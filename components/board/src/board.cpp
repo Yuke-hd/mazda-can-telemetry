@@ -1,4 +1,2 @@
-#include "board/board_config.h"
-
-// Keep the board component as the single source of board-level pin definitions.
-// This translation unit intentionally contains no runtime behavior.
+// Board component placeholder. Hardware-specific configuration is out of scope
+// for the MCAN-3 project scaffold.
