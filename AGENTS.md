@@ -1,6 +1,8 @@
 # Mazda CAN Telemetry — Project Conventions and Plan
 
-> Document status: v0.12 confirmed policy (2026-08-11)
+> Document status: v0.12 draft (2026-08-11)
+>
+> MCAN-2 license and vehicle-data policy: confirmed (2026-08-11)
 >
 > Maintenance rule: decisions reached during discussion must be added to this document immediately. Unconfirmed items must remain explicitly marked as recommendations or pending decisions and must not be implemented as established facts.
 >
@@ -522,7 +524,7 @@ Quantify acceptance criteria when hardware requirements are frozen. “Works cor
 - Map every GitHub Issue number to the project ticket key `MCAN-<number>`: Issue `#123` is ticket `MCAN-123` and its title is updated to begin with `[MCAN-123]`. GitHub's native `#123` reference remains necessary for automatic linking. Do not maintain a separate counter; gaps are expected because Issues and PRs share GitHub's repository number sequence.
 - Repository governance, initial setup, and acceptance items are defined in `docs/work-items/0001-repository-bootstrap.md` and `CONTRIBUTING.md`.
 - Project-authored source, documentation, tests, and tooling use Apache-2.0; the root `LICENSE` is authoritative.
-- Third-party material keeps its original license. The pinned opendbc MIT material and attribution process are recorded in `THIRD_PARTY_NOTICES.md`; generated definitions do not become Apache-2.0 automatically.
+- Third-party material keeps its original license. MCAN-2 confirms the opendbc MIT attribution process in `THIRD_PARTY_NOTICES.md`; the exact opendbc commit remains pending MCAN-10 before any import or generated definition.
 - Raw vehicle captures remain private. Only a reviewed anonymized fixture may be published, with no VIN, credentials, precise location, absolute timestamps, or reconstructable trip pattern. The review checklist and contributor authorization are in `docs/policies/license-and-vehicle-data.md`.
 - The project owner and agents may communicate in Chinese, but every repository artifact must be written in English. This includes documentation, source code, identifiers where under project control, comments, configuration descriptions, tests, fixtures created by the project, commit messages, Issues, and PR titles/bodies. Do not add Chinese text to the repository unless a future explicit localization requirement defines an exception.
 
@@ -550,7 +552,7 @@ Quantify acceptance criteria when hardware requirements are frozen. “Works cor
 - Read this document before implementation. If an unresolved decision would change architecture or vehicle safety, stop and request confirmation.
 - Prefer the smallest testable and replayable change. Never add active transmission to “try” an unknown signal.
 - Every new signal must include provenance/evidence, decoder definition, timeout rule, and test vector.
-- Every submitted capture, fixture, generated definition, or third-party-derived artifact must pass `docs/policies/license-and-vehicle-data.md`; never commit a VIN, credential, precise location, absolute timestamp, or non-anonymized trip.
+- Every submitted reviewed anonymized fixture, generated definition, or third-party-derived artifact must pass `docs/policies/license-and-vehicle-data.md`; raw captures are never accepted. Never commit a VIN, credential, precise location, absolute timestamp, or non-anonymized trip.
 - Changes to board pins, power control, CAN mode, or bitrate must identify the applicable hardware revision.
 - Avoid log storms and dynamic allocation in high-frequency paths. Every buffer requires a capacity, overflow policy, and counter.
 - Network outputs consume snapshots or copied events and must not hold or block the CAN receive path.
