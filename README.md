@@ -13,11 +13,10 @@ under `simulators/d1mini_can_web`. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
 
-The current T-CAN485 application is deliberately a receive-only skeleton. It
-uses the board-level pin map and TWAI listen-only mode, but does not yet decode,
-capture, or export frames. The D1 Mini project only establishes a station-mode
-Web UI boundary; it does not produce CAN frames. Neither is a vehicle release
-artifact.
+The current T-CAN485 application is deliberately a structure-only skeleton; it
+does not initialize CAN, decode, capture, or export frames. The D1 Mini project
+only establishes an Arduino setup/loop boundary; it does not initialize a
+network or produce CAN frames. Neither is a vehicle release artifact.
 
 ## Safety Boundary
 
