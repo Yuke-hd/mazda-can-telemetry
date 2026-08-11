@@ -4,6 +4,41 @@ This project connects to a safety-related vehicle network. No convenience change
 
 Every repository artifact must be written in English. This includes source code, comments, documentation, tests, configuration text, commit messages, Issues, and PR titles and bodies. The project owner and agents may use Chinese in direct conversation, but Chinese text must not be committed to the repository unless an explicit future localization requirement defines an exception.
 
+## License and data submissions
+
+Project-authored source, documentation, tests, and tooling are licensed under
+Apache-2.0 (`LICENSE`). Third-party material keeps its original license and
+must be recorded in `THIRD_PARTY_NOTICES.md`. In particular, opendbc is an MIT-
+licensed candidate signal source: record its exact commit, files, access date,
+and required notice before copying or generating signal definitions. Generated
+definitions inherit the applicable source attribution; they are not
+automatically Apache-2.0.
+
+Never commit or attach a raw vehicle capture, VIN, credential, precise location,
+absolute timestamp, or non-anonymized trip data. Real captures are for private
+analysis unless transformed into a reviewed anonymized fixture. A fixture must
+use a synthetic name, relative/coarsened time, no location or routine, and only
+the minimum reviewed frames. Unknown bytes must be treated as unsafe until
+reviewed. Follow the full [license and vehicle-data policy](docs/policies/license-and-vehicle-data.md)
+and complete its checklist before submitting a fixture.
+
+Raw captures are never accepted in commits, Issue attachments, PR comments,
+screenshots, releases, or public links. For every submitted reviewed
+anonymized fixture, generated signal definition, or third-party-derived
+artifact, include this authorization statement in the PR, or write `Not
+applicable` when no such artifact is included:
+
+> I confirm that I own or have permission to submit this artifact, that I have
+> followed the license and attribution requirements, and that I have removed
+> credentials, VIN/vehicle identifiers, precise location, absolute time, and
+> non-anonymized trip data. I understand that this public repository may
+> redistribute an accepted fixture under its recorded license and that the
+> maintainers may reject or remove it if its provenance, privacy, or safety
+> status cannot be verified.
+
+This authorization does not permit vehicle-side CAN transmission, diagnostic
+polling, or any action outside the receive-only safety boundary.
+
 ## Ticket Keys
 
 GitHub always assigns a native numeric reference such as `#123`; it cannot be configured to replace that reference with a custom prefix. The project maps that number directly to `MCAN-123`:
