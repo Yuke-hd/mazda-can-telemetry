@@ -2,8 +2,8 @@
 
 namespace vehicle_core {
 
-bool is_fresh(const Signal<float>& signal, const std::uint64_t now_us,
-             const std::uint64_t timeout_us) {
+bool is_fresh(const Signal<float> &signal, const std::uint64_t now_us,
+              const std::uint64_t timeout_us) {
   if (signal.validity != Validity::Valid || now_us < signal.last_update_us) {
     return false;
   }
@@ -21,4 +21,4 @@ VehicleState make_unknown_state(const std::uint64_t timestamp_us) {
   return state;
 }
 
-}  // namespace vehicle_core
+} // namespace vehicle_core
