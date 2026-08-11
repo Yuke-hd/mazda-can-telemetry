@@ -5,13 +5,14 @@
 #include "board/board_config.h"
 #include "driver/twai.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 
 namespace {
 
 bool g_started = false;
 can_bus_stats_t g_stats{};
 
-}  // namespace
+} // namespace
 
 extern "C" bool can_bus_start(void) {
   if (g_started) {
@@ -46,7 +47,7 @@ extern "C" void can_bus_stop(void) {
   g_started = false;
 }
 
-extern "C" bool can_bus_receive(can_bus_frame_t* frame, const uint32_t timeout_ms) {
+extern "C" bool can_bus_receive(can_bus_frame_t *frame, const uint32_t timeout_ms) {
   if (!g_started || frame == nullptr) {
     return false;
   }
@@ -68,7 +69,7 @@ extern "C" bool can_bus_receive(can_bus_frame_t* frame, const uint32_t timeout_m
   return true;
 }
 
-extern "C" void can_bus_get_stats(can_bus_stats_t* stats) {
+extern "C" void can_bus_get_stats(can_bus_stats_t *stats) {
   if (stats != nullptr) {
     *stats = g_stats;
   }
