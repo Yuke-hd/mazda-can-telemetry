@@ -16,7 +16,7 @@ Before creating product-development tickets, establish an auditable GitHub repos
 
 - GitHub repository: `Yuke-hd/mazda-can-telemetry`.
 - Description: `Read-only Mazda CX-5 KF CAN telemetry decoder, ESP32 exporter, and isolated bench simulator.`
-- Visibility: **public** by explicit project decision. No project license has been selected; review licensing, opendbc attribution, and vehicle-data anonymization before publishing sensitive material.
+- Visibility: **public** by explicit project decision. Project-authored material is Apache-2.0; third-party attribution and vehicle-data anonymization are governed by [the confirmed MCAN-2 policy](../policies/license-and-vehicle-data.md).
 - Default branch: `main`.
 - Work tracking: GitHub Issues. Map native Issue `#123` directly to ticket key `MCAN-123` and update the title to `[MCAN-123] ...` after creation. Do not create product backlog Issues until this work item passes acceptance.
 - Development model: trunk-based development without a long-lived `develop` branch.
@@ -106,5 +106,5 @@ See `CONTRIBUTING.md` for allowed types and scopes, breaking changes, Issue refe
 - Required CI checks: wait for a stable CI workflow.
 - At least one reviewer: wait for a second maintainer.
 - CODEOWNERS: wait for clear maintenance ownership.
-- Project license and vehicle-data policy: define before publishing sensitive material or accepting third-party data.
+- Project license and vehicle-data policy: confirmed in MCAN-2; raw vehicle captures remain private and only reviewed anonymized fixtures may be published.
 - Release and tag policy: define before the first runnable firmware.

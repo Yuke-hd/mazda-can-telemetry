@@ -51,6 +51,7 @@ Refs #
 
 - [ ] No credentials, VIN, precise location, or non-anonymized private trip data are included.
 - [ ] Third-party code/data has source, exact version, and license recorded.
+- [ ] If a capture, fixture, generated signal definition, or third-party-derived artifact is included, I have completed the policy checklist and authorization statement.
 - [ ] Not applicable.
 
 ## Risks, rollback, and follow-up
