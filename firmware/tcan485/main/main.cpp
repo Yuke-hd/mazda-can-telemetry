@@ -11,7 +11,7 @@ extern "C" void app_main(void) {
     return;
   }
 
-  ESP_LOGI(kTag,
-           "T-CAN485 safe defaults applied; vehicle CAN remains listen-only and no CAN transmit API "
-           "is available");
+  ESP_LOGI(kTag, "T-CAN485 safe defaults applied; vehicle CAN remains listen-only and no CAN "
+                 "transmit API "
+                 "is available");
 }

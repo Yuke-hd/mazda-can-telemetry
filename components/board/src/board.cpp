@@ -30,7 +30,7 @@ esp_err_t configure_input(const std::int8_t pin) {
   return gpio_set_direction(gpio, GPIO_MODE_INPUT);
 }
 
-}  // namespace
+} // namespace
 
 bool initialize_safe_defaults() {
   if (!is_configuration_valid()) {
@@ -61,4 +61,4 @@ bool initialize_safe_defaults() {
   return ok;
 }
 
-}  // namespace board
+} // namespace board

@@ -23,14 +23,26 @@ constexpr board::Capabilities kTransmitEnabledConfiguration{
 };
 
 static_assert(board::is_configuration_valid(), "the vendor pin record must be valid");
+static_assert(!board::is_valid_gpio(20), "GPIO20 is not present on classic ESP32");
+static_assert(!board::is_valid_gpio(24), "GPIO24 is not present on classic ESP32");
+static_assert(!board::is_valid_gpio(28), "GPIO28 is not present on classic ESP32");
+static_assert(!board::is_valid_gpio(31), "GPIO31 is not present on classic ESP32");
+static_assert(board::is_valid_gpio(34), "GPIO34 exists as an input-only GPIO");
+static_assert(!board::is_output_gpio(34), "GPIO34 must not be configured as output");
 static_assert(!board::is_configuration_valid(kDuplicatePinConfiguration),
               "duplicate pins must fail closed at compile time");
 static_assert(!board::is_configuration_valid(kTransmitEnabledConfiguration),
               "a CAN transmit API must fail closed at compile time");
 
-}  // namespace
+} // namespace
 
 int main() {
+  assert(!board::is_valid_gpio(20));
+  assert(!board::is_valid_gpio(24));
+  assert(!board::is_valid_gpio(28));
+  assert(!board::is_valid_gpio(31));
+  assert(board::is_valid_gpio(34));
+  assert(!board::is_output_gpio(34));
   assert(board::kTcan485.can.tx == 27);
   assert(board::kTcan485.can.rx == 26);
   assert(board::kTcan485.can.speed_mode == 23);

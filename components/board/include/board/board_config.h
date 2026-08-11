@@ -49,21 +49,20 @@ inline constexpr Capabilities kTcan485{
     false,
 };
 
-constexpr bool is_valid_gpio(const std::int8_t pin) { return pin >= 0 && pin < 40; }
+// Classic ESP32 GPIOs are not a contiguous range. GPIO20, GPIO24, and
+// GPIO28-31 do not exist; GPIO34-39 exist but are input-only.
+constexpr bool is_valid_gpio(const std::int8_t pin) {
+  return (pin >= 0 && pin <= 19) || (pin >= 21 && pin <= 23) || (pin >= 25 && pin <= 27) ||
+         (pin >= 32 && pin <= 39);
+}
 
 constexpr bool is_output_gpio(const std::int8_t pin) { return is_valid_gpio(pin) && pin <= 33; }
 
-constexpr bool pins_are_distinct(const Capabilities& capabilities) {
+constexpr bool pins_are_distinct(const Capabilities &capabilities) {
   const std::int8_t pins[] = {
-      capabilities.can.tx,
-      capabilities.can.rx,
-      capabilities.can.speed_mode,
-      capabilities.can.boost_enable,
-      capabilities.micro_sd.miso,
-      capabilities.micro_sd.mosi,
-      capabilities.micro_sd.sclk,
-      capabilities.micro_sd.cs,
-      capabilities.argb.data,
+      capabilities.can.tx,           capabilities.can.rx,        capabilities.can.speed_mode,
+      capabilities.can.boost_enable, capabilities.micro_sd.miso, capabilities.micro_sd.mosi,
+      capabilities.micro_sd.sclk,    capabilities.micro_sd.cs,   capabilities.argb.data,
   };
   for (std::size_t first = 0; first < sizeof(pins) / sizeof(pins[0]); ++first) {
     for (std::size_t second = first + 1; second < sizeof(pins) / sizeof(pins[0]); ++second) {
@@ -75,14 +74,14 @@ constexpr bool pins_are_distinct(const Capabilities& capabilities) {
   return true;
 }
 
-constexpr bool is_configuration_valid(const Capabilities& capabilities = kTcan485) {
+constexpr bool is_configuration_valid(const Capabilities &capabilities = kTcan485) {
   return is_output_gpio(capabilities.can.tx) && is_valid_gpio(capabilities.can.rx) &&
          is_output_gpio(capabilities.can.speed_mode) &&
-         is_output_gpio(capabilities.can.boost_enable) && is_valid_gpio(capabilities.micro_sd.miso) &&
-         is_valid_gpio(capabilities.micro_sd.mosi) && is_valid_gpio(capabilities.micro_sd.sclk) &&
-         is_valid_gpio(capabilities.micro_sd.cs) && is_output_gpio(capabilities.argb.data) &&
-         pins_are_distinct(capabilities) && capabilities.vehicle_listen_only &&
-         !capabilities.can_transmit_api_exposed;
+         is_output_gpio(capabilities.can.boost_enable) &&
+         is_valid_gpio(capabilities.micro_sd.miso) && is_valid_gpio(capabilities.micro_sd.mosi) &&
+         is_valid_gpio(capabilities.micro_sd.sclk) && is_valid_gpio(capabilities.micro_sd.cs) &&
+         is_output_gpio(capabilities.argb.data) && pins_are_distinct(capabilities) &&
+         capabilities.vehicle_listen_only && !capabilities.can_transmit_api_exposed;
 }
 
 static_assert(is_configuration_valid(), "T-CAN485 board configuration must be safe and complete");
@@ -93,4 +92,4 @@ static_assert(is_configuration_valid(), "T-CAN485 board configuration must be sa
 // Returns false if any ESP-IDF GPIO operation fails. No CAN driver is started.
 bool initialize_safe_defaults();
 
-}  // namespace board
+} // namespace board
