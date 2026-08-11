@@ -7,10 +7,12 @@ or provide a CAN data-generation path.
 ## Pinned toolchains
 
 - T-CAN485 firmware: ESP-IDF `v5.5.4`, target `esp32`.
-- Host library and tests: C++17, CMake `3.20`, doctest tag `v2.4.11` at commit
+- Host library and tests: C++17, CMake `3.20`, clang-format major version `14`,
+  doctest tag `v2.4.11` at commit
   `ae7a13539fb71f270b87eb2e874fbac80bc8dda2` (MIT license).
-- D1 Mini simulator scaffold: PlatformIO `6.1.18`, Espressif8266
-  platform `4.2.1`, Arduino core package `3.1.2`.
+- D1 Mini simulator scaffold: PlatformIO `6.1.18`, Espressif8266 platform
+  `4.2.1`, package `platformio/framework-arduinoespressif8266` `3.30102.0`
+  (Arduino core `3.1.2`).
 
 The ESP-IDF manifest requires exactly `5.5.4`; it does not download an
 unrelated SDK at configure time. The host test dependency is fetched by CMake
