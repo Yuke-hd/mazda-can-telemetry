@@ -109,16 +109,29 @@ TEST_CASE("snapshot applies each signal's freshness policy independently") {
   REQUIRE(state.speed_kph.update(20.0F, 100));
   REQUIRE(state.turn_state.update(vehicle_core::TurnState::Left, 100));
 
-  const auto snapshot = state.snapshot(350'001);
+  vehicle_core::VehicleFreshnessPolicy policy{};
+  policy.speed_kph_timeout_us = 500'000;
+  const auto snapshot = state.snapshot(350'001, policy);
   CHECK(snapshot.speed_kph.is_valid());
   CHECK(snapshot.turn_state.is_stale());
   CHECK(state.speed_kph.is_valid());
   CHECK(state.turn_state.is_valid());
 }
 
+TEST_CASE("unconfigured freshness conservatively becomes stale after time advances") {
+  vehicle_core::VehicleState state{};
+  REQUIRE(state.speed_kph.update(20.0F, 100));
+
+  const auto snapshot = state.snapshot(101);
+  CHECK(snapshot.speed_kph.is_stale());
+  CHECK(state.speed_kph.is_valid());
+}
+
 TEST_CASE("snapshot freshness is deterministic and does not mutate source") {
   FakeClock clock;
-  vehicle_core::VehicleStateStore store{clock};
+  vehicle_core::VehicleFreshnessPolicy policy{};
+  policy.speed_kph_timeout_us = 500'000;
+  vehicle_core::VehicleStateStore store{clock, policy};
   REQUIRE(store.mutable_state().speed_kph.update(12.5F, 100));
 
   clock.time_us = 100'350;

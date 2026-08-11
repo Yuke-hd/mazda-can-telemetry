@@ -61,22 +61,32 @@ enum class ActualGear : std::uint8_t {
   Sixth,
 };
 
-constexpr Microseconds kSpeedFreshnessTimeoutUs = 500'000;
-constexpr Microseconds kEngineRpmFreshnessTimeoutUs = 500'000;
-constexpr Microseconds kSelectorFreshnessTimeoutUs = 500'000;
-constexpr Microseconds kActualGearFreshnessTimeoutUs = 500'000;
 constexpr Microseconds kTurnFreshnessTimeoutUs = 250'000;
 constexpr Microseconds kRequestFreshnessTimeoutUs = 250'000;
+
+// Only turn/request freshness is confirmed by the project requirements. The
+// remaining policies are intentionally unset until signal evidence exists.
+struct VehicleFreshnessPolicy {
+  std::optional<Microseconds> speed_kph_timeout_us{};
+  std::optional<Microseconds> engine_rpm_timeout_us{};
+  std::optional<Microseconds> selector_position_timeout_us{};
+  std::optional<Microseconds> actual_gear_timeout_us{};
+  std::optional<Microseconds> turn_state_timeout_us{kTurnFreshnessTimeoutUs};
+  std::optional<Microseconds> hazard_request_timeout_us{kRequestFreshnessTimeoutUs};
+  std::optional<Microseconds> left_turn_request_timeout_us{kRequestFreshnessTimeoutUs};
+  std::optional<Microseconds> right_turn_request_timeout_us{kRequestFreshnessTimeoutUs};
+};
 
 template <typename T> struct Signal {
   T value{};
   SignalUnit unit{SignalUnit::None};
   MonotonicTimestamp last_update_us{0};
-  Microseconds freshness_timeout_us{0};
+  std::optional<Microseconds> freshness_timeout_us{};
   SignalStatus status{SignalStatus::Unknown};
 
   constexpr Signal() noexcept = default;
-  constexpr explicit Signal(SignalUnit signal_unit, Microseconds timeout_us = 0) noexcept
+  constexpr explicit Signal(SignalUnit signal_unit,
+                            std::optional<Microseconds> timeout_us = std::nullopt) noexcept
       : unit(signal_unit), freshness_timeout_us(timeout_us) {}
 
   [[nodiscard]] constexpr bool is_valid() const noexcept { return status == SignalStatus::Valid; }
@@ -89,7 +99,7 @@ template <typename T> struct Signal {
   // value or move the signal's clock backwards.
   bool update(T new_value, MonotonicTimestamp timestamp_us) noexcept;
 
-  constexpr void set_freshness_timeout(Microseconds timeout_us) noexcept {
+  void set_freshness_timeout(std::optional<Microseconds> timeout_us) noexcept {
     freshness_timeout_us = timeout_us;
   }
 
@@ -114,11 +124,10 @@ struct TurnEdgeEvent {
 
 struct VehicleState {
   MonotonicTimestamp timestamp_us{0};
-  Signal<float> speed_kph{SignalUnit::KilometresPerHour, kSpeedFreshnessTimeoutUs};
-  Signal<float> engine_rpm{SignalUnit::RevolutionsPerMinute, kEngineRpmFreshnessTimeoutUs};
-  Signal<SelectorPosition> selector_position{SignalUnit::SelectorPosition,
-                                             kSelectorFreshnessTimeoutUs};
-  Signal<ActualGear> actual_gear{SignalUnit::ActualGear, kActualGearFreshnessTimeoutUs};
+  Signal<float> speed_kph{SignalUnit::KilometresPerHour};
+  Signal<float> engine_rpm{SignalUnit::RevolutionsPerMinute};
+  Signal<SelectorPosition> selector_position{SignalUnit::SelectorPosition};
+  Signal<ActualGear> actual_gear{SignalUnit::ActualGear};
   Signal<TurnState> turn_state{SignalUnit::TurnState, kTurnFreshnessTimeoutUs};
   Signal<bool> hazard_request{SignalUnit::Boolean, kRequestFreshnessTimeoutUs};
   Signal<bool> left_turn_request{SignalUnit::Boolean, kRequestFreshnessTimeoutUs};
@@ -132,8 +141,11 @@ struct VehicleState {
   // Return a value snapshot evaluated at now_us. The original state is not
   // mutated, making this suitable for independent consumers.
   [[nodiscard]] VehicleState snapshot(MonotonicTimestamp now_us) const noexcept;
+  [[nodiscard]] VehicleState snapshot(MonotonicTimestamp now_us,
+                                      const VehicleFreshnessPolicy &policy) const noexcept;
 
   void refresh(MonotonicTimestamp now_us) noexcept;
+  void apply_freshness_policy(const VehicleFreshnessPolicy &policy) noexcept;
 };
 
 // A deterministic source of monotonic time. Production code can adapt an
@@ -154,7 +166,7 @@ public:
 // value, performs no allocation, and exposes snapshots only by value.
 class VehicleStateStore final : public SnapshotProvider {
 public:
-  explicit VehicleStateStore(MonotonicClock &clock) noexcept;
+  explicit VehicleStateStore(MonotonicClock &clock, VehicleFreshnessPolicy policy = {}) noexcept;
 
   [[nodiscard]] VehicleState &mutable_state() noexcept { return state_; }
   [[nodiscard]] const VehicleState &state() const noexcept { return state_; }
@@ -162,6 +174,7 @@ public:
 
 private:
   MonotonicClock *clock_;
+  VehicleFreshnessPolicy policy_;
   VehicleState state_{};
 };
 
@@ -187,7 +200,13 @@ template <typename T> void Signal<T>::refresh(MonotonicTimestamp now) noexcept {
   if (status != SignalStatus::Valid || now < last_update_us) {
     return;
   }
-  if ((now - last_update_us) > freshness_timeout_us) {
+  if (!freshness_timeout_us.has_value()) {
+    if (now > last_update_us) {
+      status = SignalStatus::Stale;
+    }
+    return;
+  }
+  if ((now - last_update_us) > *freshness_timeout_us) {
     status = SignalStatus::Stale;
   }
 }

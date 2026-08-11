@@ -25,15 +25,20 @@ zero speed or RPM is never confused with an uninitialized value. `update()`
 rejects an older timestamp. Each signal stores its own bounded freshness
 timeout; `refresh(now)` marks a valid signal stale only after the elapsed time
 is greater than that signal's configured timeout. Unknown signals remain
-unknown until their first update. The initial turn/request policy is 250 ms;
-other signal policies are independent and can evolve with measured periods.
+unknown until their first update. The initial turn/request policy is 250 ms.
+Speed, RPM, selector, and actual-gear policies are intentionally unconfigured
+until signal evidence exists; an unconfigured signal becomes stale as soon as
+time advances after its update, so it cannot remain silently valid.
 
 `VehicleState` currently provides the initial speed, RPM, selector position,
 actual transmission gear, turn, hazard, left-turn, and right-turn signal
 slots. Selector position and actual gear are separate value signals and cannot
 overwrite or alias one another. More signals can be added without introducing
 transport or board types. `snapshot(now)` evaluates each signal's own
-freshness policy on a value copy and leaves the source state unchanged.
+freshness policy on a value copy and leaves the source state unchanged. A
+`VehicleFreshnessPolicy` can supply synthetic or later verified per-signal
+timeouts without adding dynamic storage or asserting unverified production
+defaults.
 
 ## Semantic events and time
 

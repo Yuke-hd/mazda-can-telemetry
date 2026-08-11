@@ -38,6 +38,17 @@ void VehicleState::refresh(MonotonicTimestamp now) noexcept {
   right_turn_request.refresh(now);
 }
 
+void VehicleState::apply_freshness_policy(const VehicleFreshnessPolicy &policy) noexcept {
+  speed_kph.set_freshness_timeout(policy.speed_kph_timeout_us);
+  engine_rpm.set_freshness_timeout(policy.engine_rpm_timeout_us);
+  selector_position.set_freshness_timeout(policy.selector_position_timeout_us);
+  actual_gear.set_freshness_timeout(policy.actual_gear_timeout_us);
+  turn_state.set_freshness_timeout(policy.turn_state_timeout_us);
+  hazard_request.set_freshness_timeout(policy.hazard_request_timeout_us);
+  left_turn_request.set_freshness_timeout(policy.left_turn_request_timeout_us);
+  right_turn_request.set_freshness_timeout(policy.right_turn_request_timeout_us);
+}
+
 VehicleState VehicleState::snapshot(MonotonicTimestamp now) const noexcept {
   VehicleState result = *this;
   result.refresh(now);
@@ -45,9 +56,19 @@ VehicleState VehicleState::snapshot(MonotonicTimestamp now) const noexcept {
   return result;
 }
 
-VehicleStateStore::VehicleStateStore(MonotonicClock &clock) noexcept : clock_(&clock) {}
+VehicleState VehicleState::snapshot(MonotonicTimestamp now,
+                                    const VehicleFreshnessPolicy &policy) const noexcept {
+  VehicleState result = *this;
+  result.apply_freshness_policy(policy);
+  return result.snapshot(now);
+}
 
-VehicleState VehicleStateStore::snapshot() const noexcept { return state_.snapshot(clock_->now()); }
+VehicleStateStore::VehicleStateStore(MonotonicClock &clock, VehicleFreshnessPolicy policy) noexcept
+    : clock_(&clock), policy_(policy) {}
+
+VehicleState VehicleStateStore::snapshot() const noexcept {
+  return state_.snapshot(clock_->now(), policy_);
+}
 
 bool library_is_available() noexcept { return true; }
 
