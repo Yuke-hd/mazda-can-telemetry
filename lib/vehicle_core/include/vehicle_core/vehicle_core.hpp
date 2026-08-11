@@ -23,8 +23,7 @@ enum class Validity : std::uint8_t {
   Stale,
 };
 
-template <typename T>
-struct Signal {
+template <typename T> struct Signal {
   T value{};
   std::uint64_t last_update_us{0};
   Validity validity{Validity::Unknown};
@@ -48,9 +47,9 @@ struct VehicleState {
 
 constexpr std::uint64_t kDefaultSignalTimeoutUs = 250'000;
 
-bool is_fresh(const Signal<float>& signal, std::uint64_t now_us,
-             std::uint64_t timeout_us = kDefaultSignalTimeoutUs);
+bool is_fresh(const Signal<float> &signal, std::uint64_t now_us,
+              std::uint64_t timeout_us = kDefaultSignalTimeoutUs);
 
 VehicleState make_unknown_state(std::uint64_t timestamp_us);
 
-}  // namespace vehicle_core
+} // namespace vehicle_core
