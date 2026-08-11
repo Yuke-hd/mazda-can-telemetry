@@ -11,7 +11,7 @@ void handleRoot() {
   server.send(200, "text/plain", "D1 Mini CAN simulator scaffold; no CAN output enabled.\n");
 }
 
-}  // namespace
+} // namespace
 
 void setup() {
   Serial.begin(115200);
@@ -21,6 +21,4 @@ void setup() {
   server.begin();
 }
 
-void loop() {
-  server.handleClient();
-}
+void loop() { server.handleClient(); }
