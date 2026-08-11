@@ -148,7 +148,15 @@ if [[ -z "$installation_id" ]]; then
   installation_id="$(jq -er '.[0].id' <<<"$matches")"
 fi
 
-token_body="$(jq -cn --arg repository "$repository_name" '{repositories: [$repository]}')"
+if [[ "$role" == "coding" ]]; then
+  requested_permissions='{"contents":"write","pull_requests":"write","issues":"write","metadata":"read"}'
+  allowed_write_permissions=(contents pull_requests issues)
+else
+  requested_permissions='{"contents":"read","pull_requests":"write","issues":"write","metadata":"read"}'
+  allowed_write_permissions=(pull_requests issues)
+fi
+token_body="$(jq -cn --arg repository "$repository_name" --argjson permissions "$requested_permissions" \
+  '{repositories: [$repository], permissions: $permissions}')"
 access_response="$(github_api POST "https://api.github.com/app/installations/$installation_id/access_tokens" "$jwt" "$token_body")"
 installation_token="$(jq -er '.token' <<<"$access_response")"
 
@@ -165,6 +173,24 @@ assert_permission() {
   fi
 }
 
+assert_no_unexpected_write_permissions() {
+  local permission_name
+  local is_allowed
+  while IFS= read -r permission_name; do
+    is_allowed=false
+    for allowed_permission in "${allowed_write_permissions[@]}"; do
+      if [[ "$permission_name" == "$allowed_permission" ]]; then
+        is_allowed=true
+        break
+      fi
+    done
+    if [[ "$is_allowed" != true ]]; then
+      printf "The '%s' App token has unexpected write permission '%s'.\n" "$role" "$permission_name" >&2
+      exit 1
+    fi
+  done < <(jq -r '.permissions // {} | to_entries[] | select(.value == "write") | .key' <<<"$access_response")
+}
+
 if [[ "$role" == "coding" ]]; then
   assert_permission contents write
 else
@@ -173,6 +199,7 @@ fi
 assert_permission pull_requests write
 assert_permission issues write
 assert_permission metadata read
+assert_no_unexpected_write_permissions
 
 if [[ "$tool" == "check" ]]; then
   jq -n \

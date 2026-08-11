@@ -42,6 +42,13 @@ Required GitHub App repository permissions:
 - Coding bot: Metadata read, Contents write, Pull requests write, and Issues write.
 - Reviewer bot: Metadata read, Contents read, Pull requests write, and Issues write.
 
+The wrappers request exactly those repository permissions when creating an
+installation token. They also reject a returned token containing any write
+permission outside the role's allowlist: `contents`, `pull_requests`, and
+`issues` for coding; only `pull_requests` and `issues` for reviewer. Keep the
+Bash and PowerShell policies in parity and run
+`python3 tools/validate_github_app_wrappers.py` after changing either wrapper.
+
 Install both Apps on `Yuke-hd/mazda-can-telemetry`. Keep private keys outside the repository. If authentication fails, report the wrapper's sanitized error without inspecting environment values or private-key files.
 
 ## Run commands

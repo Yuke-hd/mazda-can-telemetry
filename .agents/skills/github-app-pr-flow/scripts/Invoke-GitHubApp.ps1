@@ -134,7 +134,13 @@ function Get-GitHubAppSession {
         $installationId = [string]$matches[0].id
     }
 
-    $tokenBody = @{ repositories = @($repositoryName) } | ConvertTo-Json -Compress
+    $requestedPermissions = if ($Role -eq "coding") {
+        @{ contents = "write"; pull_requests = "write"; issues = "write"; metadata = "read" }
+    }
+    else {
+        @{ contents = "read"; pull_requests = "write"; issues = "write"; metadata = "read" }
+    }
+    $tokenBody = @{ repositories = @($repositoryName); permissions = $requestedPermissions } | ConvertTo-Json -Compress
     $access = Invoke-GitHubRest POST "https://api.github.com/app/installations/$installationId/access_tokens" $jwt $tokenBody
     return @{
         AppId = $appId
@@ -183,6 +189,18 @@ function Assert-GitHubPermissions {
         $actual = if ($null -eq $property) { "none" } else { [string]$property.Value }
         if (-not $level.ContainsKey($actual) -or $level[$actual] -lt $level[$required[$permissionName]]) {
             throw "The '$Role' App needs '${permissionName}: $($required[$permissionName])' permission, but the installation token has '$actual'."
+        }
+    }
+
+    $allowedWritePermissions = if ($Role -eq "coding") {
+        @("contents", "pull_requests", "issues")
+    }
+    else {
+        @("pull_requests", "issues")
+    }
+    foreach ($property in $Permissions.PSObject.Properties) {
+        if ([string]$property.Value -eq "write" -and $property.Name -notin $allowedWritePermissions) {
+            throw "The '$Role' App token has unexpected write permission '$($property.Name)'."
         }
     }
 }
