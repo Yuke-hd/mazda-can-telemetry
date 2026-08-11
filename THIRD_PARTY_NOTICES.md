@@ -17,7 +17,7 @@ Before importing or generating material from opendbc, record the exact upstream
 commit, access date, files used, and any local modifications in this file and
 in the relevant decoder/evidence document. Preserve the upstream MIT notice and
 copyright statement with copied or distributed material. A generated signal
-  definition remains subject to its source material's license and attribution
+definition remains subject to its source material's license and attribution
   requirements; it is not automatically relicensed as Apache-2.0.
 
 Other dependencies must be added here before they are committed, with their
