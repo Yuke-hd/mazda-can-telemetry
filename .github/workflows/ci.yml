@@ -26,3 +26,5 @@ jobs:
         run: cmake --build build/host --parallel
       - name: Run host tests
         run: ctest --test-dir build/host --output-on-failure
+      - name: Validate GitHub App wrapper permissions
+        run: python3 tools/validate_github_app_wrappers.py

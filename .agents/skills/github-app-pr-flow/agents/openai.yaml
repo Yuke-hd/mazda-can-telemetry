@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub App PR Flow"
+  short_description: "Separate coding and reviewer bot identities"
+  default_prompt: "Use $github-app-pr-flow to publish or review a PR with the correct GitHub App identity."
