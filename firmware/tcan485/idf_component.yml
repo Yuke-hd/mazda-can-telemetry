@@ -1,0 +1,2 @@
+version: "0.1.0"
+description: "Receive-only T-CAN485 exporter skeleton"

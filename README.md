@@ -4,6 +4,21 @@ A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehic
 
 The current target vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
 
+## MCAN-3 build scaffold
+
+The portable C++17 `vehicle_core` library and its host tests are configured at
+the repository root. The T-CAN485 application lives under
+`firmware/tcan485`, and the isolated-bench D1 Mini Web simulator scaffold lives
+under `simulators/d1mini_can_web`. See
+[`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
+for pinned tool versions and reproducible commands.
+
+The current T-CAN485 application is deliberately a receive-only skeleton. It
+uses the board-level pin map and TWAI listen-only mode, but does not yet decode,
+capture, or export frames. The D1 Mini project only establishes a station-mode
+Web UI boundary; it does not produce CAN frames. Neither is a vehicle release
+artifact.
+
 ## Safety Boundary
 
 - Vehicle firmware is CAN listen-only. It performs no control, diagnostic polling, or frame injection.
