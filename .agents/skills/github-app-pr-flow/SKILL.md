@@ -5,7 +5,13 @@ description: Publish GitHub implementation work as YK's coding bot and PR review
 
 # GitHub App PR Flow
 
-Use `scripts/Invoke-GitHubApp.ps1` for every GitHub write made by an agent. Never expose, print, commit, or paste a private key or installation token. Do not change the user's global `gh` authentication.
+Use the operating-system-specific trusted wrapper for every GitHub write made by an agent:
+
+- On Windows, use `scripts/Invoke-GitHubApp.ps1`.
+- On Linux, use `scripts/invoke-github-app.sh`.
+
+Never expose, print, commit, or paste a private key or installation token. Do not change the user's global `gh` authentication.
+The Linux wrapper requires Bash, `curl`, `jq`, and OpenSSL, plus `gh` or `git` for the delegated command.
 
 ## Credential opacity boundary
 
@@ -40,24 +46,46 @@ Install both Apps on `Yuke-hd/mazda-can-telemetry`. Keep private keys outside th
 
 ## Run commands
 
-From the repository root, first verify each identity without writing to GitHub:
+From the repository root, first detect the operating system and use only its matching commands. Verify each identity without writing to GitHub.
+
+Windows:
 
 ```powershell
 pwsh -File .agents/skills/github-app-pr-flow/scripts/Invoke-GitHubApp.ps1 -Role coding -Tool check
 pwsh -File .agents/skills/github-app-pr-flow/scripts/Invoke-GitHubApp.ps1 -Role reviewer -Tool check
 ```
 
-Run `gh` through the selected installation token:
+Linux:
+
+```bash
+.agents/skills/github-app-pr-flow/scripts/invoke-github-app.sh --role coding --tool check
+.agents/skills/github-app-pr-flow/scripts/invoke-github-app.sh --role reviewer --tool check
+```
+
+Run `gh` through the selected installation token. On Windows:
 
 ```powershell
 pwsh -File .agents/skills/github-app-pr-flow/scripts/Invoke-GitHubApp.ps1 -Role coding -Tool gh pr create --title "..." --body-file pr-body.md
 pwsh -File .agents/skills/github-app-pr-flow/scripts/Invoke-GitHubApp.ps1 -Role reviewer -Tool gh api --method POST repos/Yuke-hd/mazda-can-telemetry/pulls/22/reviews --input review.json
 ```
 
-Push an implementation branch through the coding App:
+On Linux, separate wrapper options from the delegated command with `--`:
+
+```bash
+.agents/skills/github-app-pr-flow/scripts/invoke-github-app.sh --role coding --tool gh -- pr create --title "..." --body-file pr-body.md
+.agents/skills/github-app-pr-flow/scripts/invoke-github-app.sh --role reviewer --tool gh -- api --method POST repos/Yuke-hd/mazda-can-telemetry/pulls/22/reviews --input review.json
+```
+
+Push an implementation branch through the coding App. On Windows:
 
 ```powershell
 pwsh -File .agents/skills/github-app-pr-flow/scripts/Invoke-GitHubApp.ps1 -Role coding -Tool git push origin HEAD
+```
+
+On Linux:
+
+```bash
+.agents/skills/github-app-pr-flow/scripts/invoke-github-app.sh --role coding --tool git -- push origin HEAD
 ```
 
 The wrapper keeps the token in process environment only and restores the caller's environment after the command. Never run its internals manually to obtain a token.
