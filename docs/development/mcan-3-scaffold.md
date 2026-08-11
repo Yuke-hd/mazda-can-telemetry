@@ -47,8 +47,11 @@ idf.py build
 
 ## Safety and scope
 
-The T-CAN485 application is a structure-only scaffold: CAN is not initialized.
-The CAN component and board component contain placeholders for later tickets.
+The T-CAN485 application remains a structure-only scaffold: CAN is not
+initialized. The board component now contains the revision-pending T-CAN485
+capability record and applies fail-closed electrical defaults (CAN TX
+recessive, boost disabled, and onboard LED off) before the application stops.
+The CAN component remains a placeholder for a later receive-only ticket.
 The D1 Mini project is an Arduino setup/loop scaffold with no CAN driver and no
 network initialization. Any future active bench simulator must be a separate,
 explicitly marked bench-only change.
