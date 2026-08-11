@@ -1,2 +1,5 @@
 version: "0.1.0"
 description: "Receive-only T-CAN485 exporter skeleton"
+dependencies:
+  idf:
+    version: "==5.5.4"
