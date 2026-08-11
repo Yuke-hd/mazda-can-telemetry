@@ -7,15 +7,14 @@ or provide a CAN data-generation path.
 ## Pinned toolchains
 
 - T-CAN485 firmware: ESP-IDF `v5.5.4`, target `esp32`.
-- Host library and tests: C++17, CMake `3.20` or newer, doctest `2.4.11`
-  (MIT license).
-- D1 Mini simulator scaffold: PlatformIO `6.1.18` or newer, Espressif8266
+- Host library and tests: C++17, CMake `3.20`, doctest tag `v2.4.11` at commit
+  `ae7a13539fb71f270b87eb2e874fbac80bc8dda2` (MIT license).
+- D1 Mini simulator scaffold: PlatformIO `6.1.18`, Espressif8266
   platform `4.2.1`, Arduino core package `3.1.2`.
 
-The ESP-IDF version is selected by the local ESP-IDF installation; the firmware
-project records the required version in this document and does not download an
+The ESP-IDF manifest requires exactly `5.5.4`; it does not download an
 unrelated SDK at configure time. The host test dependency is fetched by CMake
-using the exact doctest tag above. PlatformIO resolves the exact framework
+using the exact doctest commit above. PlatformIO resolves the exact framework
 package listed in `platformio.ini`.
 
 ## Reproducible commands
@@ -28,7 +27,7 @@ cmake --build build/host --parallel
 ctest --test-dir build/host --output-on-failure
 ```
 
-For the simulator scaffold:
+For the simulator scaffold (PlatformIO `6.1.18`):
 
 ```text
 cd simulators/d1mini_can_web
@@ -46,12 +45,11 @@ idf.py build
 
 ## Safety and scope
 
-The T-CAN485 component configures TWAI in `TWAI_MODE_LISTEN_ONLY` and exposes
-only start, stop, receive, and statistics operations. It has no application
-path for sending vehicle frames. The D1 Mini project is a station-mode Web UI
-skeleton with no MCP2515 driver and no CAN output. It must remain an isolated
-bench-only tool when frame generation is introduced in a later, explicitly
-marked change.
+The T-CAN485 application is a structure-only scaffold: CAN is not initialized.
+The CAN component and board component contain placeholders for later tickets.
+The D1 Mini project is an Arduino setup/loop scaffold with no CAN driver and no
+network initialization. Any future active bench simulator must be a separate,
+explicitly marked bench-only change.
 
 No ESP-IDF or PlatformIO hardware build is claimed by this change. No bench or
 vehicle validation was performed.
