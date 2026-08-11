@@ -13,4 +13,4 @@ The current target vehicle is an Australian-market 2019 Mazda CX-5 Akera with th
 
 See [AGENTS.md](AGENTS.md) for the complete project plan and safety rules, and [CONTRIBUTING.md](CONTRIBUTING.md) for collaboration requirements. The first formal work item is [repository bootstrap and governance](docs/work-items/0001-repository-bootstrap.md).
 
-> No project license has been selected. The repository remains private initially.
+> No project license has been selected. The repository is public by explicit project decision; review licensing, opendbc attribution, and vehicle-data anonymization before publishing sensitive material.

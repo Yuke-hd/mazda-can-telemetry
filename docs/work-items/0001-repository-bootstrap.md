@@ -1,6 +1,6 @@
 # Work Item 0001 — Repository Bootstrap and Governance
 
-> Status: in progress
+> Status: complete
 >
 > Date: 2026-08-11
 >
@@ -16,7 +16,7 @@ Before creating product-development tickets, establish an auditable GitHub repos
 
 - GitHub repository: `Yuke-hd/mazda-can-telemetry`.
 - Description: `Read-only Mazda CX-5 KF CAN telemetry decoder, ESP32 exporter, and isolated bench simulator.`
-- Visibility: initially **private**. Review public visibility separately after deciding the project license, opendbc attribution, and vehicle-data anonymization policy.
+- Visibility: **public** by explicit project decision. No project license has been selected; review licensing, opendbc attribution, and vehicle-data anonymization before publishing sensitive material.
 - Default branch: `main`.
 - Work tracking: GitHub Issues. Map native Issue `#123` directly to ticket key `MCAN-123` and update the title to `[MCAN-123] ...` after creation. Do not create product backlog Issues until this work item passes acceptance.
 - Development model: trunk-based development without a long-lived `develop` branch.
@@ -26,7 +26,7 @@ Before creating product-development tickets, establish an auditable GitHub repos
 ## Deliverables
 
 1. A local Git repository and initial commit on `main`.
-2. A private GitHub repository configured as `origin`.
+2. A public GitHub repository configured as `origin`.
 3. `main` protection and repository merge settings.
 4. Branch, commit, and PR rules in `CONTRIBUTING.md`.
 5. `.github/pull_request_template.md`.
@@ -83,11 +83,11 @@ See `CONTRIBUTING.md` for allowed types and scopes, breaking changes, Issue refe
 - [x] Add the PR template, README, and ignore rules.
 - [x] Initialize local Git with `main` as the default branch.
 - [x] Inspect the bootstrap diff and create the initial commit.
-- [ ] Create the private GitHub repository and configure `origin`.
-- [ ] Push `main`.
-- [ ] Configure and read back repository merge settings.
-- [ ] Configure and read back `main` protection.
-- [ ] Mark this work item complete.
+- [x] Create the public GitHub repository and configure `origin`.
+- [x] Push `main`.
+- [x] Configure and read back repository merge settings.
+- [x] Configure and read back `main` protection.
+- [x] Mark this work item complete.
 
 ## Acceptance Criteria
 
@@ -106,5 +106,5 @@ See `CONTRIBUTING.md` for allowed types and scopes, breaking changes, Issue refe
 - Required CI checks: wait for a stable CI workflow.
 - At least one reviewer: wait for a second maintainer.
 - CODEOWNERS: wait for clear maintenance ownership.
-- Public visibility and project license: wait for the license/data-policy Issue.
+- Project license and vehicle-data policy: define before publishing sensitive material or accepting third-party data.
 - Release and tag policy: define before the first runnable firmware.
