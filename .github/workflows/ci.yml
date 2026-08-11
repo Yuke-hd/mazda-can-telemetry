@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build
+      - name: Validate C++ formatting
+        shell: bash
+        run: |
+          mapfile -t sources < <(find lib components firmware simulators tests -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print)
+          test "${#sources[@]}" -gt 0
+          clang-format-14 --dry-run --Werror "${sources[@]}"
+      - name: Configure host tests
+        run: cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+      - name: Build host tests
+        run: cmake --build build/host --parallel
+      - name: Run host tests
+        run: ctest --test-dir build/host --output-on-failure
