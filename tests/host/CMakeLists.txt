@@ -16,3 +16,8 @@ target_compile_features(vehicle_core_tests PRIVATE cxx_std_17)
 
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(vehicle_core_tests)
+
+add_executable(board_config_tests board_config_tests.cpp)
+target_include_directories(board_config_tests PRIVATE ${CMAKE_SOURCE_DIR}/components/board/include)
+target_compile_features(board_config_tests PRIVATE cxx_std_17)
+add_test(NAME board_config_tests COMMAND board_config_tests)
