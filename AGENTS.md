@@ -8,6 +8,15 @@
 >
 > This file is named `AGENTS.md` so Codex and other development agents discover it automatically.
 
+## GitHub App identity boundary
+
+- Agent-authored GitHub writes must use `.agents/skills/github-app-pr-flow`, never the project owner's personal `gh` authentication.
+- The primary/root agent reviews with YK's reviewer bot (App ID `4559033`). Implementation subagents publish fixes, branches, PRs, and evidence with YK's coding bot (App ID `4559002`).
+- The reviewer bot must not push fixes, the coding bot must not approve its own work, and merging requires an explicit project-owner request.
+- Private keys remain outside the repository and are referenced only by `YK_REVIEWER_PRIVATE_KEY_PATH` and `YK_CODING_PRIVATE_KEY_PATH`.
+- Agents and subagents are absolutely prohibited from reading, querying, expanding, printing, logging, or otherwise inspecting `YK_REVIEWER_PRIVATE_KEY_PATH`, `YK_CODING_PRIVATE_KEY_PATH`, or related credential environment variables to discover a private-key location or content.
+- Agents and subagents must never open, read, copy, hash, summarize, upload, or inspect a GitHub App private-key file. Only the trusted `Invoke-GitHubApp.ps1` wrapper may consume credential environment variables and private-key bytes internally; agents may invoke that wrapper by role but must treat all credential material as opaque.
+
 ## 1. Project Goal
 
 Use an ESP32, initially a LILYGO/TTGO T-CAN485, to connect to the CAN network of a 2019 Mazda CX-5 KF and safely and reliably collect vehicle data. The project will progressively identify and export signals including, but not limited to:
