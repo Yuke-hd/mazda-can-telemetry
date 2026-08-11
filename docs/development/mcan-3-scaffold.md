@@ -55,3 +55,6 @@ explicitly marked bench-only change.
 
 No ESP-IDF or PlatformIO hardware build is claimed by this change. No bench or
 vehicle validation was performed.
+
+
+Dependency source, exact version/commit, role, and upstream license links are recorded in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). The upstream notices remain authoritative.
