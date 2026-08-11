@@ -92,11 +92,13 @@ The `data` bytes are the bytes received in CAN byte order. For a remote frame
 no payload. A data frame with `dlc=0` also uses `data=-`. A reader must not
 infer an application-level signal endianness from this capture format.
 
-Records are ordered by emission. Timestamps are non-decreasing within a
-segment; equal timestamps are valid. A reader must use a `DISCONTINUITY` record
-to reset any ordering assumption.
+Every timestamped v1 record (`FRAME`, `DROP`, `STATS`, and
+`DISCONTINUITY`) uses an unsigned 64-bit `t_us`. Timestamps are non-decreasing
+within a segment; equal timestamps are valid. The `DISCONTINUITY` marker itself
+is ordered in the preceding segment, then starts its declared segment for the
+following records. A reader must use it to reset any ordering assumption.
 
-## 4. Drop and discontinuity records
+## 4. Drop, statistics, and discontinuity records
 
 When one or more received frames cannot be represented in the stream, the
 producer emits a `DROP` record as soon as possible:
@@ -108,9 +110,25 @@ DROP t_us=2000 bus=0 count=2 reason=queue-overflow
 `t_us` is the timestamp at which the loss was observed, `bus` is the affected
 bus (`all` is permitted when the source bus is unknown), `count` is the number
 of omitted frames, and `reason` is a percent-encoded diagnostic token. The
-session `dropped_frames` counter plus every `DROP count` must account for all
-known omitted frames. A producer must not fabricate a frame for a dropped
-record.
+session `dropped_frames` counter is the cumulative baseline at session start.
+Every `DROP count` increases that cumulative count; a producer must not
+fabricate a frame for a dropped record.
+
+`STATS` provides observable cumulative counters after session start:
+
+```text
+STATS t_us=1200 segment=0 dropped_frames=2 dropped_records=0
+```
+
+Required fields are `t_us`, `segment`, `dropped_frames`, and
+`dropped_records`. Both counters are absolute cumulative values from the same
+origin as the `SESSION` counters, never deltas. `dropped_frames` equals the
+session baseline plus the sum of all `DROP count` values observed so far.
+`dropped_records` counts output records that could not be emitted; it may be
+greater than the visible `DROP` records when a diagnostic record was itself
+lost. Counters never decrease. A producer should emit checkpoints periodically
+and must emit a final `STATS` before a clean shutdown. A power loss or reset
+may leave the last checkpoint absent.
 
 `DISCONTINUITY` marks a timestamp or capture-sequence break that cannot be
 represented by a frame loss alone:
@@ -170,9 +188,11 @@ SESSION firmware=mcan-tcan485%2B0.1.0 board=tcan485-revA bitrate_bps=500000 cloc
 FRAME t_us=1000 bus=0 id=0x091 format=std rtr=0 dlc=8 data=0100000000000000
 FRAME t_us=1100 bus=0 id=0x202 format=std rtr=0 dlc=8 data=0000000000000000
 DROP t_us=1200 bus=0 count=2 reason=queue-overflow
+STATS t_us=1200 segment=0 dropped_frames=2 dropped_records=0
 DISCONTINUITY t_us=2000 bus=all segment=1 reason=clock-reset
 FRAME t_us=2100 bus=0 id=0x1fffffff format=ext rtr=0 dlc=0 data=-
 FRAME t_us=2200 bus=1 id=0x123 format=std rtr=1 dlc=2 data=-
+STATS t_us=2200 segment=1 dropped_frames=2 dropped_records=0
 ```
 
 The repository validator checks this example and the fixture byte-for-byte;
