@@ -22,9 +22,11 @@ the minimum reviewed frames. Unknown bytes must be treated as unsafe until
 reviewed. Follow the full [license and vehicle-data policy](docs/policies/license-and-vehicle-data.md)
 and complete its checklist before submitting a fixture.
 
-For every submitted capture, fixture, generated signal definition, or
-third-party-derived artifact, include this authorization statement in the PR,
-or write `Not applicable` when no such artifact is included:
+Raw captures are never accepted in commits, Issue attachments, PR comments,
+screenshots, releases, or public links. For every submitted reviewed
+anonymized fixture, generated signal definition, or third-party-derived
+artifact, include this authorization statement in the PR, or write `Not
+applicable` when no such artifact is included:
 
 > I confirm that I own or have permission to submit this artifact, that I have
 > followed the license and attribution requirements, and that I have removed
