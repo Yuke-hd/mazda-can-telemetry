@@ -21,7 +21,7 @@ Repository artifacts are classified as follows:
 | Project source and tooling | Apache-2.0 | Keep the root `LICENSE` and preserve contributor copyright notices. |
 | Project documentation and tests | Apache-2.0 | Mark any third-party excerpt or asset separately; do not imply that a third-party work is Apache-2.0. |
 | Generated signal definitions | Provenance-dependent | Record the input files, exact source commit, generator/version, and modifications. Definitions generated from opendbc retain the applicable MIT attribution and are not automatically Apache-2.0. Definitions derived only from project-authored rules must still include evidence and vehicle-validation status. |
-| Raw vehicle captures | Not a project release artifact | Do not commit, attach to an Issue, or share externally. They may remain in an approved private workspace only with the data owner's authorization and suitable access controls. |
+| Raw vehicle captures | Never accepted as a repository artifact | Do not commit, paste or attach raw captures or their contents in an Issue/PR, include them in a release, or link to them externally. A PR may describe that private evidence was used without exposing the capture or its contents. They may remain in an approved private workspace only with the data owner's authorization and suitable access controls. |
 | Anonymized replay fixtures | Explicitly reviewed fixture | May be committed only after the checklist below is complete, the submitter attests to sharing authority, and a maintainer records the review. Fixtures must contain no credentials, VIN, precise location, or reconstructable private trip. |
 | Issue/PR logs and screenshots | Public by default | Treat as publishable. Use synthetic values and sanitized screenshots; never paste raw captures or secrets. |
 
@@ -110,9 +110,10 @@ private and request clarification rather than making an ad hoc privacy call.
 
 ## Contributor authorization
 
-Every contributor submitting a vehicle capture, generated signal definition,
-or third-party-derived artifact must include this statement in the PR (or
-explicitly state that it is not applicable):
+Every contributor submitting a reviewed anonymized fixture, generated signal
+definition, or third-party-derived artifact must include this statement in the
+PR (or explicitly state that it is not applicable). Raw captures are never
+accepted as repository artifacts.
 
 > I confirm that I own or have permission to submit this artifact, that I have
 > followed the license and attribution requirements, and that I have removed
