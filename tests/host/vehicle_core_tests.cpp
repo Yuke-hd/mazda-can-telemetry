@@ -11,9 +11,7 @@ class FakeClock final : public vehicle_core::MonotonicClock {
 public:
   vehicle_core::MonotonicTimestamp time_us{0};
 
-  [[nodiscard]] vehicle_core::MonotonicTimestamp now() const noexcept override {
-    return time_us;
-  }
+  [[nodiscard]] vehicle_core::MonotonicTimestamp now() const noexcept override { return time_us; }
 };
 
 } // namespace
@@ -48,20 +46,20 @@ TEST_CASE("raw frame validates classic CAN identifier and DLC bounds") {
 }
 
 TEST_CASE("signal status distinguishes valid zero from unknown and stale") {
-  vehicle_core::Signal<float> speed{vehicle_core::SignalUnit::KilometresPerHour};
+  vehicle_core::Signal<float> speed{vehicle_core::SignalUnit::KilometresPerHour, 100};
   CHECK(speed.is_unknown());
   CHECK(speed.update(0.0F, 100));
   CHECK(speed.is_valid());
   CHECK(speed.value == 0.0F);
 
-  speed.refresh(200, 100);
+  speed.refresh(200);
   CHECK(speed.is_valid());
-  speed.refresh(201, 100);
+  speed.refresh(201);
   CHECK(speed.is_stale());
   CHECK(speed.value == 0.0F);
 
-  vehicle_core::Signal<float> never_updated{vehicle_core::SignalUnit::KilometresPerHour};
-  never_updated.refresh(10000, 1);
+  vehicle_core::Signal<float> never_updated{vehicle_core::SignalUnit::KilometresPerHour, 1};
+  never_updated.refresh(10000);
   CHECK(never_updated.is_unknown());
 }
 
@@ -93,17 +91,42 @@ TEST_CASE("turn updates create semantic edge events without CAN identity") {
   CHECK(state.update_turn(vehicle_core::TurnState::Right, 19).has_value() == false);
 }
 
+TEST_CASE("selector position and actual gear are independent signals") {
+  vehicle_core::VehicleState state{};
+  REQUIRE(state.selector_position.update(vehicle_core::SelectorPosition::Drive, 100));
+  REQUIRE(state.actual_gear.update(vehicle_core::ActualGear::Third, 100));
+
+  CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Drive);
+  CHECK(state.actual_gear.value == vehicle_core::ActualGear::Third);
+  CHECK(state.selector_position.unit == vehicle_core::SignalUnit::SelectorPosition);
+  CHECK(state.actual_gear.unit == vehicle_core::SignalUnit::ActualGear);
+  CHECK(static_cast<const void *>(&state.selector_position) !=
+        static_cast<const void *>(&state.actual_gear));
+}
+
+TEST_CASE("snapshot applies each signal's freshness policy independently") {
+  vehicle_core::VehicleState state{};
+  REQUIRE(state.speed_kph.update(20.0F, 100));
+  REQUIRE(state.turn_state.update(vehicle_core::TurnState::Left, 100));
+
+  const auto snapshot = state.snapshot(350'001);
+  CHECK(snapshot.speed_kph.is_valid());
+  CHECK(snapshot.turn_state.is_stale());
+  CHECK(state.speed_kph.is_valid());
+  CHECK(state.turn_state.is_valid());
+}
+
 TEST_CASE("snapshot freshness is deterministic and does not mutate source") {
   FakeClock clock;
-  vehicle_core::VehicleStateStore store{clock, 250};
+  vehicle_core::VehicleStateStore store{clock};
   REQUIRE(store.mutable_state().speed_kph.update(12.5F, 100));
 
-  clock.time_us = 350;
+  clock.time_us = 100'350;
   const auto fresh = store.snapshot();
   CHECK(fresh.speed_kph.is_valid());
-  CHECK(fresh.timestamp_us == 350);
+  CHECK(fresh.timestamp_us == 100'350);
 
-  clock.time_us = 351;
+  clock.time_us = 600'001;
   const auto stale = store.snapshot();
   CHECK(stale.speed_kph.is_stale());
   CHECK(stale.speed_kph.value == doctest::Approx(12.5F));

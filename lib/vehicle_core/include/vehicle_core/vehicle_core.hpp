@@ -41,29 +41,46 @@ enum class SignalUnit : std::uint8_t {
   None,
   KilometresPerHour,
   RevolutionsPerMinute,
-  Gear,
+  SelectorPosition,
+  ActualGear,
   Boolean,
   TurnState,
 };
 
-enum class GearState : std::uint8_t { Unknown, Park, Reverse, Neutral, Drive };
+enum class SelectorPosition : std::uint8_t { Unknown, Park, Reverse, Neutral, Drive };
+
+enum class ActualGear : std::uint8_t {
+  Unknown,
+  Neutral,
+  Reverse,
+  First,
+  Second,
+  Third,
+  Fourth,
+  Fifth,
+  Sixth,
+};
+
+constexpr Microseconds kSpeedFreshnessTimeoutUs = 500'000;
+constexpr Microseconds kEngineRpmFreshnessTimeoutUs = 500'000;
+constexpr Microseconds kSelectorFreshnessTimeoutUs = 500'000;
+constexpr Microseconds kActualGearFreshnessTimeoutUs = 500'000;
+constexpr Microseconds kTurnFreshnessTimeoutUs = 250'000;
+constexpr Microseconds kRequestFreshnessTimeoutUs = 250'000;
 
 template <typename T> struct Signal {
   T value{};
   SignalUnit unit{SignalUnit::None};
   MonotonicTimestamp last_update_us{0};
+  Microseconds freshness_timeout_us{0};
   SignalStatus status{SignalStatus::Unknown};
 
   constexpr Signal() noexcept = default;
-  constexpr explicit Signal(SignalUnit signal_unit) noexcept
-      : unit(signal_unit) {}
+  constexpr explicit Signal(SignalUnit signal_unit, Microseconds timeout_us = 0) noexcept
+      : unit(signal_unit), freshness_timeout_us(timeout_us) {}
 
-  [[nodiscard]] constexpr bool is_valid() const noexcept {
-    return status == SignalStatus::Valid;
-  }
-  [[nodiscard]] constexpr bool is_stale() const noexcept {
-    return status == SignalStatus::Stale;
-  }
+  [[nodiscard]] constexpr bool is_valid() const noexcept { return status == SignalStatus::Valid; }
+  [[nodiscard]] constexpr bool is_stale() const noexcept { return status == SignalStatus::Stale; }
   [[nodiscard]] constexpr bool is_unknown() const noexcept {
     return status == SignalStatus::Unknown;
   }
@@ -72,10 +89,14 @@ template <typename T> struct Signal {
   // value or move the signal's clock backwards.
   bool update(T new_value, MonotonicTimestamp timestamp_us) noexcept;
 
+  constexpr void set_freshness_timeout(Microseconds timeout_us) noexcept {
+    freshness_timeout_us = timeout_us;
+  }
+
   // A zero value is still valid after update(); status is never inferred from
-  // value. Calling refresh with an elapsed timeout marks only a valid signal
-  // stale. Unknown remains unknown until its first update.
-  void refresh(MonotonicTimestamp now_us, Microseconds freshness_timeout_us) noexcept;
+  // value. Calling refresh with an elapsed, signal-specific timeout marks only
+  // a valid signal stale. Unknown remains unknown until its first update.
+  void refresh(MonotonicTimestamp now_us) noexcept;
 };
 
 enum class TurnState : std::uint8_t { Unknown, Off, Left, Right, Hazard };
@@ -93,13 +114,15 @@ struct TurnEdgeEvent {
 
 struct VehicleState {
   MonotonicTimestamp timestamp_us{0};
-  Signal<float> speed_kph{SignalUnit::KilometresPerHour};
-  Signal<float> engine_rpm{SignalUnit::RevolutionsPerMinute};
-  Signal<GearState> gear{SignalUnit::Gear};
-  Signal<TurnState> turn_state{SignalUnit::TurnState};
-  Signal<bool> hazard_request{SignalUnit::Boolean};
-  Signal<bool> left_turn_request{SignalUnit::Boolean};
-  Signal<bool> right_turn_request{SignalUnit::Boolean};
+  Signal<float> speed_kph{SignalUnit::KilometresPerHour, kSpeedFreshnessTimeoutUs};
+  Signal<float> engine_rpm{SignalUnit::RevolutionsPerMinute, kEngineRpmFreshnessTimeoutUs};
+  Signal<SelectorPosition> selector_position{SignalUnit::SelectorPosition,
+                                             kSelectorFreshnessTimeoutUs};
+  Signal<ActualGear> actual_gear{SignalUnit::ActualGear, kActualGearFreshnessTimeoutUs};
+  Signal<TurnState> turn_state{SignalUnit::TurnState, kTurnFreshnessTimeoutUs};
+  Signal<bool> hazard_request{SignalUnit::Boolean, kRequestFreshnessTimeoutUs};
+  Signal<bool> left_turn_request{SignalUnit::Boolean, kRequestFreshnessTimeoutUs};
+  Signal<bool> right_turn_request{SignalUnit::Boolean, kRequestFreshnessTimeoutUs};
 
   // Apply a semantic turn state and return an edge only when the state
   // changed. The first known state has Unknown as its previous state.
@@ -108,10 +131,9 @@ struct VehicleState {
 
   // Return a value snapshot evaluated at now_us. The original state is not
   // mutated, making this suitable for independent consumers.
-  [[nodiscard]] VehicleState snapshot(MonotonicTimestamp now_us,
-                                       Microseconds freshness_timeout_us) const noexcept;
+  [[nodiscard]] VehicleState snapshot(MonotonicTimestamp now_us) const noexcept;
 
-  void refresh(MonotonicTimestamp now_us, Microseconds freshness_timeout_us) noexcept;
+  void refresh(MonotonicTimestamp now_us) noexcept;
 };
 
 // A deterministic source of monotonic time. Production code can adapt an
@@ -132,16 +154,14 @@ public:
 // value, performs no allocation, and exposes snapshots only by value.
 class VehicleStateStore final : public SnapshotProvider {
 public:
-  explicit VehicleStateStore(MonotonicClock& clock,
-                             Microseconds freshness_timeout_us) noexcept;
+  explicit VehicleStateStore(MonotonicClock &clock) noexcept;
 
-  [[nodiscard]] VehicleState& mutable_state() noexcept { return state_; }
-  [[nodiscard]] const VehicleState& state() const noexcept { return state_; }
+  [[nodiscard]] VehicleState &mutable_state() noexcept { return state_; }
+  [[nodiscard]] const VehicleState &state() const noexcept { return state_; }
   [[nodiscard]] VehicleState snapshot() const noexcept override;
 
 private:
-  MonotonicClock* clock_;
-  Microseconds freshness_timeout_us_;
+  MonotonicClock *clock_;
   VehicleState state_{};
 };
 
@@ -153,8 +173,7 @@ private:
 // for application-defined signal value types without a runtime registry.
 namespace vehicle_core {
 
-template <typename T>
-bool Signal<T>::update(T new_value, MonotonicTimestamp timestamp) noexcept {
+template <typename T> bool Signal<T>::update(T new_value, MonotonicTimestamp timestamp) noexcept {
   if (status != SignalStatus::Unknown && timestamp < last_update_us) {
     return false;
   }
@@ -164,13 +183,11 @@ bool Signal<T>::update(T new_value, MonotonicTimestamp timestamp) noexcept {
   return true;
 }
 
-template <typename T>
-void Signal<T>::refresh(MonotonicTimestamp now,
-                        Microseconds freshness_timeout) noexcept {
+template <typename T> void Signal<T>::refresh(MonotonicTimestamp now) noexcept {
   if (status != SignalStatus::Valid || now < last_update_us) {
     return;
   }
-  if ((now - last_update_us) > freshness_timeout) {
+  if ((now - last_update_us) > freshness_timeout_us) {
     status = SignalStatus::Stale;
   }
 }

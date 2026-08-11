@@ -22,14 +22,18 @@ interface in this component.
 `Signal<T>` stores a value, `SignalUnit`, last-update monotonic timestamp, and
 `SignalStatus` (`Unknown`, `Valid`, or `Stale`). Status is explicit, so a valid
 zero speed or RPM is never confused with an uninitialized value. `update()`
-rejects an older timestamp. `refresh(now, timeout)` marks a valid signal stale
-only after the elapsed time is greater than the configured timeout; unknown
-signals remain unknown until their first update.
+rejects an older timestamp. Each signal stores its own bounded freshness
+timeout; `refresh(now)` marks a valid signal stale only after the elapsed time
+is greater than that signal's configured timeout. Unknown signals remain
+unknown until their first update. The initial turn/request policy is 250 ms;
+other signal policies are independent and can evolve with measured periods.
 
-`VehicleState` currently provides the initial speed, RPM, gear, turn, hazard,
-left-turn, and right-turn signal slots. More signals can be added without
-introducing transport or board types. `snapshot(now, timeout)` evaluates
-freshness on a value copy and leaves the source state unchanged.
+`VehicleState` currently provides the initial speed, RPM, selector position,
+actual transmission gear, turn, hazard, left-turn, and right-turn signal
+slots. Selector position and actual gear are separate value signals and cannot
+overwrite or alias one another. More signals can be added without introducing
+transport or board types. `snapshot(now)` evaluates each signal's own
+freshness policy on a value copy and leaves the source state unchanged.
 
 ## Semantic events and time
 
@@ -48,6 +52,7 @@ when crossing task or transport boundaries. Snapshot values are independent
 copies and may be handed to a slow consumer without holding the receive path.
 
 The unit tests cover construction, identifier/DLC validation, timestamp
-ordering, valid-zero distinction, stale transitions, semantic turn edges, and
+ordering, valid-zero distinction, stale transitions, independent selector and
+actual-gear values, per-signal freshness, semantic turn edges, and
 deterministic non-mutating snapshots. No bench or vehicle validation is
 claimed by MCAN-4.
