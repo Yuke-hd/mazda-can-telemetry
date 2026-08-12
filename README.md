@@ -13,6 +13,32 @@ under `simulators/d1mini_can_web`. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
 
+## Development prerequisites
+
+The following tools are needed to configure, build, format, validate, and test
+the repository. The [MCAN-3 scaffold](docs/development/mcan-3-scaffold.md)
+contains the complete commands and exact dependency pins; run
+`tools/check_toolchain.py --scope <host|simulator|firmware|all>` before a
+build. Missing tools and version mismatches are reported together with an
+official installation link.
+
+| Workflow | Required tool | Supported version or constraint | Purpose and installation |
+| --- | --- | --- | --- |
+| Host library/tests | Bash/Linux shell, Git, Python 3, ripgrep | Bash and Git current supported releases; Python >= 3.8; ripgrep current supported release | Repository commands and source discovery ([Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/), [ripgrep](https://github.com/BurntSushi/ripgrep#installation)) |
+| Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release | Configure and build the portable library/tests ([compiler](https://gcc.gnu.org/install/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
+| Host library/tests | clang-format | Major version 14 (`clang-format-14`) | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
+| D1 Mini simulator | PlatformIO Core | Exactly 6.1.18 | Build the isolated-bench simulator scaffold; Espressif8266 and Arduino packages are resolved from `platformio.ini` ([installation](https://docs.platformio.org/en/stable/core/installation/methods/pypi.html)) |
+| T-CAN485 firmware | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the ESP32 structure-only firmware scaffold ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
+
+Host tools are required for the common library, formatting, and test workflow;
+PlatformIO is simulator-only; ESP-IDF and its ESP32 toolchain are firmware-only.
+PlatformIO's platform/framework packages, CMake's doctest dependency, and
+ESP-IDF managed components are resolved by their respective build systems, not
+installed as separate repository prerequisites. On Linux, a reproducible
+user-space bootstrap for PlatformIO is available at
+[`tools/bootstrap_dev.sh`](tools/bootstrap_dev.sh); ESP-IDF must be installed
+and activated using its upstream guide.
+
 The current T-CAN485 application is deliberately a structure-only skeleton; it
 does not initialize CAN, decode, capture, or export frames. The D1 Mini project
 only establishes an Arduino setup/loop boundary; it does not initialize a
@@ -25,7 +51,11 @@ network or produce CAN frames. Neither is a vehicle release artifact.
 - This project is not a replacement for the factory instrument cluster and must not be used for safety-critical decisions.
 - Wiring, termination, power, listen-only behavior, and fail-silent operation must pass bench validation before the first vehicle connection.
 
-See [AGENTS.md](AGENTS.md) for the complete project plan and safety rules, and [CONTRIBUTING.md](CONTRIBUTING.md) for collaboration requirements. The first formal work item is [repository bootstrap and governance](docs/work-items/0001-repository-bootstrap.md).
+The authoritative product and engineering requirements are maintained in
+[Notion](https://app.notion.com/p/mazda-can-telemetry-3bab6bac581680bea756f017dc3dc347).
+See [AGENTS.md](AGENTS.md) for the compact agent operating manual and safety
+boundaries, and [CONTRIBUTING.md](CONTRIBUTING.md) for collaboration rules. The
+first formal work item is [repository bootstrap and governance](docs/work-items/0001-repository-bootstrap.md).
 
 ## License and data policy
 
