@@ -116,6 +116,7 @@ void capture_export_task(void *) noexcept {
     if (g_exporter.failed()) {
       (void)can_bus::stop();
       vTaskDelete(nullptr);
+      return;
     }
     vTaskDelay(pdMS_TO_TICKS(1));
   }
