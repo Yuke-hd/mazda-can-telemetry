@@ -39,6 +39,11 @@ Any configuration/installation error fails closed before CAN startup. A
 negative `uart_tx_chars()` result is an output error; zero means FIFO full and
 is retried without discarding the complete pending line.
 
+If a permanent output error is reported, the owner task stops CAN acquisition
+and deletes itself. This fail-silent path prevents continued receive-side loss
+from accumulating behind an exporter that can no longer produce observable
+records.
+
 ## Diagnostics and target
 
 Frame records are never rate-limited by diagnostics. `DROP` and

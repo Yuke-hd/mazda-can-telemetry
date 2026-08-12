@@ -113,6 +113,10 @@ void capture_export_task(void *) noexcept {
       g_last_driver_missed = can_stats.driver_rx_missed;
     }
     (void)g_exporter.poll_output(g_usb_sink, static_cast<std::uint64_t>(esp_timer_get_time()), 8);
+    if (g_exporter.failed()) {
+      (void)can_bus::stop();
+      vTaskDelete(nullptr);
+    }
     vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
