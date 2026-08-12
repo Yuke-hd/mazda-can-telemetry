@@ -120,7 +120,11 @@ TEST_CASE("replay clock can pause and advance deterministically") {
   CHECK(replay.advance_to(2200, [&](const vehicle_core::RawCanFrame &,
                                     raw_capture::SimulatedMonotonicClock &now) {
     times.push_back(now.now());
-  }) == 3);
+  }) == 0);
+  CHECK(replay.advance_to(2200, [&](const vehicle_core::RawCanFrame &,
+                                    raw_capture::SimulatedMonotonicClock &now) {
+    times.push_back(now.now());
+  }) == 2);
   CHECK(times == std::vector<std::uint64_t>{1000, 1100, 2100, 2200});
   clock.pause();
   clock.advance(500);
@@ -139,9 +143,12 @@ TEST_CASE("replay clock can pause and advance deterministically") {
   REQUIRE(reset_capture.ok);
   reset_replay.load(reset_capture.records);
   std::uint64_t observed = 0;
+  CHECK(reset_replay.advance_to(
+            2000, [&](const vehicle_core::RawCanFrame &,
+                      raw_capture::SimulatedMonotonicClock &now) { observed = now.now(); }) == 0);
   REQUIRE(reset_replay.advance_to(
-              2000, [&](const vehicle_core::RawCanFrame &,
-                        raw_capture::SimulatedMonotonicClock &now) { observed = now.now(); }) == 1);
+              10, [&](const vehicle_core::RawCanFrame &,
+                      raw_capture::SimulatedMonotonicClock &now) { observed = now.now(); }) == 1);
   CHECK(observed == 10);
 }
 

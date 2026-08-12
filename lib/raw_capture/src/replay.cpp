@@ -12,24 +12,24 @@ void SimulatedMonotonicClock::advance(const std::uint64_t delta_us) noexcept {
 void ReplayHarness::load(const std::vector<CaptureRecord> &records) {
   records_ = records;
   next_record_ = 0;
+  reset_pending_ = false;
   clock_->reset(0);
 }
 
 std::size_t ReplayHarness::advance_to(const vehicle_core::MonotonicTimestamp timestamp_us,
                                       const FrameHandler &handler) {
-  if (!handler || clock_->paused() || timestamp_us < clock_->now())
+  if (!handler || clock_->paused() || (!reset_pending_ && timestamp_us < clock_->now()))
     return 0;
   std::size_t delivered = 0;
-  bool reset_pending = false;
   while (next_record_ < records_.size()) {
     const auto &record = records_[next_record_];
     if (record.type == RecordType::Discontinuity) {
       if (record.discontinuity.timestamp_us > timestamp_us)
         break;
       clock_->reset(record.discontinuity.timestamp_us);
-      reset_pending = true;
+      reset_pending_ = true;
       ++next_record_;
-      continue;
+      break;
     }
     if (record.type != RecordType::Frame) {
       ++next_record_;
@@ -37,9 +37,9 @@ std::size_t ReplayHarness::advance_to(const vehicle_core::MonotonicTimestamp tim
     }
     if (record.frame.timestamp_us > timestamp_us)
       break;
-    if (reset_pending) {
+    if (reset_pending_) {
       clock_->reset(record.frame.timestamp_us);
-      reset_pending = false;
+      reset_pending_ = false;
     } else {
       clock_->set(record.frame.timestamp_us);
     }

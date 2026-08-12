@@ -49,6 +49,7 @@ private:
   SimulatedMonotonicClock *clock_;
   std::vector<CaptureRecord> records_;
   std::size_t next_record_{0};
+  bool reset_pending_{false};
 };
 
 } // namespace raw_capture
