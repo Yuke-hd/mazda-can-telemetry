@@ -27,10 +27,11 @@ public:
     }
 
     frames_[head % Capacity] = frame;
-    // Publish the watermark before head so a consumer that observes the new
-    // queue depth can never observe a lower watermark.
-    update_watermark(static_cast<std::uint32_t>((head + 1) - tail));
+    // Publish head before the watermark. A reset that observes this head can
+    // then reconcile the watermark even if it wins the following exchange;
+    // a producer that publishes after reconciliation raises it afterward.
     head_.store(head + 1, std::memory_order_release);
+    update_watermark(static_cast<std::uint32_t>((head + 1) - tail));
     frames_queued_.fetch_add(1, std::memory_order_relaxed);
     return true;
   }
