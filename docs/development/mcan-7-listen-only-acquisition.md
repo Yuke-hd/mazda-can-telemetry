@@ -92,9 +92,9 @@ drop-newest behavior, overflow and watermark accounting, statistics reset, and
 the public operation set, strict listen-only token, disabled TX queue, absence
 of alternate modes, and absence of TWAI transmit calls.
 
-The isolated CAN bench procedure in
-[`docs/validation/mcan-7-isolated-bench.md`](../validation/mcan-7-isolated-bench.md)
-has not been executed as part of this software change. Vehicle validation has
-also not been executed. This code must not be connected to a vehicle until the
-bench acceptance record is completed and the T-CAN485 PCB revision and wiring
-have been verified.
+Integrated isolated-bench validation is intentionally out of scope for MCAN-7.
+MCAN-33 owns the future physical receiver, wiring, PCB-revision, and no-ACK
+evidence after the software work and MCAN-12 are complete. Vehicle validation
+has also not been executed; this software must not be connected to a vehicle
+until the MCAN-33 safety record and T-CAN485 PCB revision/wiring verification
+are complete.
