@@ -231,7 +231,6 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
         previous_reason == reason && timestamp_us >= previous.timestamp_us &&
         timestamp_us - previous.timestamp_us <= 1 && previous.frame_boundary == queue_.head) {
       previous.count += count;
-      previous.timestamp_us = timestamp_us;
       if (drop_head_ - drop_tail_ == 1) {
         pending_drop_frames_ = previous.count;
         pending_drop_timestamp_us_ = previous.timestamp_us;

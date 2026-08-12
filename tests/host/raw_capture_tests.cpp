@@ -182,7 +182,7 @@ TEST_CASE("separate loss boundaries cannot reorder a later frame") {
   CHECK(exporter.poll_output(sink, 102, 100) > 0);
   bool saw_drop = false;
   for (const auto &line : sink.lines) {
-    if (line == "DROP t_us=66 bus=0 count=3 reason=export-queue-overflow\n") {
+    if (line == "DROP t_us=64 bus=0 count=3 reason=export-queue-overflow\n") {
       saw_drop = true;
     }
   }
