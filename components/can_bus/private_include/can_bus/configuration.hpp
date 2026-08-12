@@ -6,9 +6,9 @@ namespace can_bus::internal {
 
 [[nodiscard]] constexpr std::uint64_t counter_delta(const std::uint32_t current,
                                                     const std::uint32_t previous) noexcept {
-  // A decrease indicates that the driver restarted or reset its counters;
-  // count the new interval rather than manufacturing a large loss value.
-  return current >= previous ? current - previous : current;
+  // Unsigned subtraction is defined modulo 2^32, preserving deltas across a
+  // cumulative driver's uint32_t counter wrap.
+  return static_cast<std::uint64_t>(current - previous);
 }
 
 [[nodiscard]] constexpr bool is_configuration_valid(const Configuration &configuration) noexcept {

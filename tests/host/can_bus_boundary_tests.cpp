@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 #include "can_bus/can_bus.h"
@@ -36,9 +37,9 @@ TEST_CASE("configuration permits only explicit classic CAN bitrates") {
   CHECK_FALSE(can_bus::internal::is_configuration_valid({499'999, 0}));
 }
 
-TEST_CASE("driver counter deltas handle monotonic values and wraparound") {
+TEST_CASE("driver counter deltas handle monotonic values and uint32 wraparound") {
   CHECK(can_bus::internal::counter_delta(10, 4) == 6);
-  CHECK(can_bus::internal::counter_delta(4, 10) == 4);
+  CHECK(can_bus::internal::counter_delta(2, std::numeric_limits<std::uint32_t>::max() - 1) == 4);
   CHECK(can_bus::internal::counter_delta(0, 0) == 0);
 }
 
