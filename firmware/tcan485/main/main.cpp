@@ -1,14 +1,14 @@
 #include "board/board_config.h"
 #include "can_bus/can_bus.h"
+#include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "raw_capture/raw_capture.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string_view>
 
@@ -64,10 +64,8 @@ private:
 };
 
 constexpr raw_capture::Configuration kCaptureConfiguration{
-    raw_capture::SessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000, 1'000'000, 0,
-                                 0},
-    1'000'000,
-    1'000'000};
+    raw_capture::SessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000, 1'000'000, 0, 0},
+    1'000'000, 1'000'000};
 raw_capture::Exporter g_exporter{kCaptureConfiguration};
 CanSource g_can_source;
 UsbUartSink g_usb_sink;
@@ -90,7 +88,7 @@ void capture_export_task(void *) noexcept {
     vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
-}
+} // namespace
 
 extern "C" void app_main(void) {
   if (!board::initialize_safe_defaults()) {
@@ -111,8 +109,8 @@ extern "C" void app_main(void) {
   // UART0 is the sole capture writer after this point; suppress logs so they
   // cannot interleave with a partially accepted capture line.
   esp_log_level_set("*", ESP_LOG_NONE);
-  if (xTaskCreate(capture_export_task, "capture_export", 4096, nullptr,
-                  configMAX_PRIORITIES - 3, nullptr) != pdPASS) {
+  if (xTaskCreate(capture_export_task, "capture_export", 4096, nullptr, configMAX_PRIORITIES - 3,
+                  nullptr) != pdPASS) {
     ESP_LOGE(kTag, "raw capture task startup failed; CAN remains receive-only");
   }
 }

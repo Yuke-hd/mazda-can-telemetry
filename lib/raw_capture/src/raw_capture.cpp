@@ -64,8 +64,7 @@ public:
         if (!append(static_cast<char>(byte))) {
           return false;
         }
-      } else if (!append('%') || !append(kHexUpper[byte >> 4]) ||
-                 !append(kHexUpper[byte & 0x0f])) {
+      } else if (!append('%') || !append(kHexUpper[byte >> 4]) || !append(kHexUpper[byte & 0x0f])) {
         return false;
       }
     }
@@ -103,7 +102,8 @@ private:
     }
   } else {
     for (std::size_t index = 0; index < frame.dlc; ++index) {
-      if (!line.append(kHex[frame.data[index] >> 4]) || !line.append(kHex[frame.data[index] & 0x0f])) {
+      if (!line.append(kHex[frame.data[index] >> 4]) ||
+          !line.append(kHex[frame.data[index] & 0x0f])) {
         return false;
       }
     }
@@ -144,11 +144,10 @@ bool Exporter::valid_utf8(const std::string_view value) noexcept {
       ++index;
       continue;
     }
-    const std::size_t width = lead >= 0xf0U && lead <= 0xf4U
-                                  ? 4
-                                  : lead >= 0xe0U && lead <= 0xefU ? 3
-                                  : lead >= 0xc2U && lead <= 0xdfU ? 2
-                                                                   : 0;
+    const std::size_t width = lead >= 0xf0U && lead <= 0xf4U   ? 4
+                              : lead >= 0xe0U && lead <= 0xefU ? 3
+                              : lead >= 0xc2U && lead <= 0xdfU ? 2
+                                                               : 0;
     if (width == 0 || index + width > value.size()) {
       return false;
     }
@@ -242,8 +241,8 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
     pending_drop_timestamp_us_ = boundary.timestamp_us;
     pending_drop_segment_ = boundary.segment;
     pending_drop_bus_ = boundary.bus;
-    std::copy(boundary.reason.begin(), boundary.reason.begin() +
-                                               static_cast<std::ptrdiff_t>(boundary.reason_size),
+    std::copy(boundary.reason.begin(),
+              boundary.reason.begin() + static_cast<std::ptrdiff_t>(boundary.reason_size),
               pending_drop_reason_storage_.begin());
     pending_drop_reason_size_ = boundary.reason_size;
   }
@@ -312,8 +311,8 @@ bool Exporter::diagnostic_allowed(const std::uint64_t now_us) const noexcept {
 void Exporter::schedule_next_diagnostic(const std::uint64_t now_us) noexcept {
   const auto interval = configuration_.diagnostic_interval_us;
   next_diagnostic_us_ = interval > std::numeric_limits<std::uint64_t>::max() - now_us
-                             ? std::numeric_limits<std::uint64_t>::max()
-                             : now_us + interval;
+                            ? std::numeric_limits<std::uint64_t>::max()
+                            : now_us + interval;
 }
 
 Exporter::Attempt Exporter::write_discontinuity(OutputSink &sink,
@@ -357,8 +356,8 @@ Exporter::Attempt Exporter::write_drop(OutputSink &sink) noexcept {
       pending_drop_segment_ = next.segment;
       pending_drop_bus_ = next.bus;
       pending_drop_reason_size_ = next.reason_size;
-      std::copy(next.reason.begin(), next.reason.begin() +
-                                             static_cast<std::ptrdiff_t>(next.reason_size),
+      std::copy(next.reason.begin(),
+                next.reason.begin() + static_cast<std::ptrdiff_t>(next.reason_size),
                 pending_drop_reason_storage_.begin());
     } else {
       pending_drop_frames_ = 0;
@@ -382,10 +381,10 @@ Exporter::Attempt Exporter::write_statistics(OutputSink &sink,
   const auto result = write_line(sink, line.view());
   if (result == Attempt::kWritten) {
     final_statistics_pending_ = false;
-    next_statistics_us_ = configuration_.statistics_interval_us >
-                                  std::numeric_limits<std::uint64_t>::max() - now_us
-                              ? std::numeric_limits<std::uint64_t>::max()
-                              : now_us + configuration_.statistics_interval_us;
+    next_statistics_us_ =
+        configuration_.statistics_interval_us > std::numeric_limits<std::uint64_t>::max() - now_us
+            ? std::numeric_limits<std::uint64_t>::max()
+            : now_us + configuration_.statistics_interval_us;
     ++emitted_diagnostics_;
   }
   return result;
@@ -484,9 +483,9 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
 }
 
 Statistics Exporter::statistics() const noexcept {
-  return Statistics{input_frames_, queued_frames_, emitted_frames_, dropped_frames_,
-                    dropped_records_, queue_overflows_, emitted_diagnostics_, queue_.depth(),
-                    queue_.high_watermark};
+  return Statistics{input_frames_,        queued_frames_,   emitted_frames_,
+                    dropped_frames_,      dropped_records_, queue_overflows_,
+                    emitted_diagnostics_, queue_.depth(),   queue_.high_watermark};
 }
 
 } // namespace raw_capture

@@ -66,9 +66,9 @@ struct Statistics {
 };
 
 // A bounded, two-stage exporter. One owner task must call poll_input() then
-  // poll_output() in that order; the methods are intentionally not concurrent.
-  // The input phase copies frames into private storage and never waits for
-  // output, while the output phase can be driven at a lower effective rate.
+// poll_output() in that order; the methods are intentionally not concurrent.
+// The input phase copies frames into private storage and never waits for
+// output, while the output phase can be driven at a lower effective rate.
 class Exporter final {
 public:
   explicit Exporter(Configuration configuration) noexcept;

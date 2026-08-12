@@ -68,8 +68,7 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
   raw_capture::Exporter exporter(configuration);
 
   FakeSource source;
-  source.frames = {frame(1000, 0, 0x091, false, false, 8),
-                   frame(1100, 0, 0x202, false, false, 8),
+  source.frames = {frame(1000, 0, 0x091, false, false, 8), frame(1100, 0, 0x202, false, false, 8),
                    frame(2100, 0, 0x1fffffff, true, false, 0),
                    frame(2200, 1, 0x123, false, true, 2)};
   source.frames[0].data = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -83,19 +82,19 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
   REQUIRE(exporter.poll_output(sink, 2200, 8) == 4);
 
   CHECK(sink.lines == std::vector<std::string>{
-                           "MCAN-CAPTURE 1\n",
-                           "SESSION firmware=mcan-tcan485%2B0.1.0 board=tcan485-revA "
-                           "bitrate_bps=500000 clock=monotonic clock_unit=us "
-                           "byte_order=big-endian clock_hz=1000000 dropped_frames=0 "
-                           "dropped_records=0\n",
-                           "FRAME t_us=1000 bus=0 id=0x091 format=std rtr=0 dlc=8 "
-                           "data=0100000000000000\n",
-                           "FRAME t_us=1100 bus=0 id=0x202 format=std rtr=0 dlc=8 "
-                           "data=0000000000000000\n",
-                           "DROP t_us=1200 bus=0 count=2 reason=queue-overflow\n",
-                           "FRAME t_us=2100 bus=0 id=0x1fffffff format=ext rtr=0 dlc=0 data=-\n",
-                           "FRAME t_us=2200 bus=1 id=0x123 format=std rtr=1 dlc=2 data=-\n",
-                           "STATS t_us=2200 segment=0 dropped_frames=2 dropped_records=0\n"});
+                          "MCAN-CAPTURE 1\n",
+                          "SESSION firmware=mcan-tcan485%2B0.1.0 board=tcan485-revA "
+                          "bitrate_bps=500000 clock=monotonic clock_unit=us "
+                          "byte_order=big-endian clock_hz=1000000 dropped_frames=0 "
+                          "dropped_records=0\n",
+                          "FRAME t_us=1000 bus=0 id=0x091 format=std rtr=0 dlc=8 "
+                          "data=0100000000000000\n",
+                          "FRAME t_us=1100 bus=0 id=0x202 format=std rtr=0 dlc=8 "
+                          "data=0000000000000000\n",
+                          "DROP t_us=1200 bus=0 count=2 reason=queue-overflow\n",
+                          "FRAME t_us=2100 bus=0 id=0x1fffffff format=ext rtr=0 dlc=0 data=-\n",
+                          "FRAME t_us=2200 bus=1 id=0x123 format=std rtr=1 dlc=2 data=-\n",
+                          "STATS t_us=2200 segment=0 dropped_frames=2 dropped_records=0\n"});
 }
 
 TEST_CASE("slow or disconnected output never blocks source draining") {
@@ -165,10 +164,9 @@ TEST_CASE("separate loss boundaries cannot reorder a later frame") {
   configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
   raw_capture::Exporter exporter(configuration);
   FakeSource source;
-  for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity + 3;
-       ++timestamp) {
-    source.frames.push_back(frame(timestamp, 0, static_cast<std::uint32_t>(timestamp), false,
-                                  false, 0));
+  for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity + 3; ++timestamp) {
+    source.frames.push_back(
+        frame(timestamp, 0, static_cast<std::uint32_t>(timestamp), false, false, 0));
   }
   CHECK(exporter.poll_input(source, source.frames.size()) == raw_capture::kFrameQueueCapacity + 3);
   FakeSink sink;
