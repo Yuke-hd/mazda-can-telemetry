@@ -423,42 +423,42 @@ ParseResult CaptureReader::read(const std::string_view text, const ParseMode mod
           expected_dropped_records = records;
           record = CaptureRecord::statistics_record(
               StatisticsRecord{timestamp, stats_segment, dropped, records});
-        } else {
-          static const char *names[] = {"t_us", "bus", "segment", "reason"};
-          valid = required(map, names, 4) && get_number(map, "t_us", timestamp);
-          std::uint64_t next_segment = 0;
-          bool all = false;
-          std::uint8_t bus_id = 0;
-          std::string reason;
-          valid = valid && bus(map["bus"], all, bus_id) &&
-                  get_number(map, "segment", next_segment) && next_segment > segment &&
-                  decode_percent(map["reason"], reason) &&
-                  timestamp_ok(timestamp, last_timestamp, have_timestamp);
-          if (valid) {
-            record = CaptureRecord::discontinuity_record(
-                DiscontinuityRecord{timestamp, all, bus_id, next_segment, std::move(reason)});
-            segment = next_segment;
-          }
         }
+      } else {
+        static const char *names[] = {"t_us", "bus", "segment", "reason"};
+        valid = required(map, names, 4, error) && get_number(map, "t_us", timestamp);
+        std::uint64_t next_segment = 0;
+        bool all = false;
+        std::uint8_t bus_id = 0;
+        std::string reason;
+        valid = valid && bus(map["bus"], all, bus_id) && get_number(map, "segment", next_segment) &&
+                next_segment > segment && decode_percent(map["reason"], reason) &&
+                timestamp_ok(timestamp, last_timestamp, have_timestamp);
         if (valid) {
-          result.records.push_back(std::move(record));
-          last_timestamp = timestamp;
-          have_timestamp = true;
-        } else {
-          report(line_number, error.empty() ? "invalid record value or ordering" : error, line);
-          if (mode == ParseMode::Strict) {
-            result.ok = false;
-            return result;
-          }
+          record = CaptureRecord::discontinuity_record(
+              DiscontinuityRecord{timestamp, all, bus_id, next_segment, std::move(reason)});
+          segment = next_segment;
         }
       }
-      if (end == std::string_view::npos)
-        break;
-      start = end + 1;
+      if (valid) {
+        result.records.push_back(std::move(record));
+        last_timestamp = timestamp;
+        have_timestamp = true;
+      } else {
+        report(line_number, error.empty() ? "invalid record value or ordering" : error, line);
+        if (mode == ParseMode::Strict) {
+          result.ok = false;
+          return result;
+        }
+      }
     }
-    if (!session_seen)
-      result.ok = false;
-    return result;
+    if (end == std::string_view::npos)
+      break;
+    start = end + 1;
   }
+  if (!session_seen)
+    result.ok = false;
+  return result;
+}
 
 } // namespace raw_capture

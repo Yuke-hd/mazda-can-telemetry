@@ -108,8 +108,7 @@ bool CaptureWriter::write_record(const CaptureRecord &record, std::string &outpu
     return true;
   }
   case RecordType::Drop:
-    if (record.drop.count == 0 || !valid_text(record.drop.reason) ||
-        (!record.drop.all_buses && record.drop.bus_id > 255))
+    if (record.drop.count == 0 || !valid_text(record.drop.reason))
       return fail(error, "invalid drop record");
     output += "DROP t_us=";
     append_decimal(record.drop.timestamp_us, output);
@@ -136,8 +135,7 @@ bool CaptureWriter::write_record(const CaptureRecord &record, std::string &outpu
     output.push_back('\n');
     return true;
   case RecordType::Discontinuity:
-    if (record.discontinuity.segment == 0 || !valid_text(record.discontinuity.reason) ||
-        (!record.discontinuity.all_buses && record.discontinuity.bus_id > 255))
+    if (record.discontinuity.segment == 0 || !valid_text(record.discontinuity.reason))
       return fail(error, "invalid discontinuity record");
     output += "DISCONTINUITY t_us=";
     append_decimal(record.discontinuity.timestamp_us, output);
