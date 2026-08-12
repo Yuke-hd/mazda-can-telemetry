@@ -90,9 +90,8 @@ TEST_CASE("writer round trip retains standard extended zero length and remote fr
 }
 
 TEST_CASE("strict parser reports malformed values and recovery preserves later frames") {
-  const std::string fixture = golden_fixture();
-  const std::string text = fixture.replace(fixture.find("dlc=8 data=0000000000000000"), 27,
-                                           "dlc=9 data=0000000000000000");
+  std::string text = golden_fixture();
+  text.replace(text.find("dlc=8 data=0000000000000000"), 27, "dlc=9 data=0000000000000000");
   const auto strict = raw_capture::CaptureReader{}.read(text, raw_capture::ParseMode::Strict);
   CHECK_FALSE(strict.ok);
   REQUIRE(strict.errors.size() == 1);
