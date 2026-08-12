@@ -182,8 +182,7 @@ TEST_CASE("separate loss boundaries cannot reorder a later frame") {
   CHECK(exporter.poll_output(sink, 102, 100) > 0);
   bool saw_drop = false;
   for (const auto &line : sink.lines) {
-    if (line == "DROP t_us=64 bus=0 count=3 reason=export-queue-overflow\n" ||
-        line == "DROP t_us=66 bus=0 count=3 reason=export-queue-overflow\n") {
+    if (line == "DROP t_us=64 bus=0 count=3 reason=export-queue-overflow\n") {
       saw_drop = true;
     }
   }
@@ -239,6 +238,26 @@ TEST_CASE("equal timestamp loss boundary stays between accepted frames") {
   CHECK(sink.lines[2].rfind("FRAME t_us=10 bus=0 id=0x001", 0) == 0);
   CHECK(sink.lines[3] == "DROP t_us=10 bus=0 count=1 reason=queue-overflow\n");
   CHECK(sink.lines[4].rfind("FRAME t_us=10 bus=0 id=0x002", 0) == 0);
+}
+
+TEST_CASE("accepted frame boundary prevents loss coalescing") {
+  raw_capture::Configuration configuration{};
+  configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  configuration.diagnostic_interval_us = 0;
+  raw_capture::Exporter exporter(configuration);
+  FakeSource source;
+  source.frames.push_back(frame(10, 0, 1, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 1);
+  exporter.note_dropped_frames(1, 20, 0, "queue-overflow");
+  source.frames.push_back(frame(30, 0, 2, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 1);
+  exporter.note_dropped_frames(1, 40, 0, "queue-overflow");
+  FakeSink sink;
+  CHECK(exporter.poll_output(sink, 40, 10) == 7);
+  CHECK(sink.lines[2].rfind("FRAME t_us=10 ", 0) == 0);
+  CHECK(sink.lines[3] == "DROP t_us=20 bus=0 count=1 reason=queue-overflow\n");
+  CHECK(sink.lines[4].rfind("FRAME t_us=30 ", 0) == 0);
+  CHECK(sink.lines[5] == "DROP t_us=40 bus=0 count=1 reason=queue-overflow\n");
 }
 
 TEST_CASE("disconnect abandons a partial line before reconnect") {

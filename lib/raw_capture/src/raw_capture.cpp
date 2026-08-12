@@ -228,8 +228,7 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
         drop_boundaries_[(drop_head_ + kDropBoundaryCapacity - 1) % kDropBoundaryCapacity];
     const std::string_view previous_reason(previous.reason.data(), previous.reason_size);
     if (previous.segment == capture_segment_ && previous.bus == bus_id &&
-        previous_reason == reason && timestamp_us >= previous.timestamp_us &&
-        timestamp_us - previous.timestamp_us <= 1 && previous.frame_boundary == queue_.head) {
+        previous_reason == reason && previous.frame_boundary == queue_.head) {
       previous.count += count;
       if (drop_head_ - drop_tail_ == 1) {
         pending_drop_frames_ = previous.count;
