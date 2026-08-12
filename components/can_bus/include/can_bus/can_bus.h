@@ -43,7 +43,7 @@ enum class StatisticsOperation : std::uint8_t {
   kSnapshot,
   // Reset interval counters after taking the returned snapshot. Queued frames
   // remain intact, queue_depth is unchanged, and the new interval watermark
-  // starts at the current depth.
+  // starts at (and cannot fall below) the live queue depth.
   kSnapshotAndReset,
 };
 

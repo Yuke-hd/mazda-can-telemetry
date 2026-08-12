@@ -58,8 +58,10 @@ reset. `statistics(kSnapshotAndReset)` returns the pre-reset interval and then
 zeros receive, queued, delivered, dropped, overflow, bus-error, driver-missed,
 and controller-reset counters. It does not remove queued frames. Queue depth
 remains live, and the next interval's high watermark begins at the depth that
-existed at reset. Consequently, the watermark can never claim that an already
-occupied queue started empty.
+existed at reset. The producer publishes its watermark before publishing queue
+depth, and reset reconciles one fresh depth observation after clearing the
+interval counter. Consequently, a concurrent producer cannot make the new
+watermark claim that an already occupied queue started empty.
 
 `controller_resets` is one on an acquisition interval that follows a prior
 successful start, and zero on the first interval. An unexpected bus-off alert is

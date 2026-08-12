@@ -175,6 +175,21 @@ TEST_CASE("statistics reset preserves queue and starts watermark at current dept
   CHECK(output.identifier == 2);
 }
 
+TEST_CASE("statistics reset keeps the next watermark at the live queue depth") {
+  can_bus::internal::FrameRing<4> ring;
+  REQUIRE(ring.push(make_frame(1, 10)));
+  REQUIRE(ring.push(make_frame(2, 20)));
+  REQUIRE(ring.push(make_frame(3, 30)));
+  vehicle_core::RawCanFrame output{};
+  REQUIRE(ring.pop(output));
+  REQUIRE(ring.pop(output));
+
+  const auto before = ring.snapshot(can_bus::StatisticsOperation::kSnapshotAndReset);
+  CHECK(before.queue_depth == 1);
+  CHECK(before.queue_high_watermark == 3);
+  CHECK(ring.snapshot(can_bus::StatisticsOperation::kSnapshot).queue_high_watermark == 1);
+}
+
 TEST_CASE("acquisition boundary has fixed storage and value semantics") {
   CHECK(std::is_trivially_copyable_v<vehicle_core::RawCanFrame>);
   CHECK(can_bus::kQueueCapacity == 64);

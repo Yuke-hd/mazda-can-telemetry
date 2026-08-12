@@ -27,9 +27,11 @@ public:
     }
 
     frames_[head % Capacity] = frame;
+    // Publish the watermark before head so a consumer that observes the new
+    // queue depth can never observe a lower watermark.
+    update_watermark(static_cast<std::uint32_t>((head + 1) - tail));
     head_.store(head + 1, std::memory_order_release);
     frames_queued_.fetch_add(1, std::memory_order_relaxed);
-    update_watermark(static_cast<std::uint32_t>((head + 1) - tail));
     return true;
   }
 
@@ -73,6 +75,10 @@ public:
       result.controller_resets = controller_resets_.exchange(0, std::memory_order_relaxed);
       result.queue_high_watermark =
           queue_high_watermark_.exchange(result.queue_depth, std::memory_order_relaxed);
+      // A producer may have published a frame after the initial depth read.
+      // Reconcile with a fresh depth after the reset so the next interval's
+      // watermark cannot be below the live queue depth.
+      ensure_watermark_at_least(depth());
     } else {
       result.frames_received = frames_received_.load(std::memory_order_relaxed);
       result.frames_queued = frames_queued_.load(std::memory_order_relaxed);
@@ -105,6 +111,13 @@ private:
     std::uint32_t watermark = queue_high_watermark_.load(std::memory_order_relaxed);
     while (depth_value > watermark && !queue_high_watermark_.compare_exchange_weak(
                                           watermark, depth_value, std::memory_order_relaxed)) {
+    }
+  }
+
+  void ensure_watermark_at_least(const std::uint32_t depth_value) noexcept {
+    std::uint32_t watermark = queue_high_watermark_.load(std::memory_order_relaxed);
+    while (watermark < depth_value && !queue_high_watermark_.compare_exchange_weak(
+                                             watermark, depth_value, std::memory_order_relaxed)) {
     }
   }
 
