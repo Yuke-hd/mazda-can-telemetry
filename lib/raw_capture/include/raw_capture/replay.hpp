@@ -9,6 +9,8 @@
 
 namespace raw_capture {
 
+class ReplayHarness;
+
 class SimulatedMonotonicClock final : public vehicle_core::MonotonicClock {
 public:
   [[nodiscard]] vehicle_core::MonotonicTimestamp now() const noexcept override { return now_us_; }
@@ -17,13 +19,14 @@ public:
     if (timestamp_us >= now_us_)
       now_us_ = timestamp_us;
   }
-  void reset(vehicle_core::MonotonicTimestamp timestamp_us) noexcept { now_us_ = timestamp_us; }
   void advance(std::uint64_t delta_us) noexcept;
   void pause() noexcept { paused_ = true; }
   void resume() noexcept { paused_ = false; }
   [[nodiscard]] bool paused() const noexcept { return paused_; }
 
 private:
+  friend class ReplayHarness;
+  void reset(vehicle_core::MonotonicTimestamp timestamp_us) noexcept { now_us_ = timestamp_us; }
   vehicle_core::MonotonicTimestamp now_us_{0};
   bool paused_{false};
 };

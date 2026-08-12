@@ -1,7 +1,6 @@
 #include "raw_capture/capture_reader.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <charconv>
 #include <limits>
 #include <map>
@@ -75,7 +74,8 @@ bool encoded_syntax(const std::string_view value) {
 }
 
 bool unreserved(const unsigned char c) {
-  return std::isalnum(c) != 0 || c == '-' || c == '.' || c == '_' || c == '~';
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' ||
+         c == '.' || c == '_' || c == '~';
 }
 
 bool decode_percent(const std::string_view encoded, std::string &decoded) {

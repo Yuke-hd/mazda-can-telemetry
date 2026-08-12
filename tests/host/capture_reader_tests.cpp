@@ -33,6 +33,17 @@ std::string golden_fixture() {
   return kGoldenFallback;
 #endif
 }
+
+void check_frame(const vehicle_core::RawCanFrame &actual,
+                 const vehicle_core::RawCanFrame &expected) {
+  CHECK(actual.timestamp_us == expected.timestamp_us);
+  CHECK(actual.bus_id == expected.bus_id);
+  CHECK(actual.identifier == expected.identifier);
+  CHECK(actual.identifier_format == expected.identifier_format);
+  CHECK(actual.remote_request == expected.remote_request);
+  CHECK(actual.dlc == expected.dlc);
+  CHECK(actual.data == expected.data);
+}
 } // namespace
 
 TEST_CASE("golden capture parses all record types without loss") {
@@ -41,19 +52,30 @@ TEST_CASE("golden capture parses all record types without loss") {
   REQUIRE(result.errors.empty());
   CHECK(result.session.firmware == "mcan-tcan485+0.1.0");
   REQUIRE(result.records.size() == 8);
-  CHECK(result.records[0].frame.identifier == 0x091);
-  CHECK(result.records[0].frame.data[0] == 0x01);
-  CHECK(result.records[5].frame.identifier == 0x1fffffff);
-  CHECK(result.records[6].frame.remote_request);
-  CHECK(result.records[6].frame.dlc == 2);
-  CHECK(result.records[6].frame.data[0] == 0);
+  vehicle_core::RawCanFrame expected0{};
+  expected0.timestamp_us = 1000;
+  expected0.identifier = 0x091;
+  expected0.dlc = 8;
+  expected0.data[0] = 0x01;
+  vehicle_core::RawCanFrame expected1{};
+  expected1.timestamp_us = 1100;
+  expected1.identifier = 0x202;
+  expected1.dlc = 8;
+  vehicle_core::RawCanFrame expected5{};
+  expected5.timestamp_us = 2100;
+  expected5.identifier = 0x1fffffff;
+  expected5.identifier_format = vehicle_core::CanIdentifierFormat::Extended;
+  vehicle_core::RawCanFrame expected6{};
+  expected6.timestamp_us = 2200;
+  expected6.bus_id = 1;
+  expected6.identifier = 0x123;
+  expected6.remote_request = true;
+  expected6.dlc = 2;
+  check_frame(result.records[0].frame, expected0);
+  check_frame(result.records[1].frame, expected1);
+  check_frame(result.records[5].frame, expected5);
+  check_frame(result.records[6].frame, expected6);
   CHECK(result.records[4].discontinuity.segment == 1);
-  CHECK(result.records[0].frame.timestamp_us == 1000);
-  CHECK(result.records[0].frame.bus_id == 0);
-  CHECK(result.records[0].frame.identifier_format == vehicle_core::CanIdentifierFormat::Standard);
-  CHECK_FALSE(result.records[0].frame.remote_request);
-  CHECK(result.records[0].frame.dlc == 8);
-  CHECK(result.records[0].frame.data[7] == 0);
 }
 
 TEST_CASE("writer round trip retains standard extended zero length and remote frames") {
@@ -82,10 +104,9 @@ TEST_CASE("writer round trip retains standard extended zero length and remote fr
   const auto result = raw_capture::CaptureReader{}.read(text);
   REQUIRE(result.ok);
   REQUIRE(result.records.size() == records.size());
-  CHECK(result.records[0].frame.identifier == standard.identifier);
-  CHECK(result.records[0].frame.data == standard.data);
-  CHECK(result.records[1].frame.identifier_format == vehicle_core::CanIdentifierFormat::Extended);
-  CHECK(result.records[2].frame.remote_request);
+  check_frame(result.records[0].frame, standard);
+  check_frame(result.records[1].frame, extended);
+  check_frame(result.records[2].frame, remote);
   CHECK(text.find("firmware=fw%2Bsynthetic") != std::string::npos);
 }
 
@@ -194,21 +215,34 @@ TEST_CASE("version truncation payload and timestamp failures are explicit") {
     CHECK_FALSE(malformed.ok);
     CHECK(malformed.errors.size() == 1);
   }
+  const auto uppercase_digit = raw_capture::CaptureReader{}.read(
+      prefix + "FRAME t_us=1 bus=0 id=0x00A format=std rtr=0 dlc=0 data=-\n");
+  CHECK_FALSE(uppercase_digit.ok);
 }
 
 TEST_CASE("recovery is transactional and validates unknown syntax") {
   const std::string text =
       "MCAN-CAPTURE 1\nSESSION firmware=f board=b bitrate_bps=1 clock=monotonic clock_unit=us "
       "byte_order=big-endian clock_hz=1 dropped_frames=0 dropped_records=0\n"
-      "DROP t_us=1 bus=0 count=0 reason=bad\n"
-      "DISCONTINUITY t_us=2 bus=all segment=0 reason=bad\n"
+      "DROP t_us=100 bus=0 count=0 reason=bad\n"
+      "DISCONTINUITY t_us=200 bus=999 segment=1 reason=bad\n"
+      "STATS t_us=300 segment=0 dropped_frames=9 dropped_records=1\n"
       "FUTURE thing=value\n"
-      "FRAME t_us=3 bus=0 id=0x001 format=std rtr=0 dlc=0 data=-\n";
+      "FRAME t_us=50 bus=2 id=0x001 format=std rtr=0 dlc=0 data=-\n"
+      "DROP t_us=60 bus=2 count=2 reason=synthetic\n"
+      "STATS t_us=60 segment=0 dropped_frames=2 dropped_records=1\n"
+      "STATS t_us=70 segment=0 dropped_frames=2 dropped_records=0\n"
+      "FRAME t_us=65 bus=2 id=0x001 format=std rtr=0 dlc=0 data=-\n"
+      "STATS t_us=65 segment=0 dropped_frames=2 dropped_records=1\n";
   const auto result = raw_capture::CaptureReader{}.read(text, raw_capture::ParseMode::Recovery);
   CHECK(result.ok);
-  CHECK(result.errors.size() == 2);
-  REQUIRE(result.records.size() == 1);
-  CHECK(result.records[0].frame.timestamp_us == 3);
+  CHECK(result.errors.size() == 3);
+  REQUIRE(result.records.size() == 5);
+  CHECK(result.records[0].frame.timestamp_us == 50);
+  CHECK(result.records[1].drop.count == 2);
+  CHECK(result.records[2].statistics.dropped_frames == 2);
+  CHECK(result.records[3].frame.timestamp_us == 65);
+  CHECK(result.records[4].statistics.dropped_records == 1);
   const auto duplicate = raw_capture::CaptureReader{}.read(
       "MCAN-CAPTURE 1\nSESSION firmware=f board=b bitrate_bps=1 clock=monotonic clock_unit=us "
       "byte_order=big-endian clock_hz=1 dropped_frames=0 dropped_records=0\n"
@@ -277,8 +311,11 @@ TEST_CASE("replay clock drives vehicle freshness timeout") {
                 .has_value());
   }) == 1);
   CHECK(store.snapshot().turn_state.is_valid());
-  CHECK(replay.advance_to(1101, [&](const vehicle_core::RawCanFrame &,
-                                    raw_capture::SimulatedMonotonicClock &) {}) == 0);
+  CHECK(replay.advance_by(100, [&](const vehicle_core::RawCanFrame &,
+                                   raw_capture::SimulatedMonotonicClock &) {}) == 0);
+  CHECK(store.snapshot().turn_state.is_valid());
+  CHECK(replay.advance_by(1, [&](const vehicle_core::RawCanFrame &,
+                                 raw_capture::SimulatedMonotonicClock &) {}) == 0);
   CHECK(store.snapshot().turn_state.is_stale());
 }
 
