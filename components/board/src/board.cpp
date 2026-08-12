@@ -61,4 +61,11 @@ bool initialize_safe_defaults() {
   return ok;
 }
 
+bool set_can_transceiver_power(const bool enabled) {
+  if (!is_configuration_valid()) {
+    return false;
+  }
+  return configure_output(kTcan485.can.boost_enable, enabled ? 1 : 0) == ESP_OK;
+}
+
 } // namespace board
