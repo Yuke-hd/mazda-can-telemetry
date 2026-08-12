@@ -14,29 +14,43 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from pathlib import Path
+from typing import Callable, FrozenSet, List, Optional, Sequence, Tuple
 
 
-Version = tuple[int, ...]
+Version = Tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class Requirement:
     name: str
     executable: str
-    arguments: tuple[str, ...]
-    scopes: frozenset[str]
-    check: Callable[[str], tuple[bool, str]]
+    arguments: Tuple[str, ...]
+    scopes: FrozenSet[str]
+    check: Callable[[str], Tuple[bool, str]]
     install_hint: str
 
 
-def _version(text: str) -> Version | None:
-    match = re.search(r"(?<!\d)(\d+(?:\.\d+)+)", text)
-    return tuple(int(part) for part in match.group(1).split(".")) if match else None
+_VERSION_RE = re.compile(
+    r"(?<!\d)(?P<version>\d+(?:\.\d+)+)(?P<suffix>[-+A-Za-z][A-Za-z0-9.-]*)?"
+)
 
 
-def _at_least(expected: Version) -> Callable[[str], tuple[bool, str]]:
-    def check(output: str) -> tuple[bool, str]:
+def _version_details(text: str) -> Optional[Tuple[Version, str]]:
+    match = _VERSION_RE.search(text)
+    if match is None:
+        return None
+    version = tuple(int(part) for part in match.group("version").split("."))
+    return version, match.group("suffix") or ""
+
+
+def _version(text: str) -> Optional[Version]:
+    details = _version_details(text)
+    return details[0] if details is not None else None
+
+
+def _at_least(expected: Version) -> Callable[[str], Tuple[bool, str]]:
+    def check(output: str) -> Tuple[bool, str]:
         actual = _version(output)
         if actual is None:
             return False, f"could not parse a version (need >= {'.'.join(map(str, expected))})"
@@ -45,19 +59,22 @@ def _at_least(expected: Version) -> Callable[[str], tuple[bool, str]]:
     return check
 
 
-def _exact(expected: Version) -> Callable[[str], tuple[bool, str]]:
-    def check(output: str) -> tuple[bool, str]:
-        actual = _version(output)
+def _exact(expected: Version) -> Callable[[str], Tuple[bool, str]]:
+    def check(output: str) -> Tuple[bool, str]:
+        details = _version_details(output)
         expected_text = ".".join(map(str, expected))
-        if actual is None:
+        if details is None:
             return False, f"could not parse a version (need exactly {expected_text})"
-        return actual == expected, f"reported {'.'.join(map(str, actual))}; need exactly {expected_text}"
+        actual, suffix = details
+        actual_text = ".".join(map(str, actual)) + suffix
+        valid = actual == expected and not suffix
+        return valid, f"reported {actual_text}; need exactly {expected_text}"
 
     return check
 
 
-def _major_exact(expected: int) -> Callable[[str], tuple[bool, str]]:
-    def check(output: str) -> tuple[bool, str]:
+def _major_exact(expected: int) -> Callable[[str], Tuple[bool, str]]:
+    def check(output: str) -> Tuple[bool, str]:
         actual = _version(output)
         if actual is None:
             return False, f"could not parse a version (need major version {expected})"
@@ -66,7 +83,7 @@ def _major_exact(expected: int) -> Callable[[str], tuple[bool, str]]:
     return check
 
 
-def _present(output: str) -> tuple[bool, str]:
+def _present(output: str) -> Tuple[bool, str]:
     return True, output.strip().splitlines()[0] if output.strip() else "executable responded"
 
 
@@ -84,7 +101,7 @@ REQUIREMENTS = (
 )
 
 
-def _run(executable: str, arguments: Sequence[str]) -> tuple[int, str]:
+def _run(executable: str, arguments: Sequence[str]) -> Tuple[int, str]:
     try:
         result = subprocess.run(
             [executable, *arguments],
@@ -98,13 +115,52 @@ def _run(executable: str, arguments: Sequence[str]) -> tuple[int, str]:
     return result.returncode, f"{result.stdout}\n{result.stderr}".strip()
 
 
+def _executable_candidates(executable: str) -> Tuple[str, ...]:
+    """Return the active Python environment and PATH tool locations.
+
+    A virtual environment can be used without activating it by invoking its
+    Python directly (for example, ``.ci-venv/bin/python checker.py``). In that
+    mode Python packages install their console scripts next to the interpreter,
+    while PATH still points at the caller's shell. Prefer those locations when
+    a virtual environment is explicit; for system Python, preserve PATH
+    precedence.
+    """
+
+    path_entry = shutil.which(executable)
+    interpreter_dir = Path(sys.executable).resolve().parent
+    environment_dirs = (interpreter_dir, Path(sys.prefix) / "bin", Path(sys.prefix) / "Scripts")
+    is_virtual_environment = sys.prefix != getattr(sys, "base_prefix", sys.prefix) or hasattr(sys, "real_prefix")
+    candidates: List[str] = []
+
+    def add_directory_tools(directories: Tuple[Path, ...]) -> None:
+        for directory in directories:
+            candidate = directory / executable
+            if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                candidate_text = str(candidate)
+                if candidate_text not in candidates:
+                    candidates.append(candidate_text)
+
+    if is_virtual_environment:
+        add_directory_tools(environment_dirs)
+    if path_entry is not None and path_entry not in candidates:
+        candidates.append(path_entry)
+    if not is_virtual_environment:
+        add_directory_tools(environment_dirs)
+    return tuple(candidates)
+
+
+def _find_executable(executable: str) -> Optional[str]:
+    candidates = _executable_candidates(executable)
+    return candidates[0] if candidates else None
+
+
 def check(scope: str) -> int:
     failures = 0
     print(f"MCAN toolchain check: {scope}")
     for requirement in REQUIREMENTS:
         if scope not in requirement.scopes:
             continue
-        path = shutil.which(requirement.executable)
+        path = _find_executable(requirement.executable)
         if path is None:
             print(f"FAIL {requirement.name}: '{requirement.executable}' not found")
             print(f"     Install: {requirement.install_hint}")

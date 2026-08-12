@@ -16,6 +16,8 @@ jobs:
           sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build ripgrep python3
       - name: Check host toolchain versions
         run: python3 tools/check_toolchain.py --scope host
+      - name: Test toolchain checker diagnostics
+        run: python3 -m unittest discover -s tests/tools -p '*_test.py'
       - name: Validate C++ formatting
         shell: bash
         run: |
