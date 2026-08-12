@@ -1,4 +1,5 @@
 #include "board/board_config.h"
+#include "can_bus/can_bus.h"
 #include "esp_log.h"
 
 namespace {
@@ -11,7 +12,14 @@ extern "C" void app_main(void) {
     return;
   }
 
-  ESP_LOGI(kTag, "T-CAN485 safe defaults applied; vehicle CAN remains listen-only and no CAN "
-                 "transmit API "
-                 "is available");
+  constexpr can_bus::Configuration configuration{500'000, 0};
+  ESP_LOGI(kTag,
+           "vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; TX queue disabled; receive API "
+           "only",
+           static_cast<unsigned long>(configuration.bitrate_bps));
+  if (can_bus::start(configuration) != can_bus::Result::kOk) {
+    ESP_LOGE(kTag, "strict listen-only CAN startup failed; refusing to continue");
+    return;
+  }
+  ESP_LOGI(kTag, "strict listen-only CAN acquisition started");
 }

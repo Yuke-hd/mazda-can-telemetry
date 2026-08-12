@@ -22,6 +22,18 @@ target_include_directories(board_config_tests PRIVATE ${CMAKE_SOURCE_DIR}/compon
 target_compile_features(board_config_tests PRIVATE cxx_std_17)
 add_test(NAME board_config_tests COMMAND board_config_tests)
 
+add_executable(can_bus_boundary_tests can_bus_boundary_tests.cpp)
+target_include_directories(
+  can_bus_boundary_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/components/can_bus/include
+    ${CMAKE_SOURCE_DIR}/components/can_bus/private_include
+    ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
+)
+target_link_libraries(can_bus_boundary_tests PRIVATE doctest::doctest)
+target_compile_features(can_bus_boundary_tests PRIVATE cxx_std_17)
+doctest_discover_tests(can_bus_boundary_tests)
+
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(
   NAME capture_format_fixture
@@ -29,4 +41,12 @@ add_test(
           ${CMAKE_SOURCE_DIR}/tools/validate_capture_format.py
           --spec ${CMAKE_SOURCE_DIR}/docs/protocol/raw-capture-format.md
           --fixture ${CMAKE_SOURCE_DIR}/tests/fixtures/capture/golden-v1.txt
+)
+
+add_test(
+  NAME can_bus_no_transmit_structure
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/validate_can_receive_only.py
+          --public-header ${CMAKE_SOURCE_DIR}/components/can_bus/include/can_bus/can_bus.h
+          --implementation ${CMAKE_SOURCE_DIR}/components/can_bus/src/can_bus.cpp
 )

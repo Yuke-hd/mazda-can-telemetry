@@ -53,10 +53,16 @@ performs the following sequence:
    off, and CAN TX recessive on a best-effort basis. Firmware must then stop and
    must not fall back to normal CAN mode.
 
-Vehicle firmware is permanently listen-only. This component provides no CAN
-start, send, transmit, or diagnostic operation. A future CAN component must
-enforce `twai_general_config_t::mode = TWAI_MODE_LISTEN_ONLY` and reject any
-configuration that is not listen-only; invalid configuration must fail closed.
+The CAN component calls `board::set_can_transceiver_power(true)` only while
+starting the strict listen-only driver. Failed startup and normal stop disable
+the shared CAN/RS485 boost supply again. This power operation does not expose a
+CAN driver handle or a data-frame transmission path.
+
+Vehicle firmware is permanently listen-only. The CAN component exposes only
+start, stop, receive, and statistics operations. It enforces
+`twai_general_config_t::mode = TWAI_MODE_LISTEN_ONLY`, disables the TX queue,
+and rejects unsupported bitrates before driver installation. It exposes no
+send, transmit, diagnostic, mode-selection, or driver-handle operation.
 
 ## Bring-up checklist
 

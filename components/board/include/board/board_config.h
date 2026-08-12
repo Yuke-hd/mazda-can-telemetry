@@ -92,4 +92,9 @@ static_assert(is_configuration_valid(), "T-CAN485 board configuration must be sa
 // Returns false if any ESP-IDF GPIO operation fails. No CAN driver is started.
 bool initialize_safe_defaults();
 
+// Enable or disable the board's shared CAN/RS485 boost supply. CAN startup
+// enables it only after safe defaults are applied; stop and every startup
+// failure disable it again. Returns false if the GPIO operation fails.
+bool set_can_transceiver_power(bool enabled);
+
 } // namespace board
