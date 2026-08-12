@@ -43,6 +43,7 @@ class FakeSink final : public raw_capture::OutputSink {
 public:
   bool is_connected{true};
   bool would_block{false};
+  std::size_t discarded_partial_lines{0};
   std::vector<std::string> lines;
 
   bool connected() const noexcept override { return is_connected; }
@@ -57,6 +58,8 @@ public:
     lines.emplace_back(line);
     return raw_capture::WriteResult::kWritten;
   }
+
+  void discard_partial_line() noexcept override { ++discarded_partial_lines; }
 };
 
 } // namespace
@@ -200,7 +203,7 @@ TEST_CASE("slow output rate-limits diagnostics without hiding cumulative loss") 
   source.frames.push_back(frame(65, 0, 65, false, false, 9));
   CHECK(exporter.poll_input(source, source.frames.size()) == raw_capture::kFrameQueueCapacity + 2);
   FakeSink sink;
-  CHECK(exporter.poll_output(sink, 50, 100) == 65);
+  CHECK(exporter.poll_output(sink, 50, 100) == 67);
   source.frames.push_back(frame(66, 0, 66, false, false, 0));
   CHECK(exporter.poll_input(source, 1) == 1);
   CHECK(exporter.poll_output(sink, 100, 100) == 0);
@@ -215,4 +218,39 @@ TEST_CASE("slow output rate-limits diagnostics without hiding cumulative loss") 
                               "DROP t_us=65 bus=0 count=1 reason=invalid-frame\n");
   REQUIRE(drop != sink.lines.end());
   CHECK((drop + 1)->rfind("FRAME t_us=66 ", 0) == 0);
+}
+
+TEST_CASE("equal timestamp loss boundary stays between accepted frames") {
+  raw_capture::Configuration configuration{};
+  configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  configuration.diagnostic_interval_us = 0;
+  raw_capture::Exporter exporter(configuration);
+  FakeSource source;
+  source.frames.push_back(frame(10, 0, 1, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 1);
+  exporter.note_dropped_frames(1, 10, 0, "queue-overflow");
+  source.frames.push_back(frame(10, 0, 2, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 1);
+  FakeSink sink;
+  CHECK(exporter.poll_output(sink, 10, 8) == 5);
+  REQUIRE(sink.lines.size() == 5);
+  CHECK(sink.lines[2].rfind("FRAME t_us=10 bus=0 id=0x001", 0) == 0);
+  CHECK(sink.lines[3] == "DROP t_us=10 bus=0 count=1 reason=queue-overflow\n");
+  CHECK(sink.lines[4].rfind("FRAME t_us=10 bus=0 id=0x002", 0) == 0);
+}
+
+TEST_CASE("disconnect abandons a partial line before reconnect") {
+  raw_capture::Configuration configuration{};
+  configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  raw_capture::Exporter exporter(configuration);
+  FakeSink sink;
+  sink.would_block = true;
+  CHECK(exporter.poll_output(sink, 0, 1) == 0);
+  sink.is_connected = false;
+  CHECK(exporter.poll_output(sink, 1, 1) == 0);
+  CHECK(sink.discarded_partial_lines == 1);
+  sink.is_connected = true;
+  sink.would_block = false;
+  CHECK(exporter.poll_output(sink, 2, 2) == 2);
+  CHECK(sink.lines[0] == "MCAN-CAPTURE 1\n");
 }

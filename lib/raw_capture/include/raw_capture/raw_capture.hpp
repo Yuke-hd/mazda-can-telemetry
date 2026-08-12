@@ -36,7 +36,7 @@ public:
   virtual ~OutputSink() = default;
   [[nodiscard]] virtual bool connected() const noexcept = 0;
   [[nodiscard]] virtual WriteResult write(std::string_view complete_line) noexcept = 0;
-  virtual void discard_partial_line() noexcept {}
+  virtual void discard_partial_line() noexcept = 0;
 };
 
 struct SessionMetadata {
