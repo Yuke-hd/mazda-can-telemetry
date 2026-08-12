@@ -62,6 +62,7 @@ void ReplayHarness::replay(const std::vector<CaptureRecord> &records, const Fram
     return;
   load(records);
   resume();
-  (void)advance_to(std::numeric_limits<std::uint64_t>::max(), handler);
+  while (pending())
+    (void)advance_to(std::numeric_limits<std::uint64_t>::max(), handler);
 }
 } // namespace raw_capture

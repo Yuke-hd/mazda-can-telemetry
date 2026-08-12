@@ -48,6 +48,12 @@ TEST_CASE("golden capture parses all record types without loss") {
   CHECK(result.records[6].frame.dlc == 2);
   CHECK(result.records[6].frame.data[0] == 0);
   CHECK(result.records[4].discontinuity.segment == 1);
+  CHECK(result.records[0].frame.timestamp_us == 1000);
+  CHECK(result.records[0].frame.bus_id == 0);
+  CHECK(result.records[0].frame.identifier_format == vehicle_core::CanIdentifierFormat::Standard);
+  CHECK_FALSE(result.records[0].frame.remote_request);
+  CHECK(result.records[0].frame.dlc == 8);
+  CHECK(result.records[0].frame.data[7] == 0);
 }
 
 TEST_CASE("writer round trip retains standard extended zero length and remote frames") {
@@ -120,7 +126,7 @@ TEST_CASE("replay clock can pause and advance deterministically") {
   CHECK(replay.advance_to(2200, [&](const vehicle_core::RawCanFrame &,
                                     raw_capture::SimulatedMonotonicClock &now) {
     times.push_back(now.now());
-  }) == 0);
+  }) == 1);
   CHECK(replay.advance_to(2200, [&](const vehicle_core::RawCanFrame &,
                                     raw_capture::SimulatedMonotonicClock &now) {
     times.push_back(now.now());
@@ -132,6 +138,13 @@ TEST_CASE("replay clock can pause and advance deterministically") {
   clock.resume();
   clock.advance(500);
   CHECK(clock.now() == 2700);
+
+  raw_capture::SimulatedMonotonicClock drain_clock;
+  raw_capture::ReplayHarness drain_replay{drain_clock};
+  std::size_t drained = 0;
+  drain_replay.replay(parsed.records, [&](const vehicle_core::RawCanFrame &,
+                                          raw_capture::SimulatedMonotonicClock &) { ++drained; });
+  CHECK(drained == 4);
 
   raw_capture::SimulatedMonotonicClock reset_clock;
   raw_capture::ReplayHarness reset_replay{reset_clock};
@@ -174,6 +187,14 @@ TEST_CASE("version truncation payload and timestamp failures are explicit") {
   CHECK_FALSE(truncated.ok);
   REQUIRE(truncated.errors.size() == 1);
   CHECK(truncated.errors[0].message == "truncated record without LF");
+  for (const std::string line :
+       {"FRAME t_us=01 bus=0 id=0x001 format=std rtr=0 dlc=0 data=-\n",
+        "FRAME t_us=1 bus=0 id=0X001 format=std rtr=0 dlc=0 data=-\n",
+        "FRAME t_us=1 bus=0 id=0x001 format=std rtr=0 dlc=0 data=- t_us=2\n"}) {
+    const auto malformed = raw_capture::CaptureReader{}.read(prefix + line);
+    CHECK_FALSE(malformed.ok);
+    CHECK(malformed.errors.size() == 1);
+  }
 }
 
 TEST_CASE("recovery is transactional and validates unknown syntax") {
