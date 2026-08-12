@@ -13,7 +13,11 @@ jobs:
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build
+          sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build ripgrep python3
+      - name: Check host toolchain versions
+        run: python3 tools/check_toolchain.py --scope host
+      - name: Test toolchain checker diagnostics
+        run: python3 -m unittest discover -s tests/tools -p '*_test.py'
       - name: Validate C++ formatting
         shell: bash
         run: |
@@ -28,3 +32,27 @@ jobs:
         run: ctest --test-dir build/host --output-on-failure
       - name: Validate GitHub App wrapper permissions
         run: python3 tools/validate_github_app_wrappers.py
+
+  simulator:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install Python and PlatformIO Core 6.1.18
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/python -m pip install --upgrade pip
+          .ci-venv/bin/python -m pip install platformio==6.1.18
+      - name: Check simulator toolchain versions
+        run: .ci-venv/bin/python tools/check_toolchain.py --scope simulator
+      - name: Build D1 Mini simulator
+        working-directory: simulators/d1mini_can_web
+        run: ../../.ci-venv/bin/pio run
+
+  firmware:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check and build with ESP-IDF v5.5.4
+        run: |
+          docker run --rm -v "$PWD:/project" -w /project espressif/idf:v5.5.4 \
+            bash -lc 'source /opt/esp/idf/export.sh >/dev/null && python3 tools/check_toolchain.py --scope firmware && cd firmware/tcan485 && idf.py set-target esp32 && idf.py build'
