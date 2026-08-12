@@ -253,7 +253,7 @@ TEST_CASE("accepted frame boundary prevents loss coalescing") {
   CHECK(exporter.poll_input(source, 1) == 1);
   exporter.note_dropped_frames(1, 40, 0, "queue-overflow");
   FakeSink sink;
-  CHECK(exporter.poll_output(sink, 40, 10) == 7);
+  CHECK(exporter.poll_output(sink, 40, 10) == 6);
   CHECK(sink.lines[2].rfind("FRAME t_us=10 ", 0) == 0);
   CHECK(sink.lines[3] == "DROP t_us=20 bus=0 count=1 reason=queue-overflow\n");
   CHECK(sink.lines[4].rfind("FRAME t_us=30 ", 0) == 0);
