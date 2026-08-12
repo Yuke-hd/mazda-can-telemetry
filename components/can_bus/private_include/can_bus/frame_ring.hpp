@@ -116,9 +116,8 @@ private:
 
   void ensure_watermark_at_least(const std::uint32_t depth_value) noexcept {
     std::uint32_t watermark = queue_high_watermark_.load(std::memory_order_relaxed);
-    while (watermark < depth_value &&
-           !queue_high_watermark_.compare_exchange_weak(watermark, depth_value,
-                                                        std::memory_order_relaxed)) {
+    while (watermark < depth_value && !queue_high_watermark_.compare_exchange_weak(
+                                          watermark, depth_value, std::memory_order_relaxed)) {
     }
   }
 
