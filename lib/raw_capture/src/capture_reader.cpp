@@ -354,6 +354,7 @@ ParseResult CaptureReader::read(const std::string_view text, const ParseMode mod
       }
     } else if (type == "FRAME" || type == "DROP" || type == "STATS" || type == "DISCONTINUITY") {
       bool valid = true;
+      bool starts_new_segment = false;
       CaptureRecord record;
       record.segment = segment;
       std::uint64_t timestamp = 0;
@@ -438,12 +439,13 @@ ParseResult CaptureReader::read(const std::string_view text, const ParseMode mod
           record = CaptureRecord::discontinuity_record(
               DiscontinuityRecord{timestamp, all, bus_id, next_segment, std::move(reason)});
           segment = next_segment;
+          starts_new_segment = true;
         }
       }
       if (valid) {
         result.records.push_back(std::move(record));
         last_timestamp = timestamp;
-        have_timestamp = true;
+        have_timestamp = !starts_new_segment;
       } else {
         report(line_number, error.empty() ? "invalid record value or ordering" : error, line);
         if (mode == ParseMode::Strict) {

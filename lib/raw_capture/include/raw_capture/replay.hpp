@@ -43,7 +43,7 @@ public:
                                        const FrameHandler &handler);
   [[nodiscard]] std::size_t advance_by(std::uint64_t delta_us, const FrameHandler &handler);
   [[nodiscard]] bool pending() const noexcept { return next_record_ < records_.size(); }
-  void replay(const std::vector<CaptureRecord> &records, const FrameHandler &handler) const;
+  void replay(const std::vector<CaptureRecord> &records, const FrameHandler &handler);
 
 private:
   SimulatedMonotonicClock *clock_;

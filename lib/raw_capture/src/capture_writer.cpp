@@ -3,6 +3,7 @@
 namespace raw_capture {
 namespace {
 const char *const kHex = "0123456789abcdef";
+const char *const kPercentHex = "0123456789ABCDEF";
 
 void append_percent(const std::string_view value, std::string &output) {
   for (const unsigned char byte : value) {
@@ -11,8 +12,8 @@ void append_percent(const std::string_view value, std::string &output) {
       output.push_back(static_cast<char>(byte));
     else {
       output.push_back('%');
-      output.push_back(kHex[byte >> 4U]);
-      output.push_back(kHex[byte & 0x0fU]);
+      output.push_back(kPercentHex[byte >> 4U]);
+      output.push_back(kPercentHex[byte & 0x0fU]);
     }
   }
 }
@@ -43,7 +44,7 @@ bool valid_text(const std::string_view value) {
     i += width;
   }
   for (const unsigned char c : value)
-    if (c == 0 || c == '\n' || c == '\r' || c == ' ')
+    if (c == 0 || c == '\n' || c == '\r')
       return false;
   return true;
 }

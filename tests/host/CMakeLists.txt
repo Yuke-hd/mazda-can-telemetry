@@ -20,6 +20,8 @@ doctest_discover_tests(vehicle_core_tests)
 add_executable(capture_reader_tests capture_reader_tests.cpp)
 target_link_libraries(capture_reader_tests PRIVATE raw_capture doctest::doctest)
 target_compile_features(capture_reader_tests PRIVATE cxx_std_17)
+target_compile_definitions(capture_reader_tests PRIVATE
+  CAPTURE_FIXTURE_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/capture/golden-v1.txt")
 doctest_discover_tests(capture_reader_tests)
 
 add_executable(board_config_tests board_config_tests.cpp)

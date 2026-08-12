@@ -20,12 +20,14 @@ std::size_t ReplayHarness::advance_to(const vehicle_core::MonotonicTimestamp tim
   if (!handler || clock_->paused() || timestamp_us < clock_->now())
     return 0;
   std::size_t delivered = 0;
+  bool reset_pending = false;
   while (next_record_ < records_.size()) {
     const auto &record = records_[next_record_];
     if (record.type == RecordType::Discontinuity) {
       if (record.discontinuity.timestamp_us > timestamp_us)
         break;
       clock_->reset(record.discontinuity.timestamp_us);
+      reset_pending = true;
       ++next_record_;
       continue;
     }
@@ -35,7 +37,12 @@ std::size_t ReplayHarness::advance_to(const vehicle_core::MonotonicTimestamp tim
     }
     if (record.frame.timestamp_us > timestamp_us)
       break;
-    clock_->set(record.frame.timestamp_us);
+    if (reset_pending) {
+      clock_->reset(record.frame.timestamp_us);
+      reset_pending = false;
+    } else {
+      clock_->set(record.frame.timestamp_us);
+    }
     handler(record.frame, *clock_);
     ++next_record_;
     ++delivered;
@@ -50,13 +57,11 @@ std::size_t ReplayHarness::advance_by(const std::uint64_t delta_us, const FrameH
   return advance_to(clock_->now() + delta_us, handler);
 }
 
-void ReplayHarness::replay(const std::vector<CaptureRecord> &records,
-                           const FrameHandler &handler) const {
+void ReplayHarness::replay(const std::vector<CaptureRecord> &records, const FrameHandler &handler) {
   if (!handler)
     return;
-  auto *self = const_cast<ReplayHarness *>(this);
-  self->load(records);
-  self->resume();
-  (void)self->advance_to(std::numeric_limits<std::uint64_t>::max(), handler);
+  load(records);
+  resume();
+  (void)advance_to(std::numeric_limits<std::uint64_t>::max(), handler);
 }
 } // namespace raw_capture
