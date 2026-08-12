@@ -81,8 +81,15 @@ std::uint64_t g_last_can_drops{0};
 std::uint64_t g_last_driver_missed{0};
 
 bool initialize_usb_uart() noexcept {
-  const uart_config_t configuration{115200,           UART_DATA_8_BITS,         UART_PARITY_DISABLE,
-                                    UART_STOP_BITS_1, UART_HW_FLOWCTRL_DISABLE, 0};
+  constexpr int kUsbBaudRate = 115200;
+  uart_config_t configuration{};
+  configuration.baud_rate = kUsbBaudRate;
+  configuration.data_bits = UART_DATA_8_BITS;
+  configuration.parity = UART_PARITY_DISABLE;
+  configuration.stop_bits = UART_STOP_BITS_1;
+  configuration.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+  configuration.rx_flow_ctrl_thresh = 0;
+  configuration.source_clk = UART_SCLK_DEFAULT;
   if (uart_driver_install(UART_NUM_0, 256, 0, 0, nullptr, 0) != ESP_OK ||
       uart_param_config(UART_NUM_0, &configuration) != ESP_OK ||
       uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,

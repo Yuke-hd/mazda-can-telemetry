@@ -229,7 +229,7 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
     const std::string_view previous_reason(previous.reason.data(), previous.reason_size);
     if (previous.segment == capture_segment_ && previous.bus == bus_id &&
         previous_reason == reason && timestamp_us >= previous.timestamp_us &&
-        timestamp_us - previous.timestamp_us <= 1) {
+        timestamp_us - previous.timestamp_us <= 1 && previous.frame_boundary == queue_.head) {
       previous.count += count;
       previous.timestamp_us = timestamp_us;
       if (drop_head_ - drop_tail_ == 1) {
@@ -247,6 +247,7 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
   boundary.count = count;
   boundary.timestamp_us = timestamp_us;
   boundary.segment = capture_segment_;
+  boundary.frame_boundary = queue_.head;
   boundary.bus = bus_id;
   const auto bounded_reason = reason.size() < boundary.reason.size() ? reason : "invalid-reason";
   std::copy(bounded_reason.begin(), bounded_reason.end(), boundary.reason.begin());
@@ -399,7 +400,8 @@ Exporter::Attempt Exporter::write_statistics(OutputSink &sink,
   if (result == Attempt::kWritten) {
     final_statistics_pending_ = false;
     next_statistics_us_ =
-        configuration_.statistics_interval_us > std::numeric_limits<std::uint64_t>::max() - now_us
+        configuration_.statistics_interval_us == 0 ? std::numeric_limits<std::uint64_t>::max()
+        : configuration_.statistics_interval_us > std::numeric_limits<std::uint64_t>::max() - now_us
             ? std::numeric_limits<std::uint64_t>::max()
             : now_us + configuration_.statistics_interval_us;
     ++emitted_diagnostics_;
@@ -464,7 +466,9 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
       attempt = write_session(sink);
       if (attempt == Attempt::kWritten) {
         session_emitted_ = true;
-        next_statistics_us_ = configuration_.statistics_interval_us >
+        next_statistics_us_ = configuration_.statistics_interval_us == 0
+                                  ? std::numeric_limits<std::uint64_t>::max()
+                              : configuration_.statistics_interval_us >
                                       std::numeric_limits<std::uint64_t>::max() - now_us
                                   ? std::numeric_limits<std::uint64_t>::max()
                                   : now_us + configuration_.statistics_interval_us;
@@ -472,8 +476,7 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
     } else if (reconnect_pending_) {
       if (pending_drop_frames_ != 0 && pending_drop_segment_ < segment_ &&
           (queue_.depth() == 0 ||
-           pending_drop_timestamp_us_ <=
-               queue_.frames[queue_.tail % kFrameQueueCapacity].frame.timestamp_us)) {
+           queue_.tail >= drop_boundaries_[drop_tail_ % kDropBoundaryCapacity].frame_boundary)) {
         attempt = write_drop(sink, now_us);
       } else if (queue_.depth() != 0 &&
                  queue_.frames[queue_.tail % kFrameQueueCapacity].segment < segment_) {
@@ -483,13 +486,15 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
       }
     } else if (pending_drop_frames_ != 0) {
       if (!diagnostic_allowed(now_us)) {
-        break;
-      }
-      if (queue_.depth() == 0 ||
-          pending_drop_segment_ < queue_.frames[queue_.tail % kFrameQueueCapacity].segment ||
-          (pending_drop_segment_ == queue_.frames[queue_.tail % kFrameQueueCapacity].segment &&
-           pending_drop_timestamp_us_ <=
-               queue_.frames[queue_.tail % kFrameQueueCapacity].frame.timestamp_us)) {
+        if (queue_.depth() != 0 &&
+            queue_.tail < drop_boundaries_[drop_tail_ % kDropBoundaryCapacity].frame_boundary) {
+          attempt = write_frame(sink);
+        } else {
+          break;
+        }
+      } else if (queue_.depth() == 0 ||
+                 queue_.tail >=
+                     drop_boundaries_[drop_tail_ % kDropBoundaryCapacity].frame_boundary) {
         attempt = write_drop(sink, now_us);
       } else {
         attempt = write_frame(sink);

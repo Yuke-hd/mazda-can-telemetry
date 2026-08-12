@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -79,7 +80,7 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
   REQUIRE(exporter.poll_output(sink, 1000, 2) == 2);
   REQUIRE(exporter.poll_output(sink, 1100, 2) == 2);
   exporter.request_final_statistics();
-  REQUIRE(exporter.poll_output(sink, 2200, 4) == 4);
+  REQUIRE(exporter.poll_output(sink, 2200, 8) == 4);
 
   CHECK(sink.lines == std::vector<std::string>{
                           "MCAN-CAPTURE 1\n",
@@ -162,6 +163,7 @@ TEST_CASE("invalid configuration and frames fail closed with explicit loss") {
 TEST_CASE("separate loss boundaries cannot reorder a later frame") {
   raw_capture::Configuration configuration{};
   configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  configuration.diagnostic_interval_us = 0;
   raw_capture::Exporter exporter(configuration);
   FakeSource source;
   for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity + 3; ++timestamp) {
@@ -190,16 +192,27 @@ TEST_CASE("slow output rate-limits diagnostics without hiding cumulative loss") 
   configuration.statistics_interval_us = 100;
   raw_capture::Exporter exporter(configuration);
   FakeSource source;
-  for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity + 2; ++timestamp) {
+  for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity; ++timestamp) {
     source.frames.push_back(
         frame(timestamp, 0, static_cast<std::uint32_t>(timestamp), false, false, 0));
   }
+  source.frames.push_back(frame(64, 0, 64, false, false, 0));
+  source.frames.push_back(frame(65, 0, 65, false, false, 9));
   CHECK(exporter.poll_input(source, source.frames.size()) == raw_capture::kFrameQueueCapacity + 2);
   FakeSink sink;
-  CHECK(exporter.poll_output(sink, 0, 100) > 0);
-  CHECK(exporter.poll_output(sink, 50, 100) == 0);
-  CHECK(exporter.poll_output(sink, 100, 100) > 0);
-  CHECK(exporter.poll_output(sink, 200, 100) > 0);
+  CHECK(exporter.poll_output(sink, 50, 100) == 65);
+  source.frames.push_back(frame(66, 0, 66, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 1);
+  CHECK(exporter.poll_output(sink, 100, 100) == 0);
+  CHECK(exporter.poll_output(sink, 150, 100) == 3);
   CHECK(exporter.statistics().dropped_frames == 2);
   CHECK(exporter.statistics().dropped_records == 0);
+  CHECK(std::find(sink.lines.begin(), sink.lines.end(),
+                  "DROP t_us=64 bus=0 count=1 reason=export-queue-overflow\n") != sink.lines.end());
+  CHECK(std::find(sink.lines.begin(), sink.lines.end(),
+                  "DROP t_us=65 bus=0 count=1 reason=invalid-frame\n") != sink.lines.end());
+  const auto drop = std::find(sink.lines.begin(), sink.lines.end(),
+                              "DROP t_us=65 bus=0 count=1 reason=invalid-frame\n");
+  REQUIRE(drop != sink.lines.end());
+  CHECK((drop + 1)->rfind("FRAME t_us=66 ", 0) == 0);
 }

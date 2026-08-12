@@ -115,6 +115,7 @@ private:
     std::uint64_t count{0};
     std::uint64_t timestamp_us{0};
     std::uint64_t segment{0};
+    std::size_t frame_boundary{0};
     std::uint8_t bus{0xff};
     std::array<char, 64> reason{};
     std::size_t reason_size{0};
