@@ -78,8 +78,9 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
   source.frames[0].data = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   source.frames[1].data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   FakeSink sink;
-  REQUIRE(exporter.poll_input(source, 4) == 4);
+  REQUIRE(exporter.poll_input(source, 2) == 2);
   exporter.note_dropped_frames(2, 1200, 0, "queue-overflow");
+  REQUIRE(exporter.poll_input(source, 2) == 2);
   REQUIRE(exporter.poll_output(sink, 1000, 2) == 2);
   REQUIRE(exporter.poll_output(sink, 1100, 2) == 2);
   exporter.request_final_statistics();
@@ -181,7 +182,7 @@ TEST_CASE("separate loss boundaries cannot reorder a later frame") {
   CHECK(exporter.poll_output(sink, 102, 100) > 0);
   bool saw_drop = false;
   for (const auto &line : sink.lines) {
-    if (line.rfind("DROP t_us=64 ", 0) == 0) {
+    if (line == "DROP t_us=66 bus=0 count=3 reason=export-queue-overflow\n") {
       saw_drop = true;
     }
   }
