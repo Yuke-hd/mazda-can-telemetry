@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(MAZDA_BUILD_HOST_TESTS "Build portable vehicle_core host tests" ${BUILD_TESTING})
 
 add_subdirectory(lib/vehicle_core)
+add_subdirectory(lib/raw_capture)
 
 if(MAZDA_BUILD_HOST_TESTS)
   enable_testing()
