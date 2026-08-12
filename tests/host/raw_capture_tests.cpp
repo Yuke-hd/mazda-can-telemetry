@@ -79,7 +79,7 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
   REQUIRE(exporter.poll_output(sink, 1000, 2) == 2);
   REQUIRE(exporter.poll_output(sink, 1100, 2) == 2);
   exporter.request_final_statistics();
-  REQUIRE(exporter.poll_output(sink, 2200, 8) == 4);
+  REQUIRE(exporter.poll_output(sink, 2200, 4) == 4);
 
   CHECK(sink.lines == std::vector<std::string>{
                           "MCAN-CAPTURE 1\n",
@@ -181,4 +181,25 @@ TEST_CASE("separate loss boundaries cannot reorder a later frame") {
     }
   }
   CHECK(saw_drop);
+}
+
+TEST_CASE("slow output rate-limits diagnostics without hiding cumulative loss") {
+  raw_capture::Configuration configuration{};
+  configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  configuration.diagnostic_interval_us = 100;
+  configuration.statistics_interval_us = 100;
+  raw_capture::Exporter exporter(configuration);
+  FakeSource source;
+  for (std::uint64_t timestamp = 0; timestamp < raw_capture::kFrameQueueCapacity + 2; ++timestamp) {
+    source.frames.push_back(
+        frame(timestamp, 0, static_cast<std::uint32_t>(timestamp), false, false, 0));
+  }
+  CHECK(exporter.poll_input(source, source.frames.size()) == raw_capture::kFrameQueueCapacity + 2);
+  FakeSink sink;
+  CHECK(exporter.poll_output(sink, 0, 100) > 0);
+  CHECK(exporter.poll_output(sink, 50, 100) == 0);
+  CHECK(exporter.poll_output(sink, 100, 100) > 0);
+  CHECK(exporter.poll_output(sink, 200, 100) > 0);
+  CHECK(exporter.statistics().dropped_frames == 2);
+  CHECK(exporter.statistics().dropped_records == 0);
 }

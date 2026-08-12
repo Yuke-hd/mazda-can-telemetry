@@ -36,6 +36,7 @@ public:
   virtual ~OutputSink() = default;
   [[nodiscard]] virtual bool connected() const noexcept = 0;
   [[nodiscard]] virtual WriteResult write(std::string_view complete_line) noexcept = 0;
+  virtual void discard_partial_line() noexcept {}
 };
 
 struct SessionMetadata {
@@ -125,7 +126,7 @@ private:
   [[nodiscard]] Attempt write_header(OutputSink &sink) noexcept;
   [[nodiscard]] Attempt write_session(OutputSink &sink) noexcept;
   [[nodiscard]] Attempt write_discontinuity(OutputSink &sink, std::uint64_t now_us) noexcept;
-  [[nodiscard]] Attempt write_drop(OutputSink &sink) noexcept;
+  [[nodiscard]] Attempt write_drop(OutputSink &sink, std::uint64_t now_us) noexcept;
   [[nodiscard]] Attempt write_statistics(OutputSink &sink, std::uint64_t now_us) noexcept;
   [[nodiscard]] Attempt write_frame(OutputSink &sink) noexcept;
   [[nodiscard]] bool diagnostic_allowed(std::uint64_t now_us) const noexcept;

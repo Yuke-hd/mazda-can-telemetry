@@ -45,8 +45,11 @@ public:
 
     const int accepted = uart_tx_chars(UART_NUM_0, pending_.data() + pending_offset_,
                                        static_cast<uint32_t>(pending_size_ - pending_offset_));
-    if (accepted <= 0) {
+    if (accepted == 0) {
       return raw_capture::WriteResult::kWouldBlock;
+    }
+    if (accepted < 0) {
+      return raw_capture::WriteResult::kError;
     }
     pending_offset_ += static_cast<std::size_t>(accepted);
     if (pending_offset_ != pending_size_) {
@@ -55,6 +58,11 @@ public:
     pending_size_ = 0;
     pending_offset_ = 0;
     return raw_capture::WriteResult::kWritten;
+  }
+
+  void discard_partial_line() noexcept override {
+    pending_size_ = 0;
+    pending_offset_ = 0;
   }
 
 private:
@@ -71,6 +79,19 @@ CanSource g_can_source;
 UsbUartSink g_usb_sink;
 std::uint64_t g_last_can_drops{0};
 std::uint64_t g_last_driver_missed{0};
+
+bool initialize_usb_uart() noexcept {
+  const uart_config_t configuration{115200,           UART_DATA_8_BITS,         UART_PARITY_DISABLE,
+                                    UART_STOP_BITS_1, UART_HW_FLOWCTRL_DISABLE, 0};
+  if (uart_driver_install(UART_NUM_0, 256, 0, 0, nullptr, 0) != ESP_OK ||
+      uart_param_config(UART_NUM_0, &configuration) != ESP_OK ||
+      uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE,
+                   UART_PIN_NO_CHANGE) != ESP_OK) {
+    (void)uart_driver_delete(UART_NUM_0);
+    return false;
+  }
+  return true;
+}
 
 void capture_export_task(void *) noexcept {
   while (true) {
@@ -96,6 +117,11 @@ extern "C" void app_main(void) {
     return;
   }
 
+  if (!initialize_usb_uart()) {
+    ESP_LOGE(kTag, "output-only USB UART initialization failed; refusing to start CAN");
+    return;
+  }
+
   constexpr can_bus::Configuration configuration{500'000, 0};
   ESP_LOGI(kTag,
            "vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; TX queue disabled; receive API "
@@ -112,5 +138,6 @@ extern "C" void app_main(void) {
   if (xTaskCreate(capture_export_task, "capture_export", 4096, nullptr, configMAX_PRIORITIES - 3,
                   nullptr) != pdPASS) {
     ESP_LOGE(kTag, "raw capture task startup failed; CAN remains receive-only");
+    (void)can_bus::stop();
   }
 }

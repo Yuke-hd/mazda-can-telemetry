@@ -33,6 +33,12 @@ UART0 is reserved for capture after startup. ESP-IDF logging is disabled before
 the first capture poll so log bytes cannot interleave with a partially accepted
 line. There is no UART input path.
 
+Before CAN starts, firmware installs UART0 at 115200 8-N-1 with a 256-byte RX
+buffer and a zero-byte TX ring buffer, then applies the no-change pin mapping.
+Any configuration/installation error fails closed before CAN startup. A
+negative `uart_tx_chars()` result is an output error; zero means FIFO full and
+is retried without discarding the complete pending line.
+
 ## Diagnostics and target
 
 Frame records are never rate-limited by diagnostics. `DROP` and

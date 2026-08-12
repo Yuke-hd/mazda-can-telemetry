@@ -223,6 +223,22 @@ std::size_t Exporter::poll_input(FrameSource &source, const std::size_t max_fram
 void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timestamp_us,
                            const std::uint8_t bus_id, const std::string_view reason) noexcept {
   dropped_frames_ += count;
+  if (drop_head_ != drop_tail_) {
+    auto &previous =
+        drop_boundaries_[(drop_head_ + kDropBoundaryCapacity - 1) % kDropBoundaryCapacity];
+    const std::string_view previous_reason(previous.reason.data(), previous.reason_size);
+    if (previous.segment == capture_segment_ && previous.bus == bus_id &&
+        previous_reason == reason && timestamp_us >= previous.timestamp_us &&
+        timestamp_us - previous.timestamp_us <= 1) {
+      previous.count += count;
+      previous.timestamp_us = timestamp_us;
+      if (drop_head_ - drop_tail_ == 1) {
+        pending_drop_frames_ = previous.count;
+        pending_drop_timestamp_us_ = previous.timestamp_us;
+      }
+      return;
+    }
+  }
   if (drop_head_ - drop_tail_ >= kDropBoundaryCapacity) {
     ++dropped_records_;
     return;
@@ -263,6 +279,7 @@ Exporter::Attempt Exporter::write_line(OutputSink &sink, const std::string_view 
   case WriteResult::kWouldBlock:
     return Attempt::kDeferred;
   case WriteResult::kDisconnected:
+    sink.discard_partial_line();
     if (connection_latched_) {
       connection_latched_ = false;
       if (session_emitted_) {
@@ -333,7 +350,7 @@ Exporter::Attempt Exporter::write_discontinuity(OutputSink &sink,
   return result;
 }
 
-Exporter::Attempt Exporter::write_drop(OutputSink &sink) noexcept {
+Exporter::Attempt Exporter::write_drop(OutputSink &sink, const std::uint64_t now_us) noexcept {
   Line line;
   if (!line.append("DROP t_us=") || !line.append_uint(pending_drop_timestamp_us_) ||
       !line.append(" bus=") ||
@@ -363,7 +380,7 @@ Exporter::Attempt Exporter::write_drop(OutputSink &sink) noexcept {
       pending_drop_frames_ = 0;
     }
     ++emitted_diagnostics_;
-    schedule_next_diagnostic(pending_drop_timestamp_us_);
+    schedule_next_diagnostic(now_us);
   }
   return result;
 }
@@ -420,6 +437,7 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
     return 0;
   }
   if (!sink.connected()) {
+    sink.discard_partial_line();
     if (connection_latched_) {
       connection_latched_ = false;
       if (session_emitted_) {
@@ -452,20 +470,30 @@ std::size_t Exporter::poll_output(OutputSink &sink, const std::uint64_t now_us,
                                   : now_us + configuration_.statistics_interval_us;
       }
     } else if (reconnect_pending_) {
-      if (queue_.depth() != 0 &&
-          queue_.frames[queue_.tail % kFrameQueueCapacity].segment < segment_) {
+      if (pending_drop_frames_ != 0 && pending_drop_segment_ < segment_ &&
+          (queue_.depth() == 0 ||
+           pending_drop_timestamp_us_ <=
+               queue_.frames[queue_.tail % kFrameQueueCapacity].frame.timestamp_us)) {
+        attempt = write_drop(sink, now_us);
+      } else if (queue_.depth() != 0 &&
+                 queue_.frames[queue_.tail % kFrameQueueCapacity].segment < segment_) {
         attempt = write_frame(sink);
       } else {
         attempt = write_discontinuity(sink, now_us);
       }
-    } else if (pending_drop_frames_ != 0 &&
-               (queue_.depth() == 0 ||
-                pending_drop_segment_ < queue_.frames[queue_.tail % kFrameQueueCapacity].segment ||
-                (pending_drop_segment_ ==
-                     queue_.frames[queue_.tail % kFrameQueueCapacity].segment &&
-                 pending_drop_timestamp_us_ <=
-                     queue_.frames[queue_.tail % kFrameQueueCapacity].frame.timestamp_us))) {
-      attempt = write_drop(sink);
+    } else if (pending_drop_frames_ != 0) {
+      if (!diagnostic_allowed(now_us)) {
+        break;
+      }
+      if (queue_.depth() == 0 ||
+          pending_drop_segment_ < queue_.frames[queue_.tail % kFrameQueueCapacity].segment ||
+          (pending_drop_segment_ == queue_.frames[queue_.tail % kFrameQueueCapacity].segment &&
+           pending_drop_timestamp_us_ <=
+               queue_.frames[queue_.tail % kFrameQueueCapacity].frame.timestamp_us)) {
+        attempt = write_drop(sink, now_us);
+      } else {
+        attempt = write_frame(sink);
+      }
     } else if (queue_.depth() != 0) {
       attempt = write_frame(sink);
     } else if (final_statistics_pending_ || now_us >= next_statistics_us_) {
