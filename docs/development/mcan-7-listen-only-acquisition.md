@@ -36,18 +36,20 @@ boot from `esp_timer_get_time()` and copies the bus number, timestamp,
 standard/extended identifier format, RTR flag, DLC, identifier, and fixed
 eight-byte payload into a `RawCanFrame` value.
 
-The task is the only producer for a fixed-capacity, 64-frame SPSC ring. The
-consumer receives a copy and never obtains storage owned by the producer. The
-ring allocates no memory after static initialization. A full ring uses a
+The task is the only producer for a fixed-capacity, 64-frame SPSC ring. One
+consumer task owns the public `receive()` calls; callers must serialize those
+calls and stop that consumer before restarting acquisition. The consumer
+receives a copy and never obtains storage owned by the producer. The ring
+allocates no memory after static initialization. A full ring uses a
 **drop-newest** policy: the arriving frame is discarded, existing FIFO order is
 preserved, and both `frames_dropped` and `queue_overflows` increment. Ring push
 never waits for a consumer. The notification semaphore is also statically
 allocated and is given only after a successful push.
 
-The ESP-IDF driver has a separate 64-frame RX queue. Its RX-full alert and
-`rx_missed_count` are reported as `driver_rx_missed`; application-ring drops are
-reported separately. This distinction prevents a slow consumer from hiding a
-driver-level loss.
+The ESP-IDF driver has a separate 64-frame RX queue. `driver_rx_missed` is the
+delta of the driver's cumulative `rx_missed_count` and `rx_overrun_count`
+status counters; application-ring drops are reported separately. This
+distinction prevents a slow consumer from hiding a driver-level loss.
 
 ## Statistics semantics
 
@@ -63,10 +65,11 @@ occupied queue started empty.
 successful start, and zero on the first interval. An unexpected bus-off alert is
 also counted because it represents an abnormal controller lifecycle in strict
 listen-only operation; the component does not initiate active bus recovery.
-`bus_errors` counts TWAI bus-error alerts, and `driver_rx_missed` counts TWAI
-RX-queue-full alerts. ESP-IDF may coalesce repeated occurrences before alerts
-are read, so these are observable alert counts rather than a guarantee of one
-count per electrical error or lost driver frame.
+`bus_errors` is the delta of the driver's cumulative `bus_error_count` status
+counter. Driver loss and error counters are sampled by the receive task before
+each alert poll, so they represent driver-reported counts rather than
+coalesced alert occurrences. An unexpected bus-off remains an independent
+`controller_resets` event; the component never initiates active recovery.
 
 ## References
 

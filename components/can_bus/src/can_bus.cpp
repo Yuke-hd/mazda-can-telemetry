@@ -30,6 +30,9 @@ SemaphoreHandle_t g_task_stopped{nullptr};
 std::atomic<bool> g_running{false};
 std::uint8_t g_bus_id{0};
 bool g_has_started_before{false};
+std::uint32_t g_last_driver_rx_missed{0};
+std::uint32_t g_last_driver_rx_overrun{0};
+std::uint32_t g_last_driver_bus_errors{0};
 
 [[nodiscard]] twai_timing_config_t timing_for(const std::uint32_t bitrate_bps) noexcept {
   switch (bitrate_bps) {
@@ -52,17 +55,26 @@ void collect_alerts() noexcept {
   if (twai_read_alerts(&alerts, 0) != ESP_OK) {
     return;
   }
-  if ((alerts & TWAI_ALERT_BUS_ERROR) != 0U) {
-    g_frames.record_bus_error();
-  }
-  if ((alerts & TWAI_ALERT_RX_QUEUE_FULL) != 0U) {
-    g_frames.record_driver_rx_missed();
-  }
   if ((alerts & TWAI_ALERT_BUS_OFF) != 0U) {
     // A strict listener should not influence the bus or normally enter bus-off.
     // Record the unexpected controller state; never attempt active recovery.
     g_frames.record_controller_reset();
   }
+}
+
+void collect_driver_status() noexcept {
+  twai_status_info_t status{};
+  if (twai_get_status_info(&status) != ESP_OK) {
+    return;
+  }
+  g_frames.record_bus_error(
+      internal::counter_delta(status.bus_error_count, g_last_driver_bus_errors));
+  g_frames.record_driver_rx_missed(
+      internal::counter_delta(status.rx_missed_count, g_last_driver_rx_missed) +
+      internal::counter_delta(status.rx_overrun_count, g_last_driver_rx_overrun));
+  g_last_driver_bus_errors = status.bus_error_count;
+  g_last_driver_rx_missed = status.rx_missed_count;
+  g_last_driver_rx_overrun = status.rx_overrun_count;
 }
 
 void receive_task(void *) noexcept {
@@ -86,6 +98,7 @@ void receive_task(void *) noexcept {
         (void)xSemaphoreGive(g_available);
       }
     }
+    collect_driver_status();
     collect_alerts();
   }
   (void)xSemaphoreGive(g_task_stopped);
@@ -102,10 +115,20 @@ Result start(const Configuration &configuration) noexcept {
     return Result::kAlreadyStarted;
   }
 
-  g_available = xSemaphoreCreateCountingStatic(kQueueCapacity, 0, &g_available_storage);
-  g_task_stopped = xSemaphoreCreateBinaryStatic(&g_task_stopped_storage);
+  if (g_available == nullptr) {
+    g_available = xSemaphoreCreateCountingStatic(kQueueCapacity, 0, &g_available_storage);
+  }
+  if (g_task_stopped == nullptr) {
+    g_task_stopped = xSemaphoreCreateBinaryStatic(&g_task_stopped_storage);
+  }
   if (g_available == nullptr || g_task_stopped == nullptr) {
+    (void)board::set_can_transceiver_power(false);
     return Result::kTaskFailure;
+  }
+
+  // A stopped acquisition may leave accepted frames queued. They are owned by
+  // the previous interval and must not be signalled into the next one.
+  while (xSemaphoreTake(g_available, 0) == pdTRUE) {
   }
 
   twai_general_config_t general = TWAI_GENERAL_CONFIG_DEFAULT(
@@ -118,6 +141,7 @@ Result start(const Configuration &configuration) noexcept {
   const twai_timing_config_t timing = timing_for(configuration.bitrate_bps);
   const twai_filter_config_t filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   if (!board::set_can_transceiver_power(true)) {
+    (void)board::set_can_transceiver_power(false);
     return Result::kDriverFailure;
   }
   if (twai_driver_install(&general, &timing, &filter) != ESP_OK) {
@@ -132,10 +156,13 @@ Result start(const Configuration &configuration) noexcept {
 
   g_frames.clear();
   g_bus_id = configuration.bus_id;
-  if (g_has_started_before) {
+  const bool had_successful_start = g_has_started_before;
+  if (had_successful_start) {
     g_frames.record_controller_reset();
   }
-  g_has_started_before = true;
+  g_last_driver_bus_errors = 0;
+  g_last_driver_rx_missed = 0;
+  g_last_driver_rx_overrun = 0;
   g_running.store(true, std::memory_order_release);
   if (xTaskCreate(receive_task, kReceiveTaskName, kReceiveTaskStackBytes, nullptr,
                   kReceiveTaskPriority, &g_receive_task) != pdPASS) {
@@ -143,8 +170,10 @@ Result start(const Configuration &configuration) noexcept {
     (void)twai_stop();
     (void)twai_driver_uninstall();
     (void)board::set_can_transceiver_power(false);
+    g_receive_task = nullptr;
     return Result::kTaskFailure;
   }
+  g_has_started_before = true;
   return Result::kOk;
 }
 

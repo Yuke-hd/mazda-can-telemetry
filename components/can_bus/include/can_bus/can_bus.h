@@ -49,6 +49,9 @@ enum class StatisticsOperation : std::uint8_t {
 
 Result start(const Configuration &configuration) noexcept;
 Result stop() noexcept;
+// The receive boundary is SPSC: one acquisition task produces frames and one
+// consumer task owns calls to receive(). Callers must serialize receive() calls
+// and stop that consumer before restarting acquisition.
 Result receive(vehicle_core::RawCanFrame &frame, std::uint32_t timeout_ms) noexcept;
 Statistics statistics(StatisticsOperation operation = StatisticsOperation::kSnapshot) noexcept;
 

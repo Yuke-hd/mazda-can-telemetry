@@ -36,6 +36,12 @@ TEST_CASE("configuration permits only explicit classic CAN bitrates") {
   CHECK_FALSE(can_bus::internal::is_configuration_valid({499'999, 0}));
 }
 
+TEST_CASE("driver counter deltas handle monotonic values and wraparound") {
+  CHECK(can_bus::internal::counter_delta(10, 4) == 6);
+  CHECK(can_bus::internal::counter_delta(4, 10) == 4);
+  CHECK(can_bus::internal::counter_delta(0, 0) == 0);
+}
+
 TEST_CASE("frame boundary preserves every receive field") {
   can_bus::internal::FrameRing<4> ring;
   const auto input = make_frame(0x1abcdef0, 123'456);

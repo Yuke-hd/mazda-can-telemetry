@@ -28,7 +28,7 @@ official installation link.
 | Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release | Configure and build the portable library/tests ([compiler](https://gcc.gnu.org/install/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
 | Host library/tests | clang-format | Major version 14 (`clang-format-14`) | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
 | D1 Mini simulator | PlatformIO Core | Exactly 6.1.18 | Build the isolated-bench simulator scaffold; Espressif8266 and Arduino packages are resolved from `platformio.ini` ([installation](https://docs.platformio.org/en/stable/core/installation/methods/pypi.html)) |
-| T-CAN485 firmware | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the ESP32 structure-only firmware scaffold ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
+| T-CAN485 firmware | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the ESP32 receive-only firmware ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
 
 Host tools are required for the common library, formatting, and test workflow;
 PlatformIO is simulator-only; ESP-IDF and its ESP32 toolchain are firmware-only.
@@ -39,10 +39,11 @@ user-space bootstrap for PlatformIO is available at
 [`tools/bootstrap_dev.sh`](tools/bootstrap_dev.sh); ESP-IDF must be installed
 and activated using its upstream guide.
 
-The current T-CAN485 application is deliberately a structure-only skeleton; it
-does not initialize CAN, decode, capture, or export frames. The D1 Mini project
-only establishes an Arduino setup/loop boundary; it does not initialize a
-network or produce CAN frames. Neither is a vehicle release artifact.
+The T-CAN485 application initializes a bounded strict listen-only CAN
+acquisition path. It does not decode, capture, export, or transmit frames. The
+D1 Mini project only establishes an Arduino setup/loop boundary; it does not
+initialize a network or produce CAN frames. Neither is a vehicle release
+artifact.
 
 ## Safety Boundary
 

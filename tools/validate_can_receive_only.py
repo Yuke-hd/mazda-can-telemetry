@@ -38,6 +38,10 @@ def main() -> int:
         failures.append("an alternate TWAI mode is present")
     if not re.search(r"general\.tx_queue_len\s*=\s*0\s*;", implementation):
         failures.append("the hardware TX queue is not explicitly disabled")
+    if "twai_get_status_info" not in implementation or "twai_status_info_t" not in implementation:
+        failures.append("driver loss/error counters are not sampled from TWAI status")
+    if implementation.count("set_can_transceiver_power(false)") < 5:
+        failures.append("startup and stop paths do not visibly reassert transceiver power off")
     forbidden_public_terms = (
         r"\btwai_handle_t\b",
         r"\bdriver[_ ]?handle\b",

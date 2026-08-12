@@ -10,7 +10,8 @@
 namespace can_bus::internal {
 
 // A fixed-capacity SPSC boundary. The producer always drops the newest frame
-// when full, so an absent or slow consumer can never block acquisition.
+// when full, so an absent or slow consumer can never block acquisition. The
+// public receive API documents the single-consumer ownership requirement.
 template <std::size_t Capacity> class FrameRing final {
   static_assert(Capacity > 0, "the acquisition ring must have storage");
 
