@@ -109,6 +109,9 @@ bool initialize_usb_uart() noexcept {
 }
 
 void capture_export_task(void *) noexcept {
+  // UART0 is the sole capture writer; suppress logs before the first capture
+  // poll so log bytes cannot interleave with a partially accepted line.
+  esp_log_level_set("*", ESP_LOG_NONE);
   while (true) {
     (void)g_exporter.poll_input(g_can_source, 16);
     const auto can_stats = can_bus::statistics();
@@ -153,9 +156,6 @@ extern "C" void app_main(void) {
     return;
   }
   ESP_LOGI(kTag, "strict listen-only CAN acquisition started");
-  // UART0 is the sole capture writer after this point; suppress logs so they
-  // cannot interleave with a partially accepted capture line.
-  esp_log_level_set("*", ESP_LOG_NONE);
   if (xTaskCreate(capture_export_task, "capture_export", 4096, nullptr, configMAX_PRIORITIES - 3,
                   nullptr) != pdPASS) {
     ESP_LOGE(kTag, "raw capture task startup failed; CAN remains receive-only");
