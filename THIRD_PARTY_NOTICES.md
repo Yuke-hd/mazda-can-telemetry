@@ -7,11 +7,23 @@ not relicense third-party material.
 ## comma.ai/opendbc
 
 - **License:** MIT, as published by the upstream project.
-- **License text:** <https://github.com/commaai/opendbc/blob/master/LICENSE>
-- **Source:** <https://github.com/commaai/opendbc>
-- **Role:** candidate Mazda signal definitions and decoder-reference material.
-- **Current status:** no opendbc source file, DBC file, or vehicle capture is
-  vendored in this repository at the time of this notice.
+- **Copyright notice:** `Copyright (c) 2020, Comma.ai, Inc.` The upstream MIT
+  permission and disclaimer text are preserved at the exact pinned source.
+- **License text:** <https://github.com/commaai/opendbc/blob/95f3d52f474b677c28fc8f10fef3f2f0386aff92/LICENSE>
+- **Repository:** <https://github.com/commaai/opendbc>
+- **Exact commit:** `95f3d52f474b677c28fc8f10fef3f2f0386aff92` (`master` at
+  access time), accessed 2026-08-16.
+- **Source paths used:**
+  `opendbc/dbc/mazda_2017.dbc`, `opendbc/car/mazda/carstate.py`,
+  `opendbc/car/mazda/values.py`, and `docs/CARS.md` at that commit.
+- **Role:** candidate Mazda signal definitions and decoder-reference material;
+  see [the MCAN-10 evidence matrix](docs/development/mcan-10-opendbc-signal-evidence.md).
+- **Current status:** no opendbc source file, DBC file, generated definition,
+  or vehicle capture is vendored in this repository. The pin is documentation
+  provenance only; CMake, CI, tests, and firmware do not fetch a branch or
+  depend on opendbc.
+- **Local modifications:** none; this repository records a reviewed candidate
+  extraction only and does not redistribute the upstream DBC.
 
 Before importing or generating material from opendbc, record the exact upstream
 commit, access date, files used, and any local modifications in this file and
