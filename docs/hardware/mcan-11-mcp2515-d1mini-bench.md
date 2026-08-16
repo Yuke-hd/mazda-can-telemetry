@@ -16,7 +16,10 @@ the default environment. It builds only the register-level MCP2515 harness;
 the default `d1mini` environment excludes that source. The harness is bounded
 to one synthetic, zero-data standard-ID one-shot attempt (`0x123`) after reset,
 then only observes INT transitions. It does not retry, continuously transmit,
-initialize Wi-Fi, or expose a vehicle-firmware API.
+initialize Wi-Fi, or expose a vehicle-firmware API. If TXREQ remains pending
+after the timeout, the harness asserts MCP2515 ABAT, verifies TXREQ clears,
+clears ABAT only after that verification, and uses a controller reset as the
+last local cleanup if required; a persistent TXREQ requires power removal.
 
 The intended component is a shared-VCC MCP2515/TJA1050 module with a confirmed
 8 MHz oscillator. The oscillator is **NOT RUN / PENDING HARDWARE** until the

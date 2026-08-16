@@ -152,12 +152,22 @@ bool abort_pending_transmission() {
 
   // A controller that did not honor ABAT must not retain a deferred frame.
   // BIT MODIFY is the MCP2515-specific per-buffer TXREQ cleanup fallback.
-  if ((read_register(kTxb0ctrl) & kTxRequest) != 0U) {
+  bool txreq_pending = (read_register(kTxb0ctrl) & kTxRequest) != 0U;
+  if (txreq_pending) {
     bit_modify(kTxb0ctrl, kTxRequest, 0x00);
   }
-  if ((read_register(kTxb0ctrl) & kTxRequest) != 0U) {
-    Serial.println(F("TX_ONESHOT ABORT FAILED; TXREQ remains set; power-cycle required"));
-    return false; // Keep ABAT asserted; do not release a queued transmission.
+  txreq_pending = (read_register(kTxb0ctrl) & kTxRequest) != 0U;
+  if (txreq_pending) {
+    // Reset is the final local cleanup; it also clears ABAT and all TX
+    // buffers. A persistent TXREQ requires power removal before proceeding.
+    reset_controller();
+    txreq_pending = (read_register(kTxb0ctrl) & kTxRequest) != 0U;
+    if (txreq_pending) {
+      Serial.println(F("TX_ONESHOT ABORT FAILED; TXREQ remains set; power-cycle required"));
+      return false;
+    }
+    Serial.println(F("TX_ONESHOT ABORTED/FAILED; controller reset cleared TXREQ"));
+    return false; // The failed run cannot proceed after controller reset.
   }
 
   // ABAT must be cleared only after TXREQ is verified clear.
