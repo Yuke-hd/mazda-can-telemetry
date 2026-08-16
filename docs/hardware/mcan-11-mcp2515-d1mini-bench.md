@@ -4,6 +4,11 @@ Status: preparation only. Every measurement and pass/fail result below is
 `NOT RUN / PENDING HARDWARE`. This procedure is for a supervised, isolated
 bench and must never be connected to a vehicle or an in-vehicle harness.
 
+Authoritative references:
+
+- [Microchip MCP2515 Family Data Sheet, DS20001801K](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP2515-Family-Data-Sheet-DS20001801K.pdf), sections 3.4/3.6, 5.7, and 10.5, for one-shot mode, abort behavior, bit timing, and register definitions.
+- [NXP TJA1050 High speed CAN transceiver data sheet](https://www.nxp.com/docs/en/data-sheet/TJA1050.pdf), Table 1 and the Characteristics table, for supply and logic/line characterization limits.
+
 ## Fixed test configuration
 
 The PlatformIO environment `bench_mcp2515` is explicitly bench-only and is not
@@ -19,6 +24,17 @@ component marking and (if needed) a scope/frequency-counter check are recorded.
 The harness uses SPI mode 0 at exactly 1 MHz and the 8 MHz / 500 kbit/s MCP2515
 timing bytes in its source. These configured values are not physical evidence.
 
+### CNF timing derivation
+
+For the MCP2515 settings in the harness, `FOSC = 8 MHz`, so `TOSC = 125 ns`.
+The data sheet defines the minimum time quantum as `2 x TOSC` when `BRP = 0`;
+therefore `CNF1 = 0x00` gives `TQ = 250 ns` and `SJW = 1 TQ`. With
+`CNF2 = 0x90`, `BTLMODE = 1`, `SAM = 0`, `PRSEG = 1 TQ`, and `PHSEG1 = 3 TQ`.
+With `CNF3 = 0x02`, `PHSEG2 = 3 TQ`. The nominal bit is therefore
+`1 + 1 + 3 + 3 = 8 TQ = 2 us`, or `500 kbit/s`, with a 62.5% nominal sample
+point. This is a configured calculation pending oscillator and bus evidence;
+it is not a claim that the module's fitted oscillator is 8 MHz.
+
 | D1 Mini signal | ESP8266 GPIO | MCP2515 module | Required connection |
 | --- | ---: | --- | --- |
 | 3V3 | — | VCC | 3.3 V only while SPI/INT are connected |
@@ -30,9 +46,13 @@ timing bytes in its source. These configured values are not physical evidence.
 | D1 | 5 | INT | Open-drain active-low interrupt |
 
 Do not power this shared-VCC module at 5 V while D1 Mini SPI or INT lines are
-directly connected. If the TJA1050 physical layer is not valid at the measured
-3.3 V supply, stop and use a 5 V Arduino with level-safe interfacing or a
-native-3.3-V CAN module; do not improvise a vehicle connection.
+directly connected. The NXP TJA1050 data sheet specifies `VCC = 4.75–5.25 V`;
+3.3 V is outside that specified operating range. Therefore any 3.3 V result
+is out-of-spec characterization only, not a TJA1050 compliance or reliability
+pass. If the 3.3 V physical layer is unstable or any required electrical/logic
+behavior is outside the worksheet comparison, stop and use a 5 V Arduino with
+level-safe interfacing or a native-3.3-V CAN module; do not improvise a vehicle
+connection.
 
 ## Wiring and termination gate
 
@@ -80,11 +100,45 @@ no other active CAN participant. Record controller flags and the analyzer's
 observation, not a made-up pass/fail. The harness's 50 ms timeout bounds the
 attempt; power-cycle before any repeat and document each run separately.
 
+## TJA1050 electrical worksheet
+
+Record instrument, probe reference, and bench run label with each value. Do not
+fill a field from a nominal calculation. The comparison column is the cited
+NXP data-sheet limit; because the planned test is at 3.3 V, it cannot establish
+component compliance even if every observed value appears plausible.
+
+| Measurement | Measured result | NXP reference / comparison | Status |
+| --- | --- | --- | --- |
+| Module VCC, recessive/idle | NOT RUN / PENDING HARDWARE | 4.75–5.25 V specified operating range | PENDING |
+| Module VCC under load during one-shot | NOT RUN / PENDING HARDWARE | 4.75–5.25 V specified operating range | PENDING |
+| CANH recessive | NOT RUN / PENDING HARDWARE | 2.0–3.0 V at VCC 4.75–5.25 V, no load | PENDING |
+| CANL recessive | NOT RUN / PENDING HARDWARE | 2.0–3.0 V at VCC 4.75–5.25 V, no load | PENDING |
+| CANH dominant | NOT RUN / PENDING HARDWARE | 3.0–4.25 V at TXD=0 V | PENDING |
+| CANL dominant | NOT RUN / PENDING HARDWARE | 0.5–1.75 V at TXD=0 V | PENDING |
+| CANH-CANL differential, dominant | NOT RUN / PENDING HARDWARE | 1.5–3.0 V for 42.5–60 ohm load | PENDING |
+| CANH-CANL differential, recessive | NOT RUN / PENDING HARDWARE | -50–+50 mV, no load | PENDING |
+| TXD HIGH / recessive logic | NOT RUN / PENDING HARDWARE | VIH >= 2.0 V | PENDING |
+| TXD LOW / dominant logic | NOT RUN / PENDING HARDWARE | VIL <= 0.8 V | PENDING |
+| RXD HIGH / recessive logic | NOT RUN / PENDING HARDWARE | Function table: HIGH | PENDING |
+| RXD LOW / dominant logic | NOT RUN / PENDING HARDWARE | Function table: LOW | PENDING |
+| Analyzer decode at configured bitrate | NOT RUN / PENDING HARDWARE | Isolated analyzer observation | PENDING |
+| ACK/error observation | NOT RUN / PENDING HARDWARE | Record ACK, TXERR/ABTF, and analyzer error state | PENDING |
+
+Explicit fallback criteria: select the 5 V Arduino path with level-safe SPI/
+INT interfacing or a native-3.3-V CAN transceiver/module if VCC sags, CANH or
+CANL does not show the expected recessive/dominant relationship, the dominant
+differential is not clearly detected, TXD/RXD levels are not reliably logical,
+the analyzer cannot decode the isolated frame at the configured bitrate, or
+the TJA1050 becomes unstable or thermally abnormal. Stop the 3.3 V run at the
+first such condition; do not compensate by connecting to a vehicle. Any
+successful 3.3 V observation remains characterization outside the TJA1050
+specified VCC range.
+
 ## Exit criteria and exclusions
 
 MCAN-11 remains open until supervised physical evidence confirms wiring,
 termination, repeatable SPI access, reset/INT behavior, one-shot/no-ACK
-behavior, and the TJA1050 3.3 V physical-layer result. This document does not
-claim any of those results. It does not authorize a vehicle connection, active
-vehicle firmware, diagnostic polling, raw-capture publication, or a release
-artifact.
+behavior, and the TJA1050 3.3 V physical-layer characterization and fallback
+decision. This document does not claim any of those results. It does not
+authorize a vehicle connection, active vehicle firmware, diagnostic polling,
+raw-capture publication, or a release artifact.

@@ -35,8 +35,17 @@ def main() -> int:
         "kSpiFrequencyHz = 1000000UL",
         "kOscillatorFrequencyHz = 8000000UL",
         "kAttemptTimeoutMs = 50UL",
-        "kNormalModeOneShot = 0x08",
+        "kAbortTimeoutMs = 10UL",
+        "kCanctrlAbat = 0x10",
+        "kCanctrlOsm = 0x08",
+        "const uint8_t canctrl_before_attempt = read_register(kCanctrl);",
+        "(canctrl_before_attempt & kCanctrlOsm) == 0U",
         "request_one_shot_transmission();",
+        "abort_pending_transmission();",
+        "write_register(kCanctrl, read_register(kCanctrl) | kCanctrlAbat);",
+        "bit_modify(kTxb0ctrl, kTxRequest, 0x00);",
+        "write_register(kCanctrl, read_register(kCanctrl) & static_cast<uint8_t>(~kCanctrlAbat));",
+        "ABAT cleared and TXREQ verified clear",
         "if (configure_controller() && !attempt_made)",
         "No retry is permitted",
     )
@@ -47,6 +56,11 @@ def main() -> int:
         failures.append("bench source must issue exactly one TXB0 request command")
     if "vehicle" not in source.lower():
         failures.append("bench source must explicitly forbid vehicle connection")
+    attempt_start = source.find("void attempt_once()")
+    readback = source.find("const uint8_t canctrl_before_attempt", attempt_start)
+    load = source.find("load_one_shot_frame();", attempt_start)
+    if attempt_start < 0 or readback < 0 or load < 0 or readback > load:
+        failures.append("CANCTRL Normal+OSM readback must precede TXB0 loading")
 
     if failures:
         for failure in failures:

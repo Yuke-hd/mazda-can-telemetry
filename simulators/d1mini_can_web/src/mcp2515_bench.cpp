@@ -18,6 +18,7 @@ constexpr uint32_t kSpiFrequencyHz = 1000000UL;
 constexpr uint32_t kOscillatorFrequencyHz = 8000000UL;
 constexpr uint32_t kCanBitrateHz = 500000UL;
 constexpr uint32_t kAttemptTimeoutMs = 50UL;
+constexpr uint32_t kAbortTimeoutMs = 10UL;
 constexpr uint16_t kBenchOnlyCanId = 0x123;
 
 // MCP2515 register addresses and SPI commands.
@@ -32,7 +33,11 @@ constexpr uint8_t kEflg = 0x2D;
 constexpr uint8_t kTxb0ctrl = 0x30;
 
 constexpr uint8_t kConfigMode = 0x80;
-constexpr uint8_t kNormalModeOneShot = 0x08;
+constexpr uint8_t kNormalMode = 0x00;
+constexpr uint8_t kCanctrlReqopMask = 0xE0;
+constexpr uint8_t kCanctrlAbat = 0x10;
+constexpr uint8_t kCanctrlOsm = 0x08;
+constexpr uint8_t kNormalModeOneShot = kNormalMode | kCanctrlOsm;
 constexpr uint8_t kTxRequest = 0x08;
 constexpr uint8_t kTx0Interrupt = 0x04;
 
@@ -52,6 +57,17 @@ void write_register(uint8_t address, uint8_t value) {
   digitalWrite(kChipSelectPin, LOW);
   SPI.transfer(0x02); // WRITE
   SPI.transfer(address);
+  SPI.transfer(value);
+  digitalWrite(kChipSelectPin, HIGH);
+  SPI.endTransaction();
+}
+
+void bit_modify(uint8_t address, uint8_t mask, uint8_t value) {
+  SPI.beginTransaction(SPISettings(kSpiFrequencyHz, MSBFIRST, SPI_MODE0));
+  digitalWrite(kChipSelectPin, LOW);
+  SPI.transfer(0x05); // BIT MODIFY
+  SPI.transfer(address);
+  SPI.transfer(mask);
   SPI.transfer(value);
   digitalWrite(kChipSelectPin, HIGH);
   SPI.endTransaction();
@@ -110,8 +126,13 @@ bool configure_controller() {
   write_register(kCaninte, kTx0Interrupt);
   write_register(kCanctrl, kNormalModeOneShot);
 
+  const uint8_t canctrl = read_register(kCanctrl);
+  if ((canctrl & kCanctrlReqopMask) != kNormalMode || (canctrl & kCanctrlOsm) == 0U) {
+    Serial.println(F("MCP2515 CANCTRL Normal+OSM readback FAILED; no CAN attempt"));
+    return false;
+  }
   const uint8_t canstat = read_register(kCanstat);
-  if ((canstat & 0xE0U) != 0x00U) {
+  if ((canstat & kCanctrlReqopMask) != kNormalMode) {
     Serial.println(F("MCP2515 normal-mode check FAILED; no CAN attempt"));
     return false;
   }
@@ -120,7 +141,46 @@ bool configure_controller() {
   return true;
 }
 
+bool abort_pending_transmission() {
+  // MCP2515 data sheet 3.6 requires ABAT before clearing the abort request.
+  write_register(kCanctrl, read_register(kCanctrl) | kCanctrlAbat);
+  const uint32_t abort_started = millis();
+  while ((millis() - abort_started) < kAbortTimeoutMs &&
+         (read_register(kTxb0ctrl) & kTxRequest) != 0U) {
+    delay(1);
+  }
+
+  // A controller that did not honor ABAT must not retain a deferred frame.
+  // BIT MODIFY is the MCP2515-specific per-buffer TXREQ cleanup fallback.
+  if ((read_register(kTxb0ctrl) & kTxRequest) != 0U) {
+    bit_modify(kTxb0ctrl, kTxRequest, 0x00);
+  }
+  if ((read_register(kTxb0ctrl) & kTxRequest) != 0U) {
+    Serial.println(F("TX_ONESHOT ABORT FAILED; TXREQ remains set; power-cycle required"));
+    return false; // Keep ABAT asserted; do not release a queued transmission.
+  }
+
+  // ABAT must be cleared only after TXREQ is verified clear.
+  write_register(kCanctrl, read_register(kCanctrl) & static_cast<uint8_t>(~kCanctrlAbat));
+  const uint8_t canctrl = read_register(kCanctrl);
+  const bool txreq_cleared = (read_register(kTxb0ctrl) & kTxRequest) == 0U;
+  if ((canctrl & kCanctrlAbat) != 0U || !txreq_cleared) {
+    Serial.println(F("TX_ONESHOT ABORT CLEANUP FAILED; power-cycle required"));
+    return false;
+  }
+  Serial.println(F("TX_ONESHOT ABORTED/FAILED; ABAT cleared and TXREQ verified clear"));
+  return true;
+}
+
 void attempt_once() {
+  // Re-read immediately before loading/requesting TXB0. A partial CANCTRL
+  // write must never silently downgrade this run to automatic retransmission.
+  const uint8_t canctrl_before_attempt = read_register(kCanctrl);
+  if ((canctrl_before_attempt & kCanctrlReqopMask) != kNormalMode ||
+      (canctrl_before_attempt & kCanctrlOsm) == 0U) {
+    Serial.println(F("TX_ONESHOT NOT ATTEMPTED; CANCTRL is not Normal+OSM"));
+    return;
+  }
   load_one_shot_frame();
   request_one_shot_transmission();
 
@@ -132,7 +192,11 @@ void attempt_once() {
     delay(1);
   }
 
-  const uint8_t txb0ctrl = read_register(kTxb0ctrl);
+  uint8_t txb0ctrl = read_register(kTxb0ctrl);
+  if ((txb0ctrl & kTxRequest) != 0U) {
+    abort_pending_transmission();
+    return;
+  }
   const uint8_t canintf = read_register(kCanintf);
   const uint8_t eflg = read_register(kEflg);
   Serial.printf("TX_ONESHOT id=0x%03X txb0=0x%02X intf=0x%02X eflg=0x%02X int=%d\n",

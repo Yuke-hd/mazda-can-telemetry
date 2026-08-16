@@ -49,6 +49,9 @@ jobs:
       - name: Build D1 Mini simulator
         working-directory: simulators/d1mini_can_web
         run: ../../.ci-venv/bin/pio run
+      - name: Build isolated MCP2515 bench target
+        working-directory: simulators/d1mini_can_web
+        run: ../../.ci-venv/bin/pio run -e bench_mcp2515
 
   firmware:
     runs-on: ubuntu-22.04
