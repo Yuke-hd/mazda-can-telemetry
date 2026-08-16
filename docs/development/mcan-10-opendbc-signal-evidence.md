@@ -8,8 +8,10 @@ The candidate source is comma.ai/opendbc at the exact commit
 `95f3d52f474b677c28fc8f10fef3f2f0386aff92`, accessed 2026-08-16. The commit was
 resolved from `refs/heads/master`; the branch is not a dependency. The source
 repository is [comma.ai/opendbc](https://github.com/commaai/opendbc), licensed
-under MIT. The upstream notice is `Copyright (c) 2020, Comma.ai, Inc.` and its
-full permission and disclaimer text is recorded by
+under MIT. The upstream notice is `Copyright (c) 2020, Comma.ai, Inc.` and the
+exact permission and disclaimer text is preserved in
+[`third_party/licenses/opendbc-MIT.txt`](../../third_party/licenses/opendbc-MIT.txt),
+with the attribution index in
 [`THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md).
 
 The extraction reads these paths at that commit:
@@ -22,9 +24,11 @@ The extraction reads these paths at that commit:
   and [`docs/CARS.md`](https://github.com/commaai/opendbc/blob/95f3d52f474b677c28fc8f10fef3f2f0386aff92/docs/CARS.md)
   for the upstream model-scope lead.
 
-No opendbc file, generated DBC, or capture is copied into this repository.
-This document is a provenance record and candidate lead, not a compatibility
-claim. Build and test tooling has no opendbc download or floating-branch input.
+The candidate matrix is an opendbc-derived field extraction distributed as
+project documentation. No full opendbc source tree or DBC file is vendored in
+this repository, and no vehicle capture is included. This document is a
+provenance record and candidate lead, not a compatibility claim. Build and test
+tooling has no opendbc download or floating-branch input.
 
 ## Upstream candidate matrix
 
@@ -50,9 +54,10 @@ claim of vehicle compatibility.
 | `TURN_SWITCH` (145 / `0x091`) | `HAZARD`: `10|1@0+ (1,0)`, `[0,1]`; `TURN_RIGHT_SWITCH`: `12|1@0+ (1,0)`, `[0,3]`; `TURN_LEFT_SWITCH`: `13|1@0+ (1,0)`, `[0,255]`; `CTR`: `27|4@0+ (1,0)`, `[0,255]`; `CHKSUM`: `39|8@0+ (1,0)`, `[0,15]` | Unspecified by source; establish from reviewed replay | [`opendbc/dbc/mazda_2017.dbc`](https://github.com/commaai/opendbc/blob/95f3d52f474b677c28fc8f10fef3f2f0386aff92/opendbc/dbc/mazda_2017.dbc#L436-L442) | Switch semantics and counter/checksum behavior require Australian-target evidence; upstream `carstate.py` does not consume this message | Upstream candidate — unverified for Australian target |
 | `BLINK_INFO` (154 / `0x09A`) | `LEFT_BLINK`: `18|1@1+ (1,0)`, `[0,3]`; `RIGHT_BLINK`: `19|1@0+ (1,0)`, `[0,255]`; `REAR_WIPER_ON`: `0|1@0+ (1,0)`, `[0,1]`; `WIPER_LO`: `33|1@1+ (1,0)`, `[0,31]`; `WIPER_HI`: `34|1@0+ (1,0)`, `[0,1]`; `LOW_BEAMS`: `5|2@0+ (1,0)`, `[0,3]`; `HIGH_BEAMS`: `7|2@0+ (1,0)`, `[0,3]`; `LBEAM1`: `17|1@0+ (1,0)`, `[0,1]`; `LBEAM2`: `50|1@0+ (1,0)`, `[0,1]`; `LBEAM3`: `60|1@0+ (1,0)`, `[0,1]` | Unspecified by source; establish from reviewed replay | [`opendbc/dbc/mazda_2017.dbc`](https://github.com/commaai/opendbc/blob/95f3d52f474b677c28fc8f10fef3f2f0386aff92/opendbc/dbc/mazda_2017.dbc#L424-L434) | Lamp and wiper availability/semantics may vary by market, trim, and body controller; upstream `carstate.py` consumes only selected lamp fields | Upstream candidate — unverified for Australian target |
 
-The source's unusual limits are reproduced verbatim, including fields whose
-observed range is narrower than the declared DBC limit. They must not be
-silently normalized before local evidence exists.
+The source's unusual limits are reproduced verbatim. These are DBC-declared
+ranges, not vehicle observations; a field's representable bit width may be
+broader or narrower than its declared range. Values must not be silently
+normalized before local evidence exists.
 
 ## Local verification boundary
 

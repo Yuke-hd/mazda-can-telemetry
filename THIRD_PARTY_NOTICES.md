@@ -7,8 +7,9 @@ not relicense third-party material.
 ## comma.ai/opendbc
 
 - **License:** MIT, as published by the upstream project.
-- **Copyright notice:** `Copyright (c) 2020, Comma.ai, Inc.` The upstream MIT
-  permission and disclaimer text are preserved at the exact pinned source.
+- **Copyright notice:** `Copyright (c) 2020, Comma.ai, Inc.` The exact MIT
+  permission and disclaimer text is preserved locally in
+  [`third_party/licenses/opendbc-MIT.txt`](third_party/licenses/opendbc-MIT.txt).
 - **License text:** <https://github.com/commaai/opendbc/blob/95f3d52f474b677c28fc8f10fef3f2f0386aff92/LICENSE>
 - **Repository:** <https://github.com/commaai/opendbc>
 - **Exact commit:** `95f3d52f474b677c28fc8f10fef3f2f0386aff92` (`master` at
@@ -18,12 +19,13 @@ not relicense third-party material.
   `opendbc/car/mazda/values.py`, and `docs/CARS.md` at that commit.
 - **Role:** candidate Mazda signal definitions and decoder-reference material;
   see [the MCAN-10 evidence matrix](docs/development/mcan-10-opendbc-signal-evidence.md).
-- **Current status:** no opendbc source file, DBC file, generated definition,
-  or vehicle capture is vendored in this repository. The pin is documentation
-  provenance only; CMake, CI, tests, and firmware do not fetch a branch or
-  depend on opendbc.
-- **Local modifications:** none; this repository records a reviewed candidate
-  extraction only and does not redistribute the upstream DBC.
+- **Current status:** the evidence matrix is an opendbc-derived field
+  extraction distributed as project documentation. No full opendbc source tree,
+  DBC file, generated definition, or vehicle capture is vendored. The pin is
+  documentation provenance only; CMake, CI, tests, and firmware do not fetch a
+  branch or depend on opendbc.
+- **Local modifications:** none were made to upstream source. The derived
+  matrix is not a redistribution of the full upstream DBC.
 
 Before importing or generating material from opendbc, record the exact upstream
 commit, access date, files used, and any local modifications in this file and
