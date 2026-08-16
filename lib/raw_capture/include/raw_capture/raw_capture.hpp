@@ -39,7 +39,7 @@ public:
   virtual void discard_partial_line() noexcept = 0;
 };
 
-struct SessionMetadata {
+struct ExporterSessionMetadata {
   std::string_view firmware;
   std::string_view board;
   std::uint32_t bitrate_bps{500'000};
@@ -49,7 +49,7 @@ struct SessionMetadata {
 };
 
 struct Configuration {
-  SessionMetadata session{};
+  ExporterSessionMetadata session{};
   std::uint64_t diagnostic_interval_us{kDefaultDiagnosticIntervalUs};
   std::uint64_t statistics_interval_us{kDefaultStatisticsIntervalUs};
 };

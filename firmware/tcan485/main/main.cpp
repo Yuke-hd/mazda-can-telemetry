@@ -72,7 +72,8 @@ private:
 };
 
 constexpr raw_capture::Configuration kCaptureConfiguration{
-    raw_capture::SessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000, 1'000'000, 0, 0},
+    raw_capture::ExporterSessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000,
+                                        1'000'000, 0, 0},
     1'000'000, 1'000'000};
 raw_capture::Exporter g_exporter{kCaptureConfiguration};
 CanSource g_can_source;
