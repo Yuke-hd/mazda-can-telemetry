@@ -78,11 +78,46 @@ connection.
 
 Do not proceed if the wiring review or termination measurement is incomplete.
 
-## Bring-up and evidence worksheet
+## Build, upload, and run sequence
 
-Run `pio run -e bench_mcp2515` and observe the serial log only on the isolated
-bench. Record evidence without raw vehicle captures, VINs, absolute times, or
-location metadata.
+PlatformIO Core 6.1.18 command syntax follows the official [`pio run` CLI
+reference](https://docs.platformio.org/en/stable/core/userguide/cmd_run.html)
+and [`pio device monitor` CLI reference](https://docs.platformio.org/en/stable/core/userguide/device/cmd_monitor.html).
+Run the build from the simulator project directory; compilation does not touch
+the hardware:
+
+```text
+cd simulators/d1mini_can_web
+pio run -e bench_mcp2515
+```
+
+Before uploading or running anything on the bench, remove all power and pass
+the complete wiring/termination gate above. Then connect the D1 Mini and
+shared-VCC module exactly as documented, using 3.3 V only while SPI and INT are
+connected. List available ports with `pio device list`, substitute the reviewed
+bench port for `<PORT>`, and upload only the bench environment:
+
+```text
+pio run -e bench_mcp2515 -t upload --upload-port <PORT>
+```
+
+The harness performs its one active attempt during boot/reset. To capture the
+full serial record, attach the environment-specific monitor after upload and
+then perform one deliberate, supervised reset (or power-cycle) while the
+monitor is attached:
+
+```text
+pio device monitor -e bench_mcp2515 -b 115200 --port <PORT>
+```
+
+Do not use the default environment for this procedure. Do not press reset or
+cycle power until the wiring review and unpowered approximately-60-ohm
+termination measurement have been recorded. Every repeated ACK/no-ACK run
+requires a deliberate supervised power-cycle/reset and a separate evidence
+record; never rely on the loop to retry a transmission. Record evidence
+without raw vehicle captures, VINs, absolute times, or location metadata.
+
+## Bring-up and evidence worksheet
 
 | Check | Result | Evidence / instrument reference |
 | --- | --- | --- |
