@@ -136,7 +136,20 @@ TEST_CASE("slow or disconnected output never blocks source draining") {
   CHECK(exporter.poll_output(sink, 1000, 3) == 3);
   CHECK(sink.lines[0] == "MCAN-CAPTURE 1\n");
   CHECK(sink.lines[1].rfind("SESSION ", 0) == 0);
+  exporter.request_final_statistics();
+  CHECK(exporter.poll_output(sink, 2000, 1000) > 0);
   CHECK(exporter.statistics().dropped_frames == 936);
+
+  std::string serialized;
+  for (const auto &line : sink.lines) {
+    serialized += line;
+  }
+  const auto parsed = raw_capture::CaptureReader{}.read(serialized);
+  REQUIRE(parsed.ok);
+  CHECK(parsed.errors.empty());
+  REQUIRE(!parsed.records.empty());
+  CHECK(parsed.records.back().type == raw_capture::RecordType::Statistics);
+  CHECK(parsed.records.back().statistics.dropped_frames == 936);
 }
 
 TEST_CASE("disconnect and reconnect create an isolated output segment") {
@@ -156,6 +169,18 @@ TEST_CASE("disconnect and reconnect create an isolated output segment") {
   REQUIRE(exporter.poll_output(sink, 30, 3) == 2);
   CHECK(sink.lines[3] == "DISCONTINUITY t_us=30 bus=all segment=1 reason=usb-reconnect\n");
   CHECK(sink.lines[4].rfind("FRAME t_us=30 ", 0) == 0);
+
+  std::string serialized;
+  for (const auto &line : sink.lines) {
+    serialized += line;
+  }
+  const auto parsed = raw_capture::CaptureReader{}.read(serialized);
+  REQUIRE(parsed.ok);
+  CHECK(parsed.errors.empty());
+  REQUIRE(parsed.records.size() == 3);
+  CHECK(parsed.records[1].type == raw_capture::RecordType::Discontinuity);
+  CHECK(parsed.records[1].discontinuity.segment == 1);
+  CHECK(parsed.records[2].segment == 1);
 }
 
 TEST_CASE("invalid configuration and frames fail closed with explicit loss") {
@@ -232,6 +257,42 @@ TEST_CASE("slow output rate-limits diagnostics without hiding cumulative loss") 
                               "DROP t_us=65 bus=0 count=1 reason=invalid-frame\n");
   REQUIRE(drop != sink.lines.end());
   CHECK((drop + 1)->rfind("FRAME t_us=66 ", 0) == 0);
+
+  std::string serialized;
+  for (const auto &line : sink.lines) {
+    serialized += line;
+  }
+  const auto parsed = raw_capture::CaptureReader{}.read(serialized);
+  REQUIRE(parsed.ok);
+  CHECK(parsed.errors.empty());
+  REQUIRE(parsed.records.back().type == raw_capture::RecordType::Statistics);
+  CHECK(parsed.records.back().statistics.dropped_frames == 2);
+}
+
+TEST_CASE("diagnostic boundary capacity fails closed before an invalid STATS") {
+  raw_capture::Configuration configuration{};
+  configuration.session = {"fw", "board", 500'000, 1'000'000, 0, 0};
+  raw_capture::Exporter exporter(configuration);
+  FakeSink sink;
+  REQUIRE(exporter.poll_output(sink, 0, 2) == 2);
+
+  for (std::size_t index = 0; index < raw_capture::kDropBoundaryCapacity + 1; ++index) {
+    exporter.note_dropped_frames(1, static_cast<std::uint64_t>(index),
+                                 static_cast<std::uint8_t>(index & 1U),
+                                 (index & 1U) == 0 ? "queue-overflow" : "upstream-overflow");
+  }
+  CHECK(exporter.failed());
+  CHECK(exporter.statistics().dropped_frames == raw_capture::kDropBoundaryCapacity + 1);
+  CHECK(exporter.statistics().dropped_records == 1);
+
+  std::string serialized;
+  for (const auto &line : sink.lines) {
+    serialized += line;
+  }
+  const auto parsed = raw_capture::CaptureReader{}.read(serialized);
+  REQUIRE(parsed.ok);
+  CHECK(parsed.errors.empty());
+  CHECK(parsed.records.empty());
 }
 
 TEST_CASE("equal timestamp loss boundary stays between accepted frames") {

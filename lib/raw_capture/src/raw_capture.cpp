@@ -197,7 +197,7 @@ Exporter::Exporter(Configuration configuration) noexcept : configuration_(config
 
 std::size_t Exporter::poll_input(FrameSource &source, const std::size_t max_frames) noexcept {
   std::size_t consumed = 0;
-  while (consumed < max_frames) {
+  while (consumed < max_frames && !failed_) {
     vehicle_core::RawCanFrame frame{};
     if (!source.try_receive(frame)) {
       break;
@@ -238,7 +238,11 @@ void Exporter::record_drop(const std::uint64_t count, const std::uint64_t timest
     }
   }
   if (drop_head_ - drop_tail_ >= kDropBoundaryCapacity) {
+    // There is no safe place to retain another ordering boundary. Continuing
+    // would make a later STATS record disagree with the visible DROP records,
+    // so fail closed and let the owner stop receive acquisition.
     ++dropped_records_;
+    failed_ = true;
     return;
   }
   auto &boundary = drop_boundaries_[drop_head_ % kDropBoundaryCapacity];
