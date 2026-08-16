@@ -1,0 +1,2 @@
+version: "0.1.0"
+description: "Bounded output-only MCAN-8 raw capture exporter"

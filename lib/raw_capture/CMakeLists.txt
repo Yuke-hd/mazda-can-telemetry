@@ -1,4 +1,10 @@
+if(COMMAND idf_component_register)
+  idf_component_register(SRCS "src/raw_capture.cpp" INCLUDE_DIRS "include" REQUIRES vehicle_core)
+  return()
+endif()
+
 add_library(raw_capture STATIC
+  src/raw_capture.cpp
   src/capture_reader.cpp
   src/capture_writer.cpp
   src/replay.cpp
