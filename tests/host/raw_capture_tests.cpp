@@ -284,6 +284,12 @@ TEST_CASE("diagnostic boundary capacity fails closed before an invalid STATS") {
   CHECK(exporter.failed());
   CHECK(exporter.statistics().dropped_frames == raw_capture::kDropBoundaryCapacity + 1);
   CHECK(exporter.statistics().dropped_records == 1);
+  FakeSource source;
+  source.frames.push_back(frame(999, 0, 0x123, false, false, 0));
+  CHECK(exporter.poll_input(source, 1) == 0);
+  CHECK(source.next == 0);
+  CHECK(exporter.statistics().input_frames == 0);
+  CHECK(exporter.statistics().queue_depth == 0);
 
   std::string serialized;
   for (const auto &line : sink.lines) {
