@@ -102,6 +102,11 @@ bool configure_controller() {
   write_register(kCnf1, 0x00);
   write_register(kCnf2, 0x90);
   write_register(kCnf3, 0x02);
+  if (read_register(kCnf1) != 0x00U || read_register(kCnf2) != 0x90U ||
+      read_register(kCnf3) != 0x02U) {
+    Serial.println(F("MCP2515 SPI register readback FAILED; no CAN attempt"));
+    return false;
+  }
   write_register(kCaninte, kTx0Interrupt);
   write_register(kCanctrl, kNormalModeOneShot);
 
