@@ -5,7 +5,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "raw_capture/raw_capture.hpp"
+#include "raw_capture/exporter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -28,7 +28,12 @@ public:
 // second record. No UART receive API is linked or called.
 class UsbUartSink final : public raw_capture::OutputSink {
 public:
-  bool connected() const noexcept override { return true; }
+  // UART0 exposes readiness, not USB cable presence. This state is therefore
+  // only the configured-output gate; unplug/replug detection remains a bench
+  // hardware concern and is never inferred from FIFO backpressure.
+  bool connected() const noexcept override { return initialized_; }
+
+  void mark_initialized() noexcept { initialized_ = true; }
 
   raw_capture::WriteResult write(const std::string_view line) noexcept override {
     if (pending_size_ == 0) {
@@ -49,6 +54,7 @@ public:
       return raw_capture::WriteResult::kWouldBlock;
     }
     if (accepted < 0) {
+      initialized_ = false;
       return raw_capture::WriteResult::kError;
     }
     pending_offset_ += static_cast<std::size_t>(accepted);
@@ -69,11 +75,12 @@ private:
   std::array<char, 512> pending_{};
   std::size_t pending_size_{0};
   std::size_t pending_offset_{0};
+  bool initialized_{false};
 };
 
 constexpr raw_capture::Configuration kCaptureConfiguration{
-    raw_capture::ExporterSessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000,
-                                        1'000'000, 0, 0},
+    raw_capture::ExporterSessionMetadata{"mcan-tcan485+0.1.0", "tcan485-revA", 500'000, 1'000'000,
+                                         0, 0},
     1'000'000, 1'000'000};
 raw_capture::Exporter g_exporter{kCaptureConfiguration};
 CanSource g_can_source;
@@ -134,6 +141,7 @@ extern "C" void app_main(void) {
     ESP_LOGE(kTag, "output-only USB UART initialization failed; refusing to start CAN");
     return;
   }
+  g_usb_sink.mark_initialized();
 
   constexpr can_bus::Configuration configuration{500'000, 0};
   ESP_LOGI(kTag,

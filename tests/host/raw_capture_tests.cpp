@@ -100,6 +100,19 @@ TEST_CASE("exporter emits the normative v1 serialization exactly") {
                           "FRAME t_us=2100 bus=0 id=0x1fffffff format=ext rtr=0 dlc=0 data=-\n",
                           "FRAME t_us=2200 bus=1 id=0x123 format=std rtr=1 dlc=2 data=-\n",
                           "STATS t_us=2200 segment=0 dropped_frames=2 dropped_records=0\n"});
+
+  std::string serialized;
+  for (const auto &line : sink.lines) {
+    serialized += line;
+  }
+  const auto parsed = raw_capture::CaptureReader{}.read(serialized);
+  REQUIRE(parsed.ok);
+  REQUIRE(parsed.records.size() == 6);
+  CHECK(parsed.records[0].type == raw_capture::RecordType::Frame);
+  CHECK(parsed.records[0].frame.identifier == 0x091);
+  CHECK(parsed.records[2].type == raw_capture::RecordType::Drop);
+  CHECK(parsed.records[2].drop.count == 2);
+  CHECK(parsed.records[5].statistics.dropped_frames == 2);
 }
 
 TEST_CASE("slow or disconnected output never blocks source draining") {

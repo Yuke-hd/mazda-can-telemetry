@@ -72,3 +72,27 @@ check the normative v1 records byte-for-byte, frame identity and payload
 formatting, slow/disconnected output, bounded input draining, explicit drops,
 and reconnect segment markers. No real vehicle capture or sensitive data is
 included.
+
+## Target validation procedure
+
+The remaining acceptance evidence must be collected on an isolated, protected
+bench with the exact board revision and a two-ended terminated classic-CAN bus.
+Record the firmware revision, configured bitrate, synthetic input frame rate,
+test duration, UART host baud, and CAN receive counters. Capture the complete
+output stream for each case and strict-parse it with the MCAN-9 reader:
+
+1. Run a connected host at the chosen sustained rate and compare injected,
+   received, emitted, and cumulative `DROP`/`STATS` counts.
+2. Repeat with a deliberately slow reader and verify that receive ownership
+   continues, every omitted frame is covered by visible `DROP` records, and
+   cumulative `STATS` counters never decrease.
+3. Disconnect and reconnect the USB cable only if the board exposes a
+   separately validated host-presence mechanism. Otherwise record that UART0
+   cannot observe this condition; FIFO backpressure must not be reported as
+   physical disconnect or used to claim a `DISCONTINUITY`.
+4. Check that no serial input is connected or parsed and that the CAN driver
+   remains listen-only throughout the run.
+
+Do not connect the bench to a vehicle. Until these measurements and a validated
+host-presence mechanism exist, MCAN-8 remains software-complete but physically
+unverified.
