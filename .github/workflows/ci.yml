@@ -32,6 +32,8 @@ jobs:
         run: ctest --test-dir build/host --output-on-failure
       - name: Validate GitHub App wrapper permissions
         run: python3 tools/validate_github_app_wrappers.py
+      - name: Validate MCAN-11 bench target safety fences
+        run: python3 tools/validate_mcp2515_bench.py --config simulators/d1mini_can_web/platformio.ini --source simulators/d1mini_can_web/src/mcp2515_bench.cpp
 
   simulator:
     runs-on: ubuntu-22.04
