@@ -118,13 +118,22 @@ class SlcanTransport:
         self.serial.write((command + "\r").encode("ascii"))
         self.emitted_commands.append(command)
 
-    def read_record(self) -> str:
-        """Read one stock SLCAN record, which is terminated by CR, not LF."""
+    def read_record(self, *, allow_idle_timeout: bool = False) -> Optional[str]:
+        """Read one CR-terminated record, optionally treating idle as no data.
+
+        Setup and acknowledgement reads leave ``allow_idle_timeout`` false:
+        timeout is always fatal there. The capture loop enables it so a
+        pyserial timeout before any byte is an ordinary idle poll. Once a
+        record has started, timeout remains fatal and cannot discard a partial
+        frame.
+        """
 
         record = bytearray()
         while True:
             chunk = self.serial.read(1)
             if not chunk:
+                if allow_idle_timeout and not record:
+                    return None
                 raise SlcanProtocolError("SLCAN record timed out before CR terminator")
             if not isinstance(chunk, bytes) or len(chunk) != 1:
                 raise SlcanProtocolError("serial reader returned an invalid byte")
@@ -198,8 +207,8 @@ def capture(
     valid and still performs setup followed by the required ``C`` shutdown.
     The serial object must provide pyserial's ``read()``, ``write()``, and
     optionally ``close()`` methods. Records are CR-delimited because the stock
-    firmware does not terminate replies with LF. Tests can therefore use a deterministic
-    in-memory serial double without installing pyserial.
+    firmware does not terminate replies with LF. Tests can therefore use a
+    deterministic in-memory serial double without installing pyserial.
     """
 
     opened: list[IO[str]] = []
@@ -248,8 +257,8 @@ def capture(
             now_us = clock_us()
             if deadline_us is not None and now_us >= deadline_us:
                 break
-            line = transport.read_record()
-            if not line:
+            line = transport.read_record(allow_idle_timeout=True)
+            if line is None or not line:
                 continue
             parse_classic_frame(line)
             native_line += 1

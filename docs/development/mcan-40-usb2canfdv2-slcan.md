@@ -48,7 +48,9 @@ timestamps, device drop counters, or MCAN conversion fields.
 The stock version reply `WeAct Studio V1.0.0.0` is recognized only as that exact
 response. Arbitrary `W`-prefixed records and malformed version replies remain
 fail-closed. Records are read to CR because this firmware does not append LF;
-using LF-oriented `readline()` can coalesce setup replies and frame data.
+using LF-oriented `readline()` can coalesce setup replies and frame data. After
+setup, a timeout before any byte is an idle poll and capture continues until its
+duration; a timeout after a partial record remains fatal.
 
 The JSONL sidecar has a schema header followed by one observation per native
 frame. Its `host_monotonic_us` values are relative to the first observation and

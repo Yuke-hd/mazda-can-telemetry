@@ -123,6 +123,40 @@ class SlcanCaptureTests(unittest.TestCase):
         self.assertNotIn("timestamp", sidecar.getvalue())
         self.assertNotIn("drop", sidecar.getvalue().lower())
 
+    def test_idle_timeout_then_frame_is_captured_with_cr_framing(self) -> None:
+        serial_port = FakeSerial(
+            [b"WeAct Studio V1.0.0.0\r\r\r\r\r\r", b"", b"t1230\r"]
+        )
+        transport = slcan_capture.SlcanTransport(serial_port)
+        native = io.StringIO()
+        sidecar = io.StringIO()
+        ticks = iter([0, 0, 10, 20])
+        frames = slcan_capture.capture(
+            transport,
+            native,
+            sidecar,
+            duration_s=1,
+            max_frames=1,
+            clock_us=lambda: next(ticks),
+        )
+        self.assertEqual(frames, 1)
+        self.assertEqual(native.getvalue(), "t1230\n")
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+
+    def test_idle_timeouts_poll_until_duration_without_failing(self) -> None:
+        serial_port = FakeSerial([b"WeAct Studio V1.0.0.0\r\r\r\r\r\r", b"", b""])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        ticks = iter([0, 0, 10, 20, 1_000_000])
+        frames = slcan_capture.capture(
+            transport,
+            io.StringIO(),
+            io.StringIO(),
+            duration_s=1,
+            clock_us=lambda: next(ticks),
+        )
+        self.assertEqual(frames, 0)
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+
     def test_shutdown_command_is_sent_after_malformed_or_fd_input(self) -> None:
         for line in (b"d1230\r", b"t1239AA\r"):
             serial_port = FakeSerial([b"WeAct Studio V1.0.0.0\r\r\r\r\r\r", line])
@@ -235,6 +269,22 @@ class SlcanCaptureTests(unittest.TestCase):
             with self.assertRaises(slcan_capture.SlcanProtocolError):
                 slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=None, max_frames=1)
             self.assertEqual(serial_port.writes[-1], b"C\r")
+
+    def test_partial_capture_record_timeout_is_fatal(self) -> None:
+        serial_port = FakeSerial([b"WeAct Studio V1.0.0.0\r\r\r\r\r\r", b"t123"])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with self.assertRaises(slcan_capture.SlcanProtocolError):
+            slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=None, max_frames=1)
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+        self.assertNotIn(b"t123", serial_port.writes)
+
+    def test_setup_ack_timeout_is_fatal_and_does_not_emit_open(self) -> None:
+        serial_port = FakeSerial([b"WeAct Studio V1.0.0.0\r"])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with self.assertRaises(slcan_capture.SlcanProtocolError):
+            slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=None, max_frames=1)
+        self.assertEqual(serial_port.writes, [b"V\r", b"C\r", b"C\r"])
+        self.assertNotIn(b"O\r", serial_port.writes)
 
     def test_classic_parser_rejects_fd_and_malformed_lines(self) -> None:
         with self.assertRaises(slcan_capture.CanFdFrameError):
