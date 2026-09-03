@@ -41,6 +41,10 @@ causes the required `C` shutdown. Native USB logs are auxiliary diagnostics and
 evidence. They are not MCAN v1 records, and the tool never fabricates device
 timestamps, device drop counters, or MCAN conversion fields.
 
+The stock version reply `WeAct Studio V1.0.0.0` is recognized only when it
+matches the vendor string and four numeric version components. Arbitrary
+`W`-prefixed records and malformed version replies remain fail-closed.
+
 The JSONL sidecar has a schema header followed by one observation per native
 frame. Its `host_monotonic_us` values are relative to the first observation and
 are intentionally not wall-clock timestamps:

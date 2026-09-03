@@ -36,19 +36,21 @@ SPEED_CODE_RE = re.compile(r"^S[0-8]$")
 FRAME_PREFIXES = frozenset("tTrR")
 CAN_FD_PREFIXES = frozenset("dDbB")
 HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
+STOCK_VERSION_RE = re.compile(r"^WeAct Studio V[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 def _is_stock_status_line(line: str) -> bool:
     """Identify status replies that are not native frame records.
 
-    ``V`` is the stock version response and ``F`` is the stock error/status
-    response.  A bare bell is the SLCAN command-error response.  They are not
-    copied into the native frame log; every other non-frame line remains a
-    protocol error so an unsupported CAN-FD/diagnostic stream cannot be
-    silently reinterpreted.
+    The observed USB2CANFDV2 version response is ``WeAct Studio V1.0.0.0``;
+    the matcher permits only that vendor string followed by four numeric
+    version components.  A bare bell is the SLCAN command-error response.
+    These are not copied into the native frame log; every other non-frame line
+    remains a protocol error so an unsupported CAN-FD/diagnostic stream cannot
+    be silently reinterpreted.
     """
 
-    return line == "\x07" or line in {"OK", "ERROR"} or line.startswith(("V", "F"))
+    return line == "\x07" or line in {"OK", "ERROR"} or STOCK_VERSION_RE.fullmatch(line) is not None
 
 
 def validate_command(command: str) -> str:

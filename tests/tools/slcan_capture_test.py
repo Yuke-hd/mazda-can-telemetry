@@ -122,7 +122,7 @@ class SlcanCaptureTests(unittest.TestCase):
             self.assertNotIn(b"t", b"".join(serial_port.writes))
 
     def test_stock_version_and_status_replies_are_not_capture_frames(self) -> None:
-        serial_port = FakeSerial([b"V0101\r", b"F00\r", b"\x07", b"t1230\r"])
+        serial_port = FakeSerial([b"WeAct Studio V1.0.0.0\r", b"OK\r", b"\x07", b"t1230\r"])
         transport = slcan_capture.SlcanTransport(serial_port)
         native = io.StringIO()
         sidecar = io.StringIO()
@@ -131,6 +131,20 @@ class SlcanCaptureTests(unittest.TestCase):
         )
         self.assertEqual(frames, 1)
         self.assertEqual(native.getvalue(), "t1230\n")
+
+    def test_only_stock_version_response_is_ignored(self) -> None:
+        serial_port = FakeSerial([b"WeAct Studio V1.0.0\r"])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with self.assertRaises(slcan_capture.SlcanProtocolError):
+            slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=None, max_frames=1)
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+
+        for line in (b"W1.0.0.0\r", b"WeAct Studio V1.0.0.0 extra\r", b"WeAct Studio V1.0.0\r"):
+            serial_port = FakeSerial([line])
+            transport = slcan_capture.SlcanTransport(serial_port)
+            with self.assertRaises(slcan_capture.SlcanProtocolError):
+                slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=None, max_frames=1)
+            self.assertEqual(serial_port.writes[-1], b"C\r")
 
     def test_invalid_arguments_still_attempt_close(self) -> None:
         serial_port = FakeSerial([])
