@@ -54,8 +54,8 @@ artifact.
 
 The authoritative product and engineering requirements are maintained in
 [Notion](https://app.notion.com/p/mazda-can-telemetry-3bab6bac581680bea756f017dc3dc347).
-See [AGENTS.md](AGENTS.md) for the compact agent operating manual and safety
-boundaries, and [CONTRIBUTING.md](CONTRIBUTING.md) for collaboration rules. The
+See [CONTRIBUTING.md](CONTRIBUTING.md) for collaboration rules and repository
+safety boundaries. The
 first formal work item is [repository bootstrap and governance](docs/work-items/0001-repository-bootstrap.md).
 
 ## License and data policy

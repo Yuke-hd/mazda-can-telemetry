@@ -6,7 +6,6 @@
 
 <!-- Use `Closes #123` only when this PR fully satisfies the issue. -->
 
-Ticket: MCAN-
 Refs #
 
 ## Scope
