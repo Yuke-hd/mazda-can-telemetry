@@ -51,6 +51,7 @@ enum class SelectorPosition : std::uint8_t { Unknown, Park, Reverse, Neutral, Dr
 
 enum class ActualGear : std::uint8_t {
   Unknown,
+  Park,
   Neutral,
   Reverse,
   First,
@@ -179,6 +180,74 @@ private:
 };
 
 [[nodiscard]] bool library_is_available() noexcept;
+
+// Candidate Mazda signal definitions and decoders. These are deliberately
+// transport- and clock-independent: callers provide a received RawCanFrame
+// and the frame's monotonic timestamp. Definitions remain candidates pending
+// MCAN-19 validation against the approved vehicle.
+namespace mazda_candidate {
+
+constexpr std::uint32_t kEngineDataId = 0x202;
+constexpr std::uint32_t kGearId = 0x228;
+constexpr std::uint8_t kCandidateDlc = 8;
+
+enum class DecodeStatus : std::uint8_t { Ignored, Updated, Invalid };
+
+struct CandidateMessageDefinition {
+  const char *name;
+  std::uint32_t identifier;
+  std::uint8_t expected_dlc;
+  std::optional<Microseconds> expected_period_us;
+  std::optional<Microseconds> freshness_timeout_us;
+  bool pending_validation;
+  const char *provenance;
+};
+
+struct CandidateSignalDefinition {
+  const char *name;
+  std::uint32_t identifier;
+  // Payload bit offset in the decoder's byte/LSB numbering, not DBC Motorola
+  // start-bit notation. Numeric big-endian fields are documented by byte
+  // offset in the MCAN-14 note.
+  std::uint8_t start_bit;
+  std::uint8_t bit_length;
+  float scale;
+  float offset;
+  SignalUnit unit;
+  float physical_min;
+  float physical_max;
+  const char *invalid_values;
+};
+
+// The opendbc source has no cycle-time declaration. Null periods/timeouts are
+// intentional until reviewed replay or isolated-bench evidence establishes
+// them; callers can supply per-signal timeouts through VehicleFreshnessPolicy.
+inline constexpr CandidateMessageDefinition kEngineDataDefinition{
+    "ENGINE_DATA", kEngineDataId, kCandidateDlc, std::nullopt, std::nullopt, true,
+    "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
+inline constexpr CandidateMessageDefinition kGearDefinition{
+    "GEAR", kGearId, kCandidateDlc, std::nullopt, std::nullopt, true,
+    "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
+
+inline constexpr CandidateSignalDefinition kEngineRpmDefinition{
+    "RPM", kEngineDataId, 0, 16, 0.25F, 0.0F, SignalUnit::RevolutionsPerMinute, 0.0F, 8500.0F,
+    "raw values above 34000 (8500 rpm)"};
+inline constexpr CandidateSignalDefinition kEngineSpeedDefinition{
+    "SPEED", kEngineDataId, 16, 16, 0.01F, 0.0F, SignalUnit::KilometresPerHour, 0.0F, 32767.0F,
+    "none declared by source; representable values are bounded by 16 bits"};
+inline constexpr CandidateSignalDefinition kSelectorDefinition{
+    "GEAR", kGearId, 0, 3, 1.0F, 0.0F, SignalUnit::SelectorPosition, 0.0F, 4.0F,
+    "0=shifting/unknown; 5-7=undefined"};
+inline constexpr CandidateSignalDefinition kActualGearDefinition{
+    "GEAR_BOX", kGearId, 33, 4, 1.0F, 0.0F, SignalUnit::ActualGear, 0.0F, 6.0F,
+    "7-13=undefined; 15=shifting/unknown; 14=reverse"};
+
+[[nodiscard]] DecodeStatus decode_engine_data(const RawCanFrame &frame,
+                                               VehicleState &state) noexcept;
+[[nodiscard]] DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept;
+[[nodiscard]] DecodeStatus decode(const RawCanFrame &frame, VehicleState &state) noexcept;
+
+} // namespace mazda_candidate
 
 } // namespace vehicle_core
 

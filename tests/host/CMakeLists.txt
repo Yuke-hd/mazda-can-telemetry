@@ -17,6 +17,11 @@ target_compile_features(vehicle_core_tests PRIVATE cxx_std_17)
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(vehicle_core_tests)
 
+add_executable(mazda_candidate_tests mazda_candidate_tests.cpp)
+target_link_libraries(mazda_candidate_tests PRIVATE raw_capture doctest::doctest)
+target_compile_features(mazda_candidate_tests PRIVATE cxx_std_17)
+doctest_discover_tests(mazda_candidate_tests)
+
 add_executable(capture_reader_tests capture_reader_tests.cpp)
 target_link_libraries(capture_reader_tests PRIVATE raw_capture doctest::doctest)
 target_compile_features(capture_reader_tests PRIVATE cxx_std_17)
