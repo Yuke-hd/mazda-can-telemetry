@@ -1,0 +1,6 @@
+# T-CAN485 BENCH_ACK_ONLY is an isolated LILYGO/TTGO bench receiver. Its
+# project name and build guard, rather than an editable sdkconfig mode, select
+# normal TWAI mode. Missing/ambiguous guards fail closed to listen-only.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_FREERTOS_UNICORE=n

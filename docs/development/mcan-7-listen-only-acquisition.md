@@ -2,11 +2,14 @@
 
 ## Safety boundary
 
-The T-CAN485 vehicle target installs the ESP-IDF v5.5.4 TWAI driver with
-`TWAI_MODE_LISTEN_ONLY`. The mode is a compile-time statement in the private
-implementation, not a public configuration value. The driver TX queue is
-explicitly set to zero. Invalid bitrates fail before the transceiver is powered
-or the driver is installed. There is no normal-mode or no-ack fallback.
+The `tcan485_vehicle_listen_only` target installs the ESP-IDF v5.5.4 TWAI
+driver with `TWAI_MODE_LISTEN_ONLY`. The mode is a compile-time statement in
+the private implementation, not a public configuration value. The driver TX
+queue is explicitly set to zero. Invalid bitrates fail before the transceiver
+is powered or the driver is installed. There is no normal-mode or no-ACK
+fallback in the vehicle target. The separately named
+`tcan485-bench-ack-only` project is the only guarded exception and is governed
+by [MCAN-13's isolation record](mcan-13-bench-ack-only.md).
 
 The public `can_bus` header exposes exactly four operations:
 
@@ -90,7 +93,10 @@ Host tests exercise bitrate rejection, full frame fidelity, FIFO order,
 drop-newest behavior, overflow and watermark accounting, statistics reset, and
 1,000 producer calls with an absent consumer. The structural check verifies
 the public operation set, strict listen-only token, disabled TX queue, absence
-of alternate modes, and absence of TWAI transmit calls.
+of alternate modes in the vehicle CAN implementation, and absence of TWAI
+transmit calls. The MCAN-13 artifact check additionally verifies that normal
+mode is confined to the separately named bench project and that its labels
+cannot be mistaken for vehicle firmware.
 
 Integrated isolated-bench validation is intentionally out of scope for MCAN-7.
 MCAN-33 owns the future physical receiver, wiring, PCB-revision, and no-ACK

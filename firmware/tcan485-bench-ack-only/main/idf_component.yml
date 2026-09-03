@@ -1,0 +1,5 @@
+version: "0.1.0"
+description: "T-CAN485 BENCH_ACK_ONLY isolated classic-CAN ACK receiver"
+dependencies:
+  idf:
+    version: "==5.5.4"

@@ -7,6 +7,7 @@
 #include "board/board_config.h"
 #include "can_bus/configuration.hpp"
 #include "can_bus/frame_ring.hpp"
+#include "can_bus/mode.hpp"
 #include "driver/twai.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -131,9 +132,14 @@ Result start(const Configuration &configuration) noexcept {
   while (xSemaphoreTake(g_available, 0) == pdTRUE) {
   }
 
-  twai_general_config_t general = TWAI_GENERAL_CONFIG_DEFAULT(
-      static_cast<gpio_num_t>(board::kTcan485.can.tx),
-      static_cast<gpio_num_t>(board::kTcan485.can.rx), TWAI_MODE_LISTEN_ONLY);
+  twai_general_config_t general =
+      TWAI_GENERAL_CONFIG_DEFAULT(static_cast<gpio_num_t>(board::kTcan485.can.tx),
+                                  static_cast<gpio_num_t>(board::kTcan485.can.rx),
+#if !defined(TCAN485_BENCH_ACK_ONLY) || !defined(TCAN485_BENCH_TARGET)
+                                  TWAI_MODE_LISTEN_ONLY);
+#else
+                                  internal::driver_mode());
+#endif
   general.tx_queue_len = 0;
   general.rx_queue_len = kQueueCapacity;
   general.alerts_enabled = TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_QUEUE_FULL |
