@@ -22,6 +22,11 @@ target_link_libraries(mazda_candidate_tests PRIVATE raw_capture doctest::doctest
 target_compile_features(mazda_candidate_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_candidate_tests)
 
+add_executable(mazda_turn_tests mazda_turn_tests.cpp)
+target_link_libraries(mazda_turn_tests PRIVATE raw_capture doctest::doctest)
+target_compile_features(mazda_turn_tests PRIVATE cxx_std_17)
+doctest_discover_tests(mazda_turn_tests)
+
 add_executable(capture_reader_tests capture_reader_tests.cpp)
 target_link_libraries(capture_reader_tests PRIVATE raw_capture doctest::doctest)
 target_compile_features(capture_reader_tests PRIVATE cxx_std_17)

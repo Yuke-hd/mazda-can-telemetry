@@ -16,7 +16,7 @@ bool RawCanFrame::is_valid() const noexcept {
 
 std::optional<TurnEdgeEvent> VehicleState::update_turn(TurnState state,
                                                        MonotonicTimestamp timestamp) noexcept {
-  const TurnState previous = turn_state.value;
+  const TurnState previous = effective_turn_state();
   if (!turn_state.update(state, timestamp)) {
     return std::nullopt;
   }
