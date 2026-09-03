@@ -3,7 +3,10 @@ if(COMMAND idf_component_register)
   return()
 endif()
 
-add_library(vehicle_core STATIC src/vehicle_core.cpp)
+add_library(vehicle_core STATIC
+  src/vehicle_core.cpp
+  src/mazda_candidate.cpp
+)
 
 target_include_directories(vehicle_core
   PUBLIC
