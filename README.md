@@ -45,6 +45,15 @@ D1 Mini project only establishes an Arduino setup/loop boundary; it does not
 initialize a network or produce CAN frames. Neither is a vehicle release
 artifact.
 
+## MCAN-40 USB2CANFDV2 host capture
+
+The stock USB2CANFDV2 SLCAN instrument is supported only by the passive,
+allowlisted host capture path in
+[`docs/development/mcan-40-usb2canfdv2-slcan.md`](docs/development/mcan-40-usb2canfdv2-slcan.md).
+Its native logs are auxiliary; the WeAct CAN485 V1.1 remains the only canonical
+v1 vehicle-capture source. K2 must be OFF for vehicle monitoring, and the
+USB2CANFDV2 ACK-slot behavior remains unmeasured.
+
 ## Safety Boundary
 
 - Vehicle firmware is CAN listen-only. It performs no control, diagnostic polling, or frame injection.
