@@ -23,8 +23,12 @@ value is retained for diagnostics while its status is stale.
 
 `VehicleState::update_turn()` emits a `TurnEdgeEvent` only when the semantic
 state changes. Equal states and duplicate frames do not create duplicate
-edges. A stale value is not actionable, so a recovered frame produces an edge
-from effective `Unknown` when its new state is different.
+edges. The decoder can optionally write that event to an output
+`std::optional<TurnEdgeEvent>`, which is cleared for ignored, invalid, and
+duplicate frames. Before comparing states, `update_turn()` refreshes the
+mutable turn signal at the incoming timestamp. A stale value is therefore not
+actionable, and a recovered frame produces an edge from effective `Unknown`,
+including when it recovers to the same stored direction.
 
 `BLINK_INFO` (`0x09A`) remains diagnostic-only. Its phase/lamp candidates are
 not decoded into request or turn state. All definitions above are upstream
