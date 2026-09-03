@@ -46,8 +46,14 @@ def main() -> int:
     can_cmake = (root / "components/can_bus/CMakeLists.txt").read_text(encoding="utf-8")
     require(
         can_cmake,
-        'PROJECT_NAME STREQUAL "tcan485_bench_ack_only"',
+        'idf_build_get_property(tcan485_app_name PROJECT_NAME)',
         "bench project guard",
+        failures,
+    )
+    require(
+        can_cmake,
+        'tcan485_app_name STREQUAL "tcan485_bench_ack_only"',
+        "bench app-name guard",
         failures,
     )
     require(bench_main, "BENCH_ACK_ONLY", "bench startup warning", failures)

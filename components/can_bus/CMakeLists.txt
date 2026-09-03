@@ -9,7 +9,10 @@ idf_component_register(
 # This variable is set only by firmware/tcan485-bench-ack-only/CMakeLists.txt.
 # A missing variable deliberately leaves the component in the strict mode.
 if(TCAN485_BENCH_ACK_ONLY)
-  if(NOT PROJECT_NAME STREQUAL "tcan485_bench_ack_only")
+  # PROJECT_NAME is component-local here. Resolve the top-level ESP-IDF app
+  # name through the build property API before allowing the bench mode.
+  idf_build_get_property(tcan485_app_name PROJECT_NAME)
+  if(NOT tcan485_app_name STREQUAL "tcan485_bench_ack_only")
     message(FATAL_ERROR "BENCH_ACK_ONLY is reserved for the named isolated bench project")
   endif()
   target_compile_definitions(${COMPONENT_LIB} PRIVATE
