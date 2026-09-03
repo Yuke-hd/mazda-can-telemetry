@@ -88,15 +88,14 @@ def _present(output: str) -> Tuple[bool, str]:
 
 
 REQUIREMENTS = (
-    Requirement("Git", "git", ("--version",), frozenset({"host", "simulator", "firmware"}), _present, "https://git-scm.com/book/en/v2/Getting-Started-Installing-Git"),
-    Requirement("Bash", "bash", ("--version",), frozenset({"host", "simulator", "firmware"}), _present, "https://www.gnu.org/software/bash/"),
+    Requirement("Git", "git", ("--version",), frozenset({"host", "firmware"}), _present, "https://git-scm.com/book/en/v2/Getting-Started-Installing-Git"),
+    Requirement("Bash", "bash", ("--version",), frozenset({"host", "firmware"}), _present, "https://www.gnu.org/software/bash/"),
     Requirement("CMake", "cmake", ("--version",), frozenset({"host"}), _at_least((3, 20)), "https://cmake.org/download/"),
     Requirement("Ninja", "ninja", ("--version",), frozenset({"host"}), _present, "https://ninja-build.org/"),
     Requirement("C++ compiler", "c++", ("--version",), frozenset({"host"}), _present, "https://gcc.gnu.org/install/"),
     Requirement("clang-format", "clang-format-14", ("--version",), frozenset({"host"}), _major_exact(14), "https://clang.llvm.org/docs/ClangFormat.html"),
-    Requirement("Python", "python3", ("--version",), frozenset({"host", "simulator", "firmware"}), _at_least((3, 8)), "https://www.python.org/downloads/"),
+    Requirement("Python", "python3", ("--version",), frozenset({"host", "firmware"}), _at_least((3, 8)), "https://www.python.org/downloads/"),
     Requirement("ripgrep", "rg", ("--version",), frozenset({"host"}), _present, "https://github.com/BurntSushi/ripgrep#installation"),
-    Requirement("PlatformIO Core", "pio", ("--version",), frozenset({"simulator"}), _exact((6, 1, 18)), "https://docs.platformio.org/en/stable/core/installation/methods/pypi.html"),
     Requirement("ESP-IDF", "idf.py", ("--version",), frozenset({"firmware"}), _exact((5, 5, 4)), "https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/"),
 )
 
@@ -189,12 +188,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scope",
-        choices=("host", "simulator", "firmware", "all"),
+        choices=("host", "firmware", "all"),
         default="all",
         help="requirements to check (default: all)",
     )
     args = parser.parse_args()
-    scopes = ("host", "simulator", "firmware") if args.scope == "all" else (args.scope,)
+    scopes = ("host", "firmware") if args.scope == "all" else (args.scope,)
     return max(check(scope) for scope in scopes)
 
 

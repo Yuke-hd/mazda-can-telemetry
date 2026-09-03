@@ -1,6 +1,6 @@
 # Mazda CAN Telemetry
 
-A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. An ESP32/T-CAN485 exporter listens to and exports vehicle data, supported by an isolated CAN bench simulator. A real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
+A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. An ESP32/T-CAN485 exporter listens to and exports vehicle data, supported by host-side capture and replay tools. A real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
 
 The current target vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
 
@@ -8,8 +8,7 @@ The current target vehicle is an Australian-market 2019 Mazda CX-5 Akera with th
 
 The portable C++17 `vehicle_core` library and its host tests are configured at
 the repository root. The T-CAN485 application lives under
-`firmware/tcan485`, and the isolated-bench D1 Mini Web simulator scaffold lives
-under `simulators/d1mini_can_web`. See
+`firmware/tcan485`. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
 
@@ -18,7 +17,7 @@ for pinned tool versions and reproducible commands.
 The following tools are needed to configure, build, format, validate, and test
 the repository. The [MCAN-3 scaffold](docs/development/mcan-3-scaffold.md)
 contains the complete commands and exact dependency pins; run
-`tools/check_toolchain.py --scope <host|simulator|firmware|all>` before a
+`tools/check_toolchain.py --scope <host|firmware|all>` before a
 build. Missing tools and version mismatches are reported together with an
 official installation link.
 
@@ -27,23 +26,17 @@ official installation link.
 | Host library/tests | Bash/Linux shell, Git, Python 3, ripgrep | Bash and Git current supported releases; Python >= 3.8; ripgrep current supported release | Repository commands and source discovery ([Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/), [ripgrep](https://github.com/BurntSushi/ripgrep#installation)) |
 | Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release | Configure and build the portable library/tests ([compiler](https://gcc.gnu.org/install/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
 | Host library/tests | clang-format | Major version 14 (`clang-format-14`) | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
-| D1 Mini simulator | PlatformIO Core | Exactly 6.1.18 | Build the isolated-bench simulator scaffold; Espressif8266 and Arduino packages are resolved from `platformio.ini` ([installation](https://docs.platformio.org/en/stable/core/installation/methods/pypi.html)) |
 | T-CAN485 firmware | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the ESP32 receive-only firmware ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
 
 Host tools are required for the common library, formatting, and test workflow;
-PlatformIO is simulator-only; ESP-IDF and its ESP32 toolchain are firmware-only.
-PlatformIO's platform/framework packages, CMake's doctest dependency, and
-ESP-IDF managed components are resolved by their respective build systems, not
-installed as separate repository prerequisites. On Linux, a reproducible
-user-space bootstrap for PlatformIO is available at
-[`tools/bootstrap_dev.sh`](tools/bootstrap_dev.sh); ESP-IDF must be installed
+ESP-IDF and its ESP32 toolchain are firmware-only. CMake's doctest dependency
+and ESP-IDF managed components are resolved by their respective build systems,
+not installed as separate repository prerequisites. ESP-IDF must be installed
 and activated using its upstream guide.
 
 The T-CAN485 application initializes a bounded strict listen-only CAN
-acquisition path. It does not decode, capture, export, or transmit frames. The
-D1 Mini project only establishes an Arduino setup/loop boundary; it does not
-initialize a network or produce CAN frames. Neither is a vehicle release
-artifact.
+acquisition path. It does not decode, capture, export, or transmit frames. It is
+not a vehicle release artifact.
 
 ## Safety Boundary
 
