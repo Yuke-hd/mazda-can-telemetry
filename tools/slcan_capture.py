@@ -36,21 +36,8 @@ SPEED_CODE_RE = re.compile(r"^S[0-8]$")
 FRAME_PREFIXES = frozenset("tTrR")
 CAN_FD_PREFIXES = frozenset("dDbB")
 HEX_RE = re.compile(r"^[0-9A-Fa-f]+$")
-STOCK_VERSION_RE = re.compile(r"^WeAct Studio V[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
-
-
-def _is_stock_status_line(line: str) -> bool:
-    """Identify status replies that are not native frame records.
-
-    The observed USB2CANFDV2 version response is ``WeAct Studio V1.0.0.0``;
-    the matcher permits only that vendor string followed by four numeric
-    version components.  A bare bell is the SLCAN command-error response.
-    These are not copied into the native frame log; every other non-frame line
-    remains a protocol error so an unsupported CAN-FD/diagnostic stream cannot
-    be silently reinterpreted.
-    """
-
-    return line == "\x07" or line in {"OK", "ERROR"} or STOCK_VERSION_RE.fullmatch(line) is not None
+STOCK_VERSION_RESPONSE = "WeAct Studio V1.0.0.0"
+MAX_RECORD_LENGTH = 128
 
 
 def validate_command(command: str) -> str:
@@ -117,12 +104,6 @@ def parse_classic_frame(line: str) -> Tuple[str, int, bool]:
     return line, dlc, remote
 
 
-def _strip_line_ending(raw: bytes) -> bytes:
-    """Remove serial line framing without changing any frame characters."""
-
-    return raw[:-2] if raw.endswith(b"\r\n") else raw[:-1] if raw.endswith((b"\r", b"\n")) else raw
-
-
 class SlcanTransport:
     """The sole command-writing boundary for the stock SLCAN device."""
 
@@ -137,6 +118,35 @@ class SlcanTransport:
         self.serial.write((command + "\r").encode("ascii"))
         self.emitted_commands.append(command)
 
+    def read_record(self) -> str:
+        """Read one stock SLCAN record, which is terminated by CR, not LF."""
+
+        record = bytearray()
+        while True:
+            chunk = self.serial.read(1)
+            if not chunk:
+                raise SlcanProtocolError("SLCAN record timed out before CR terminator")
+            if not isinstance(chunk, bytes) or len(chunk) != 1:
+                raise SlcanProtocolError("serial reader returned an invalid byte")
+            if chunk == b"\r":
+                try:
+                    return bytes(record).decode("ascii")
+                except UnicodeDecodeError as error:
+                    raise SlcanProtocolError("SLCAN record is not ASCII") from error
+            if chunk in {b"\n", b"\x07"}:
+                raise SlcanProtocolError("SLCAN record contains an invalid terminator or BEL")
+            record.extend(chunk)
+            if len(record) > MAX_RECORD_LENGTH:
+                raise SlcanProtocolError("SLCAN record exceeds the maximum length")
+
+    def _send_and_expect(self, command: str, expected: str) -> None:
+        self.send_command(command)
+        reply = self.read_record()
+        if reply != expected:
+            raise SlcanProtocolError(
+                f"unexpected reply to {command}: expected {expected!r}, received {reply!r}"
+            )
+
     def configure_vehicle_capture(self, speed_code: str = "6") -> None:
         """Issue the fixed stock-SLCAN setup sequence.
 
@@ -146,8 +156,9 @@ class SlcanTransport:
 
         if not re.fullmatch(r"[0-8]", speed_code):
             raise SlcanProtocolError("speed code must be one digit from 0 through 8")
-        for command in ("V", "C", f"S{speed_code}", "M1", "A0", "O"):
-            self.send_command(command)
+        self._send_and_expect("V", STOCK_VERSION_RESPONSE)
+        for command in ("C", f"S{speed_code}", "M1", "A0", "O"):
+            self._send_and_expect(command, "")
 
     def close(self) -> None:
         """Close the stock-SLCAN capture exactly once, then close the port."""
@@ -185,8 +196,9 @@ def capture(
 
     ``duration_s=None`` requires ``max_frames``.  A zero-duration capture is
     valid and still performs setup followed by the required ``C`` shutdown.
-    The serial object must provide pyserial's ``readline()``, ``write()``, and
-    optionally ``close()`` methods.  Tests can therefore use a deterministic
+    The serial object must provide pyserial's ``read()``, ``write()``, and
+    optionally ``close()`` methods. Records are CR-delimited because the stock
+    firmware does not terminate replies with LF. Tests can therefore use a deterministic
     in-memory serial double without installing pyserial.
     """
 
@@ -236,19 +248,8 @@ def capture(
             now_us = clock_us()
             if deadline_us is not None and now_us >= deadline_us:
                 break
-            raw = transport.serial.readline()
-            if not raw:
-                # pyserial's timeout allows a bounded poll so duration remains
-                # deterministic and shutdown is reachable even on an idle bus.
-                continue
-            raw_line = _strip_line_ending(bytes(raw))
-            try:
-                line = raw_line.decode("ascii")
-            except UnicodeDecodeError as error:
-                raise SlcanProtocolError("SLCAN input is not ASCII") from error
+            line = transport.read_record()
             if not line:
-                continue
-            if _is_stock_status_line(line):
                 continue
             parse_classic_frame(line)
             native_line += 1

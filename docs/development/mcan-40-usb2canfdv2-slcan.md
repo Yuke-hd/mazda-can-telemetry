@@ -19,12 +19,16 @@ capture path. Its only serial command writer accepts this exact allowlist:
 | `A0` | Apply the approved stock capture acceptance setting. |
 | `O` | Open the capture session. |
 
-The setup sequence is `V`, `C`, `Sx`, `M1`, `A0`, `O`; a final `C` is sent in a
-`finally` path on normal completion, malformed input, and output failure. A
-caller cannot include a line terminator in a command, and the writer has no
-frame/transmit method. In particular, `t`, `T`, `r`, and `R` data/RTR commands,
-`L`, `m`, `l`, and all other configuration or transmit commands are rejected
-before any serial write.
+The setup sequence is `V`, `C`, `Sx`, `M1`, `A0`, `O`, and each command waits for
+its CR-terminated reply before the next command is emitted. `V` must return the
+exact `WeAct Studio V1.0.0.0` response; every other setup command must return an
+empty CR success response. BEL, LF framing, timeout, partial, and malformed
+replies fail closed, so `O` cannot be emitted after an earlier setup failure. A
+final `C` is sent in a `finally` path on normal completion, malformed input,
+and output failure. A caller cannot include a line terminator in a command, and
+the writer has no frame/transmit method. In particular, `t`, `T`, `r`, and `R`
+data/RTR commands, `L`, `m`, `l`, and all other configuration or transmit
+commands are rejected before any serial write.
 
 The `V` response must be recorded by the operator in the private run worksheet
 along with the instrument model, stock firmware version, USB identity, and
@@ -41,9 +45,10 @@ causes the required `C` shutdown. Native USB logs are auxiliary diagnostics and
 evidence. They are not MCAN v1 records, and the tool never fabricates device
 timestamps, device drop counters, or MCAN conversion fields.
 
-The stock version reply `WeAct Studio V1.0.0.0` is recognized only when it
-matches the vendor string and four numeric version components. Arbitrary
-`W`-prefixed records and malformed version replies remain fail-closed.
+The stock version reply `WeAct Studio V1.0.0.0` is recognized only as that exact
+response. Arbitrary `W`-prefixed records and malformed version replies remain
+fail-closed. Records are read to CR because this firmware does not append LF;
+using LF-oriented `readline()` can coalesce setup replies and frame data.
 
 The JSONL sidecar has a schema header followed by one observation per native
 frame. Its `host_monotonic_us` values are relative to the first observation and
