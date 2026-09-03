@@ -26,18 +26,38 @@ TEST_CASE("turn switch normalizes candidate bits with hazard and conflict preced
   using namespace vehicle_core::mazda_candidate;
 
   VehicleState state{};
-  CHECK(decode_turn_switch(turn_frame(0, false, false, false), state) == DecodeStatus::Updated);
+  std::optional<TurnEdgeEvent> edge;
+  CHECK(decode_turn_switch(turn_frame(0, false, false, false), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Unknown);
+  CHECK(edge->current == TurnState::Off);
   CHECK(state.turn_state.value == TurnState::Off);
   CHECK(state.effective_turn_state() == TurnState::Off);
 
-  CHECK(decode_turn_switch(turn_frame(1, false, true, false), state) == DecodeStatus::Updated);
+  CHECK(decode_turn_switch(turn_frame(1, false, true, false), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Off);
+  CHECK(edge->current == TurnState::Left);
   CHECK(state.turn_state.value == TurnState::Left);
-  CHECK(decode_turn_switch(turn_frame(2, false, false, true), state) == DecodeStatus::Updated);
+  CHECK(decode_turn_switch(turn_frame(2, false, false, true), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Left);
+  CHECK(edge->current == TurnState::Right);
   CHECK(state.turn_state.value == TurnState::Right);
-  CHECK(decode_turn_switch(turn_frame(3, false, true, true), state) == DecodeStatus::Updated);
+  CHECK(decode_turn_switch(turn_frame(3, false, true, true), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Right);
+  CHECK(edge->current == TurnState::Unknown);
   CHECK(state.turn_state.value == TurnState::Unknown);
   CHECK(state.effective_turn_state() == TurnState::Unknown);
-  CHECK(decode_turn_switch(turn_frame(4, true, true, true), state) == DecodeStatus::Updated);
+  CHECK(decode_turn_switch(turn_frame(4, true, true, true), state, &edge) == DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Unknown);
+  CHECK(edge->current == TurnState::Hazard);
   CHECK(state.turn_state.value == TurnState::Hazard);
   CHECK(state.hazard_request.value);
   CHECK(state.left_turn_request.value);
@@ -49,30 +69,37 @@ TEST_CASE("turn switch rejects malformed input and ignores diagnostic blink info
   using namespace vehicle_core::mazda_candidate;
 
   VehicleState state{};
+  std::optional<TurnEdgeEvent> edge;
   const auto initial = turn_frame(100, false, true, false);
-  REQUIRE(decode_turn_switch(initial, state) == DecodeStatus::Updated);
+  REQUIRE(decode_turn_switch(initial, state, &edge) == DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
 
   auto short_frame = initial;
   short_frame.dlc = 7;
-  CHECK(decode_turn_switch(short_frame, state) == DecodeStatus::Invalid);
+  CHECK(decode_turn_switch(short_frame, state, &edge) == DecodeStatus::Invalid);
+  CHECK_FALSE(edge.has_value());
   CHECK(state.turn_state.value == TurnState::Left);
 
   auto extended = initial;
   extended.identifier_format = CanIdentifierFormat::Extended;
-  CHECK(decode_turn_switch(extended, state) == DecodeStatus::Ignored);
+  CHECK(decode_turn_switch(extended, state, &edge) == DecodeStatus::Ignored);
+  CHECK_FALSE(edge.has_value());
 
   auto remote = initial;
   remote.remote_request = true;
-  CHECK(decode_turn_switch(remote, state) == DecodeStatus::Ignored);
+  CHECK(decode_turn_switch(remote, state, &edge) == DecodeStatus::Ignored);
+  CHECK_FALSE(edge.has_value());
 
   auto invalid_identifier = initial;
   invalid_identifier.identifier = 0x800;
-  CHECK(decode_turn_switch(invalid_identifier, state) == DecodeStatus::Ignored);
+  CHECK(decode_turn_switch(invalid_identifier, state, &edge) == DecodeStatus::Ignored);
+  CHECK_FALSE(edge.has_value());
 
   auto blink_info = initial;
   blink_info.identifier = kBlinkInfoId;
   blink_info.data[1] = 0xff;
-  CHECK(decode(blink_info, state) == DecodeStatus::Ignored);
+  CHECK(decode(blink_info, state, &edge) == DecodeStatus::Ignored);
+  CHECK_FALSE(edge.has_value());
   CHECK(state.turn_state.value == TurnState::Left);
   CHECK(state.left_turn_request.value);
 }
@@ -123,6 +150,49 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
   CHECK(recovered.turn_state.is_valid());
   CHECK(recovered.effective_turn_state() == TurnState::Right);
   CHECK(recovered.timestamp_us == 301'000);
+}
+
+TEST_CASE("decoder emits recovery edges after freshness loss, including same direction") {
+  using namespace vehicle_core;
+  using namespace vehicle_core::mazda_candidate;
+
+  VehicleState state{};
+  std::optional<TurnEdgeEvent> edge;
+  REQUIRE(decode_turn_switch(turn_frame(1'000, false, true, false), state, &edge) ==
+          DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Unknown);
+  CHECK(edge->current == TurnState::Left);
+
+  state.refresh(251'001);
+  CHECK(state.turn_state.is_stale());
+  CHECK(decode_turn_switch(turn_frame(251'002, false, true, false), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Unknown);
+  CHECK(edge->current == TurnState::Left);
+
+  state.refresh(501'003);
+  CHECK(state.turn_state.is_stale());
+  CHECK(decode_turn_switch(turn_frame(501'004, false, false, true), state, &edge) ==
+        DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(edge->previous == TurnState::Unknown);
+  CHECK(edge->current == TurnState::Right);
+}
+
+TEST_CASE("duplicate frames through decoder clear edge output") {
+  using namespace vehicle_core;
+  using namespace vehicle_core::mazda_candidate;
+
+  VehicleState state{};
+  std::optional<TurnEdgeEvent> edge;
+  REQUIRE(decode_turn_switch(turn_frame(10, false, true, false), state, &edge) ==
+          DecodeStatus::Updated);
+  REQUIRE(edge.has_value());
+  CHECK(decode_turn_switch(turn_frame(11, false, true, false), state, &edge) ==
+        DecodeStatus::Updated);
+  CHECK_FALSE(edge.has_value());
 }
 
 TEST_CASE("candidate definitions document provenance and diagnostic-only phase") {
