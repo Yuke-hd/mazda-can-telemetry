@@ -51,20 +51,6 @@ source, exact version or commit, license, and required notices.
 - **License:** Apache-2.0, upstream [LICENSE](https://github.com/espressif/esp-idf/blob/v5.5.4/LICENSE)
 - **Role/status:** required firmware toolchain and manifest dependency; no ESP-IDF source is copied into this repository. The upstream notices remain authoritative.
 
-## PlatformIO Espressif8266 platform
-
-- **Source:** <https://github.com/platformio/platform-espressif8266/tree/v4.2.1>
-- **Exact version:** `v4.2.1`
-- **License:** Apache-2.0, upstream [LICENSE](https://github.com/platformio/platform-espressif8266/blob/v4.2.1/LICENSE)
-- **Role/status:** exact PlatformIO platform for the D1 Mini scaffold in `simulators/d1mini_can_web/platformio.ini`.
-
-## Arduino core for ESP8266
-
-- **Source:** <https://github.com/esp8266/Arduino/tree/3.1.2>
-- **Exact upstream version:** `3.1.2`; PlatformIO package: `platformio/framework-arduinoespressif8266` `3.30102.0`
-- **License:** LGPL-2.1, upstream [LICENSE](https://github.com/esp8266/Arduino/blob/3.1.2/LICENSE)
-- **Role/status:** framework package resolved by the D1 Mini scaffold; no Arduino core source is copied into this repository. The upstream notices remain authoritative.
-
 ## GitHub Actions checkout
 
 - **Source:** <https://github.com/actions/checkout>

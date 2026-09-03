@@ -21,7 +21,7 @@ jobs:
       - name: Validate C++ formatting
         shell: bash
         run: |
-          mapfile -t sources < <(find lib components firmware simulators tests -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print)
+          mapfile -t sources < <(find lib components firmware tests -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -print)
           test "${#sources[@]}" -gt 0
           clang-format-14 --dry-run --Werror "${sources[@]}"
       - name: Configure host tests
@@ -30,27 +30,6 @@ jobs:
         run: cmake --build build/host --parallel
       - name: Run host tests
         run: ctest --test-dir build/host --output-on-failure
-      - name: Validate MCAN-11 bench target safety fences
-        run: python3 tools/validate_mcp2515_bench.py --config simulators/d1mini_can_web/platformio.ini --source simulators/d1mini_can_web/src/mcp2515_bench.cpp
-
-  simulator:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Install Python and PlatformIO Core 6.1.18
-        run: |
-          python3 -m venv .ci-venv
-          .ci-venv/bin/python -m pip install --upgrade pip
-          .ci-venv/bin/python -m pip install platformio==6.1.18
-      - name: Check simulator toolchain versions
-        run: .ci-venv/bin/python tools/check_toolchain.py --scope simulator
-      - name: Build D1 Mini simulator
-        working-directory: simulators/d1mini_can_web
-        run: ../../.ci-venv/bin/pio run
-      - name: Build isolated MCP2515 bench target
-        working-directory: simulators/d1mini_can_web
-        run: ../../.ci-venv/bin/pio run -e bench_mcp2515
-
   firmware:
     runs-on: ubuntu-22.04
     steps:

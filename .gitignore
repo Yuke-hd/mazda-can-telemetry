@@ -8,11 +8,6 @@ CMakeCache.txt
 cmake-build-*/
 compile_commands.json
 
-# PlatformIO / Arduino
-.pio/
-.pioenvs/
-.piolibdeps/
-
 # Editors and OS
 .vscode/
 .idea/

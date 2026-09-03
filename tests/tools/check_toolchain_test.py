@@ -69,11 +69,11 @@ class ToolchainCheckerTests(unittest.TestCase):
             Path, "is_file", side_effect=[True, False, False]
         ), patch.object(Path, "stat") as stat:
             stat.return_value.st_mode = 0o100755
-            candidates = check_toolchain._executable_candidates("pio")
-        self.assertEqual(candidates, ("/tmp/venv/bin/pio",))
+            candidates = check_toolchain._executable_candidates("tool")
+        self.assertEqual(candidates, (str(Path("/tmp/venv/bin/tool").resolve()),))
 
     def test_venv_sibling_tool_precedes_wrong_path_version(self) -> None:
-        with patch.object(check_toolchain.shutil, "which", return_value="/usr/bin/pio"), patch.object(
+        with patch.object(check_toolchain.shutil, "which", return_value="/usr/bin/tool"), patch.object(
             check_toolchain.sys, "executable", "/tmp/venv/bin/python"
         ), patch.object(check_toolchain.sys, "prefix", "/tmp/venv"), patch.object(
             check_toolchain.sys, "base_prefix", "/usr"
@@ -81,27 +81,27 @@ class ToolchainCheckerTests(unittest.TestCase):
             Path, "stat"
         ) as stat:
             stat.return_value.st_mode = 0o100755
-            selected = check_toolchain._find_executable("pio")
-        self.assertEqual(selected, "/tmp/venv/bin/pio")
+            selected = check_toolchain._find_executable("tool")
+        self.assertEqual(selected, str(Path("/tmp/venv/bin/tool").resolve()))
 
     def test_system_python_preserves_path_precedence(self) -> None:
-        with patch.object(check_toolchain.shutil, "which", return_value="/usr/local/bin/pio"), patch.object(
+        with patch.object(check_toolchain.shutil, "which", return_value="/usr/local/bin/tool"), patch.object(
             check_toolchain.sys, "executable", "/usr/bin/python3"
         ), patch.object(check_toolchain.sys, "prefix", "/usr"), patch.object(
             check_toolchain.sys, "base_prefix", "/usr"
         ), patch.object(Path, "is_file", return_value=False):
-            selected = check_toolchain._find_executable("pio")
-        self.assertEqual(selected, "/usr/local/bin/pio")
+            selected = check_toolchain._find_executable("tool")
+        self.assertEqual(selected, "/usr/local/bin/tool")
 
     def test_system_python_path_precedes_existing_interpreter_tool(self) -> None:
-        with patch.object(check_toolchain.shutil, "which", return_value="/usr/local/bin/pio"), patch.object(
+        with patch.object(check_toolchain.shutil, "which", return_value="/usr/local/bin/tool"), patch.object(
             check_toolchain.sys, "executable", "/usr/bin/python3"
         ), patch.object(check_toolchain.sys, "prefix", "/usr"), patch.object(
             check_toolchain.sys, "base_prefix", "/usr"
         ), patch.object(Path, "is_file", return_value=True), patch.object(Path, "stat") as stat:
             stat.return_value.st_mode = 0o100755
-            selected = check_toolchain._find_executable("pio")
-        self.assertEqual(selected, "/usr/local/bin/pio")
+            selected = check_toolchain._find_executable("tool")
+        self.assertEqual(selected, "/usr/local/bin/tool")
 
 
 if __name__ == "__main__":
