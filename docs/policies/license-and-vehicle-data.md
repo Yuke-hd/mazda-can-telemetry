@@ -12,7 +12,7 @@ reviewable by the same checklist every time.
 The project-authored source code, build files, tests, documentation, and
 configuration are released under the Apache License 2.0 in the repository
 root. The license grants no permission to use project or vehicle trademarks,
-and it does not change the safety requirements in `AGENTS.md`.
+and it does not change the repository's documented safety requirements.
 
 Repository artifacts are classified as follows:
 
@@ -81,7 +81,7 @@ Anonymization is not a vehicle-control permission. Firmware and vehicle builds
 remain receive-only, and no fixture may justify adding a transmit path,
 diagnostic polling, or a gateway. Captures must never be collected while
 driving merely to inspect logs; follow the staged safety procedure in
-`AGENTS.md`.
+the repository's contribution guidance.
 
 ## Fixture review checklist
 

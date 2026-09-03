@@ -18,7 +18,7 @@ Before creating product-development tickets, establish an auditable GitHub repos
 - Description: `Read-only Mazda CX-5 KF CAN telemetry decoder, ESP32 exporter, and isolated bench simulator.`
 - Visibility: **public** by explicit project decision. Project-authored material is Apache-2.0; third-party attribution and vehicle-data anonymization are governed by [the confirmed MCAN-2 policy](../policies/license-and-vehicle-data.md).
 - Default branch: `main`.
-- Work tracking: GitHub Issues. Map native Issue `#123` directly to ticket key `MCAN-123` and update the title to `[MCAN-123] ...` after creation. Do not create product backlog Issues until this work item passes acceptance.
+- Work tracking: GitHub Issues. Use GitHub's native Issue references; an MCAN number is not required. Do not create product backlog Issues until this work item passes acceptance.
 - Development model: trunk-based development without a long-lived `develop` branch.
 - Merge method: squash merge only. The Conventional Commit PR title becomes the merged commit title.
 - Repository language: English for every artifact, including source, comments, documentation, tests, configuration text, commits, Issues, and PRs. The owner-agent conversation may use Chinese.
@@ -30,7 +30,7 @@ Before creating product-development tickets, establish an auditable GitHub repos
 3. `main` protection and repository merge settings.
 4. Branch, commit, and PR rules in `CONTRIBUTING.md`.
 5. `.github/pull_request_template.md`.
-6. The `MCAN-<GitHub Issue number>` ticket-key convention.
+6. Native GitHub Issue references without a separate ticket-key convention.
 7. Project introduction, ignore rules, and this work-item record.
 
 ## `main` Protection
@@ -54,15 +54,15 @@ Also disable merge commits and rebase merges, retain squash merge only, and auto
 `main` must remain buildable and replay-testable and must never produce a vehicle firmware artifact with active CAN transmission capability. Use short-lived branches for every non-trivial change:
 
 ```text
-feat/mcan-<number>-<slug>
-fix/mcan-<number>-<slug>
-docs/mcan-<number>-<slug>
-test/mcan-<number>-<slug>
-chore/mcan-<number>-<slug>
-spike/mcan-<number>-<slug>
+feat/<slug>
+fix/<slug>
+docs/<slug>
+test/<slug>
+chore/<slug>
+spike/<slug>
 ```
 
-GitHub's native Issue reference cannot be customized. Map it rather than creating another counter: Issue `#123` is ticket `MCAN-123`. Immediately rename its title to `[MCAN-123] <descriptive title>`, use `mcan-123` in branch names, and retain `#123` where GitHub automatic linking is required. Issues and PRs share GitHub's number sequence, so gaps are expected and valid.
+Use GitHub's native Issue references such as `#123` where linking is useful. No separate MCAN counter or title prefix is required.
 
 Use `fix/` for urgent corrections rather than creating a long-lived hotfix branch. Even a small spelling correction should preferably use a PR. Any future exception must first change the governance document and protection rule; do not bypass the rule by verbal agreement.
 
@@ -93,7 +93,7 @@ See `CONTRIBUTING.md` for allowed types and scopes, breaking changes, Issue refe
 
 - `git status` is clean and local `main` tracks the remote.
 - GitHub uses `main` as its default branch and has Issues enabled.
-- Every product Issue uses the `MCAN-<native Issue number>` key and `[MCAN-<number>]` title prefix without a separate sequence allocator.
+- Product Issues use GitHub's native references; no MCAN number or title prefix is required.
 - Direct force-push and deletion of `main` are prohibited, and ordinary changes require PRs.
 - The repository permits squash merge only and automatically deletes merged branches.
 - This work item matches settings read back from the GitHub API.
