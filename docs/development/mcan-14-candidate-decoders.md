@@ -17,7 +17,7 @@ decoder implementation.
 | `0x202` | RPM | bytes 0..1, big-endian | `0.25 + 0` | rpm | raw `>34000` (`>8500 rpm`) |
 | `0x202` | SPEED | bytes 2..3, big-endian | `0.01 + 0` | km/h | no source sentinel; zero is valid |
 | `0x228` | selector | byte 0 low 3 bits | `1 + 0` | selector position | `0` means shifting/unknown; `5..7` undefined |
-| `0x228` | actual gear | byte 4 bits 4..1 | `1 + 0` | actual gear | `7..13` undefined; `15` shifting/unknown |
+| `0x228` | actual gear | byte 4 bits 4..1 | `1 + 0` | actual gear | valid raw domain `0..14` (with `7..13` undefined); `15` shifting/unknown |
 
 Selector and actual transmission gear are separate signals. Selector values
 are `1=P`, `2=R`, `3=N`, and `4=D`. Actual gear values are `0=P`, `14=R`, and

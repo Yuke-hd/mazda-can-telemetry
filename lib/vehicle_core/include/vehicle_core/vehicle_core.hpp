@@ -223,27 +223,68 @@ struct CandidateSignalDefinition {
 // intentional until reviewed replay or isolated-bench evidence establishes
 // them; callers can supply per-signal timeouts through VehicleFreshnessPolicy.
 inline constexpr CandidateMessageDefinition kEngineDataDefinition{
-    "ENGINE_DATA", kEngineDataId, kCandidateDlc, std::nullopt, std::nullopt, true,
+    "ENGINE_DATA",
+    kEngineDataId,
+    kCandidateDlc,
+    std::nullopt,
+    std::nullopt,
+    true,
     "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
 inline constexpr CandidateMessageDefinition kGearDefinition{
-    "GEAR", kGearId, kCandidateDlc, std::nullopt, std::nullopt, true,
+    "GEAR",
+    kGearId,
+    kCandidateDlc,
+    std::nullopt,
+    std::nullopt,
+    true,
     "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
 
 inline constexpr CandidateSignalDefinition kEngineRpmDefinition{
-    "RPM", kEngineDataId, 0, 16, 0.25F, 0.0F, SignalUnit::RevolutionsPerMinute, 0.0F, 8500.0F,
+    "RPM",
+    kEngineDataId,
+    0,
+    16,
+    0.25F,
+    0.0F,
+    SignalUnit::RevolutionsPerMinute,
+    0.0F,
+    8500.0F,
     "raw values above 34000 (8500 rpm)"};
 inline constexpr CandidateSignalDefinition kEngineSpeedDefinition{
-    "SPEED", kEngineDataId, 16, 16, 0.01F, 0.0F, SignalUnit::KilometresPerHour, 0.0F, 32767.0F,
+    "SPEED",
+    kEngineDataId,
+    16,
+    16,
+    0.01F,
+    0.0F,
+    SignalUnit::KilometresPerHour,
+    0.0F,
+    32767.0F,
     "none declared by source; representable values are bounded by 16 bits"};
-inline constexpr CandidateSignalDefinition kSelectorDefinition{
-    "GEAR", kGearId, 0, 3, 1.0F, 0.0F, SignalUnit::SelectorPosition, 0.0F, 4.0F,
-    "0=shifting/unknown; 5-7=undefined"};
+inline constexpr CandidateSignalDefinition kSelectorDefinition{"GEAR",
+                                                               kGearId,
+                                                               0,
+                                                               3,
+                                                               1.0F,
+                                                               0.0F,
+                                                               SignalUnit::SelectorPosition,
+                                                               0.0F,
+                                                               4.0F,
+                                                               "0=shifting/unknown; 5-7=undefined"};
 inline constexpr CandidateSignalDefinition kActualGearDefinition{
-    "GEAR_BOX", kGearId, 33, 4, 1.0F, 0.0F, SignalUnit::ActualGear, 0.0F, 6.0F,
+    "GEAR_BOX",
+    kGearId,
+    33,
+    4,
+    1.0F,
+    0.0F,
+    SignalUnit::ActualGear,
+    0.0F,
+    14.0F,
     "7-13=undefined; 15=shifting/unknown; 14=reverse"};
 
 [[nodiscard]] DecodeStatus decode_engine_data(const RawCanFrame &frame,
-                                               VehicleState &state) noexcept;
+                                              VehicleState &state) noexcept;
 [[nodiscard]] DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept;
 [[nodiscard]] DecodeStatus decode(const RawCanFrame &frame, VehicleState &state) noexcept;
 

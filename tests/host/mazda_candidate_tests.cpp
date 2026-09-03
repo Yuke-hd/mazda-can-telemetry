@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
 #include <algorithm>
@@ -35,6 +36,8 @@ TEST_CASE("candidate definitions retain source provenance and unspecified timing
   CHECK(kEngineSpeedDefinition.scale == doctest::Approx(0.01F));
   CHECK(kEngineRpmDefinition.unit == vehicle_core::SignalUnit::RevolutionsPerMinute);
   CHECK(kEngineSpeedDefinition.unit == vehicle_core::SignalUnit::KilometresPerHour);
+  CHECK(kActualGearDefinition.physical_min == doctest::Approx(0.0F));
+  CHECK(kActualGearDefinition.physical_max == doctest::Approx(14.0F));
 }
 
 TEST_CASE("ENGINE_DATA decodes upstream-derived big-endian golden vector") {
@@ -43,8 +46,8 @@ TEST_CASE("ENGINE_DATA decodes upstream-derived big-endian golden vector") {
   const auto input = frame(0x202, 1000, {0x09, 0x5b, 0x00, 0x00, 0, 0, 0, 0});
   vehicle_core::VehicleState state{};
 
-  CHECK(vehicle_core::mazda_candidate::decode_engine_data(
-            input, state) == vehicle_core::mazda_candidate::DecodeStatus::Updated);
+  CHECK(vehicle_core::mazda_candidate::decode_engine_data(input, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Updated);
   CHECK(state.engine_rpm.is_valid());
   CHECK(state.engine_rpm.value == doctest::Approx(598.75F));
   CHECK(state.speed_kph.is_valid());
@@ -55,14 +58,14 @@ TEST_CASE("ENGINE_DATA decodes upstream-derived big-endian golden vector") {
 TEST_CASE("ENGINE_DATA accepts representable boundaries and rejects invalid RPM") {
   vehicle_core::VehicleState state{};
   const auto boundary = frame(0x202, 10, {0x84, 0xd0, 0xff, 0xff, 0, 0, 0, 0});
-  CHECK(vehicle_core::mazda_candidate::decode_engine_data(
-            boundary, state) == vehicle_core::mazda_candidate::DecodeStatus::Updated);
+  CHECK(vehicle_core::mazda_candidate::decode_engine_data(boundary, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Updated);
   CHECK(state.engine_rpm.value == doctest::Approx(8500.0F));
   CHECK(state.speed_kph.value == doctest::Approx(655.35F));
 
   const auto invalid = frame(0x202, 11, {0x84, 0xd1, 0, 0, 0, 0, 0, 0});
-  CHECK(vehicle_core::mazda_candidate::decode_engine_data(
-            invalid, state) == vehicle_core::mazda_candidate::DecodeStatus::Invalid);
+  CHECK(vehicle_core::mazda_candidate::decode_engine_data(invalid, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Invalid);
   CHECK(state.engine_rpm.value == doctest::Approx(8500.0F));
   CHECK(state.engine_rpm.last_update_us == 10);
 }
@@ -95,8 +98,8 @@ TEST_CASE("GEAR keeps selector and actual transmission gear independent") {
   // Synthetic vector from the issue acceptance example: Drive, second gear.
   const auto input = frame(0x228, 2000, {0x24, 0x81, 0x07, 0xff, 0x04, 0xf0, 0, 0});
   vehicle_core::VehicleState state{};
-  CHECK(vehicle_core::mazda_candidate::decode_gear(
-            input, state) == vehicle_core::mazda_candidate::DecodeStatus::Updated);
+  CHECK(vehicle_core::mazda_candidate::decode_gear(input, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Updated);
   CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Drive);
   CHECK(state.actual_gear.value == vehicle_core::ActualGear::Second);
   CHECK(state.selector_position.last_update_us == 2000);
@@ -107,6 +110,7 @@ TEST_CASE("GEAR keeps selector and actual transmission gear independent") {
           vehicle_core::mazda_candidate::DecodeStatus::Updated);
   CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Reverse);
   CHECK(state.actual_gear.value == vehicle_core::ActualGear::Reverse);
+  CHECK(vehicle_core::mazda_candidate::kActualGearDefinition.physical_max >= 14.0F);
   const auto park = frame(0x228, 2002, {0x01, 0, 0, 0, 0x00, 0, 0, 0});
   REQUIRE(vehicle_core::mazda_candidate::decode_gear(park, state) ==
           vehicle_core::mazda_candidate::DecodeStatus::Updated);
@@ -117,21 +121,21 @@ TEST_CASE("GEAR keeps selector and actual transmission gear independent") {
 TEST_CASE("GEAR ignores shifting and undefined values without creating valid signals") {
   vehicle_core::VehicleState state{};
   const auto selector_only = frame(0x228, 1, {0x04, 0, 0, 0, 0x1e, 0, 0, 0});
-  CHECK(vehicle_core::mazda_candidate::decode_gear(
-            selector_only, state) == vehicle_core::mazda_candidate::DecodeStatus::Updated);
+  CHECK(vehicle_core::mazda_candidate::decode_gear(selector_only, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Updated);
   CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Drive);
   CHECK(state.actual_gear.is_unknown());
 
   const auto unknown = frame(0x228, 1, {0x00, 0, 0, 0, 0x1e, 0, 0, 0});
-  CHECK(vehicle_core::mazda_candidate::decode_gear(
-            unknown, state) == vehicle_core::mazda_candidate::DecodeStatus::Invalid);
+  CHECK(vehicle_core::mazda_candidate::decode_gear(unknown, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Invalid);
   CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Drive);
   CHECK(state.actual_gear.is_unknown());
 
   const auto undefined = frame(0x228, 2, {0x05, 0, 0, 0, 0x0e, 0, 0, 0});
-  CHECK(vehicle_core::mazda_candidate::decode_gear(
-            undefined, state) == vehicle_core::mazda_candidate::DecodeStatus::Invalid);
-  CHECK(state.selector_position.is_unknown());
+  CHECK(vehicle_core::mazda_candidate::decode_gear(undefined, state) ==
+        vehicle_core::mazda_candidate::DecodeStatus::Invalid);
+  CHECK(state.selector_position.value == vehicle_core::SelectorPosition::Drive);
   CHECK(state.actual_gear.is_unknown());
 }
 

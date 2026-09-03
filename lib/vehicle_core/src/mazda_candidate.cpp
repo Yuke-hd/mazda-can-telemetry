@@ -11,7 +11,7 @@ bool candidate_frame(const RawCanFrame &frame, const std::uint32_t identifier) n
 std::uint16_t big_endian_u16(const std::array<std::uint8_t, kCanClassicPayloadBytes> &data,
                              const std::size_t offset) noexcept {
   return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[offset]) << 8U) |
-                                     data[offset + 1]);
+                                    data[offset + 1]);
 }
 
 SelectorPosition selector_from_raw(const std::uint8_t raw) noexcept {
@@ -67,10 +67,10 @@ DecodeStatus decode_engine_data(const RawCanFrame &frame, VehicleState &state) n
   if (rpm_raw > 34000U)
     return DecodeStatus::Invalid;
 
-  const bool rpm_updated = state.engine_rpm.update(static_cast<float>(rpm_raw) * 0.25F,
-                                                    frame.timestamp_us);
-  const bool speed_updated = state.speed_kph.update(static_cast<float>(speed_raw) * 0.01F,
-                                                     frame.timestamp_us);
+  const bool rpm_updated =
+      state.engine_rpm.update(static_cast<float>(rpm_raw) * 0.25F, frame.timestamp_us);
+  const bool speed_updated =
+      state.speed_kph.update(static_cast<float>(speed_raw) * 0.01F, frame.timestamp_us);
   if (rpm_updated || speed_updated) {
     if (frame.timestamp_us > state.timestamp_us)
       state.timestamp_us = frame.timestamp_us;
