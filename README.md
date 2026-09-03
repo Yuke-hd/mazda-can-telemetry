@@ -1,14 +1,14 @@
 # Mazda CAN Telemetry
 
-A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. An ESP32/T-CAN485 exporter listens to and exports vehicle data, supported by host-side capture and replay tools. A real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
+A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct CAN485 V1.1 under MCAN-39. The existing `firmware/tcan485` tree is a legacy ESP32/T-CAN485 scaffold retained pending the MCAN-39 product migration and MCAN-13 `BENCH_ACK_ONLY` separation; it is not an approved vehicle exporter. Host-side capture and replay tools support analysis, while a real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
 
-The current target vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
+The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
 
 ## MCAN-3 build scaffold
 
 The portable C++17 `vehicle_core` library and its host tests are configured at
-the repository root. The T-CAN485 application lives under
-`firmware/tcan485`. See
+the repository root. The legacy T-CAN485 scaffold lives under
+`firmware/tcan485` pending the MCAN-39 product migration. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
 
@@ -26,17 +26,19 @@ official installation link.
 | Host library/tests | Bash/Linux shell, Git, Python 3, ripgrep | Bash and Git current supported releases; Python >= 3.8; ripgrep current supported release | Repository commands and source discovery ([Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/), [ripgrep](https://github.com/BurntSushi/ripgrep#installation)) |
 | Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release | Configure and build the portable library/tests ([compiler](https://gcc.gnu.org/install/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
 | Host library/tests | clang-format | Major version 14 (`clang-format-14`) | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
-| T-CAN485 firmware | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the ESP32 receive-only firmware ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
+| Legacy T-CAN485 scaffold | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Configure and build the retained ESP32 receive-only scaffold while the MCAN-39 product migration is pending ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
 
 Host tools are required for the common library, formatting, and test workflow;
-ESP-IDF and its ESP32 toolchain are firmware-only. CMake's doctest dependency
-and ESP-IDF managed components are resolved by their respective build systems,
-not installed as separate repository prerequisites. ESP-IDF must be installed
-and activated using its upstream guide.
+ESP-IDF and its ESP32 toolchain apply only to the retained legacy scaffold.
+CMake's doctest dependency and ESP-IDF managed components are resolved by their
+respective build systems, not installed as separate repository prerequisites.
+ESP-IDF must be installed and activated using its upstream guide.
 
-The T-CAN485 application initializes a bounded strict listen-only CAN
-acquisition path. It does not decode, capture, export, or transmit frames. It is
-not a vehicle release artifact.
+The legacy T-CAN485 scaffold initializes a bounded strict listen-only CAN
+acquisition path. It does not decode, capture, export, or transmit frames, and
+is retained pending the MCAN-39 product migration and MCAN-13 `BENCH_ACK_ONLY`
+separation. It is not a vehicle release artifact or an approved vehicle
+exporter.
 
 ## Safety Boundary
 
