@@ -52,6 +52,18 @@ ActualGear actual_gear_from_raw(const std::uint8_t raw) noexcept {
   }
 }
 
+TurnState normalize_turn(const bool hazard, const bool left, const bool right) noexcept {
+  if (hazard)
+    return TurnState::Hazard;
+  if (left && right)
+    return TurnState::Unknown;
+  if (left)
+    return TurnState::Left;
+  if (right)
+    return TurnState::Right;
+  return TurnState::Off;
+}
+
 } // namespace
 
 DecodeStatus decode_engine_data(const RawCanFrame &frame, VehicleState &state) noexcept {
@@ -105,11 +117,43 @@ DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept
   return DecodeStatus::Invalid;
 }
 
-DecodeStatus decode(const RawCanFrame &frame, VehicleState &state) noexcept {
+DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
+                                std::optional<TurnEdgeEvent> *edge) noexcept {
+  if (edge != nullptr)
+    edge->reset();
+  if (!candidate_frame(frame, kTurnSwitchId))
+    return DecodeStatus::Ignored;
+  if (frame.dlc != kCandidateDlc)
+    return DecodeStatus::Invalid;
+
+  // DBC fields 10, 12, and 13 map to byte 1 bits 2, 4, and 5 when using
+  // byte/LSB numbering. Hazard has precedence over either direction.
+  const bool hazard = (frame.data[1] & (1U << 2U)) != 0;
+  const bool right = (frame.data[1] & (1U << 4U)) != 0;
+  const bool left = (frame.data[1] & (1U << 5U)) != 0;
+  const auto turn = normalize_turn(hazard, left, right);
+
+  const auto turn_edge = state.update_turn(turn, frame.timestamp_us);
+  if (edge != nullptr)
+    *edge = turn_edge;
+  bool updated = turn_edge.has_value();
+  updated = state.hazard_request.update(hazard, frame.timestamp_us) || updated;
+  updated = state.left_turn_request.update(left, frame.timestamp_us) || updated;
+  updated = state.right_turn_request.update(right, frame.timestamp_us) || updated;
+  return updated ? DecodeStatus::Updated : DecodeStatus::Invalid;
+}
+
+DecodeStatus decode(const RawCanFrame &frame, VehicleState &state,
+                    std::optional<TurnEdgeEvent> *edge) noexcept {
+  if (edge != nullptr)
+    edge->reset();
   const auto engine_status = decode_engine_data(frame, state);
   if (engine_status != DecodeStatus::Ignored)
     return engine_status;
-  return decode_gear(frame, state);
+  const auto gear_status = decode_gear(frame, state);
+  if (gear_status != DecodeStatus::Ignored)
+    return gear_status;
+  return decode_turn_switch(frame, state, edge);
 }
 
 } // namespace vehicle_core::mazda_candidate

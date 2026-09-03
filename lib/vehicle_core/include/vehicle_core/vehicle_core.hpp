@@ -139,6 +139,13 @@ struct VehicleState {
   std::optional<TurnEdgeEvent> update_turn(TurnState state,
                                            MonotonicTimestamp timestamp_us) noexcept;
 
+  // Unknown and stale turn values are never actionable. Consumers that drive
+  // an indicator surface should use this fail-off view rather than the stored
+  // value directly.
+  [[nodiscard]] TurnState effective_turn_state() const noexcept {
+    return turn_state.is_valid() ? turn_state.value : TurnState::Unknown;
+  }
+
   // Return a value snapshot evaluated at now_us. The original state is not
   // mutated, making this suitable for independent consumers.
   [[nodiscard]] VehicleState snapshot(MonotonicTimestamp now_us) const noexcept;
@@ -189,6 +196,8 @@ namespace mazda_candidate {
 
 constexpr std::uint32_t kEngineDataId = 0x202;
 constexpr std::uint32_t kGearId = 0x228;
+constexpr std::uint32_t kTurnSwitchId = 0x091;
+constexpr std::uint32_t kBlinkInfoId = 0x09a;
 constexpr std::uint8_t kCandidateDlc = 8;
 
 enum class DecodeStatus : std::uint8_t { Ignored, Updated, Invalid };
@@ -238,6 +247,25 @@ inline constexpr CandidateMessageDefinition kGearDefinition{
     std::nullopt,
     true,
     "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
+inline constexpr CandidateMessageDefinition kTurnSwitchDefinition{
+    "TURN_SWITCH",
+    kTurnSwitchId,
+    kCandidateDlc,
+    std::nullopt,
+    kTurnFreshnessTimeoutUs,
+    true,
+    "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; candidate pending MCAN-19"};
+// BLINK_INFO is intentionally exposed as provenance only. It must not drive
+// request or turn-state updates until a later validation change establishes
+// its semantics for the approved vehicle.
+inline constexpr CandidateMessageDefinition kBlinkInfoDefinition{
+    "BLINK_INFO",
+    kBlinkInfoId,
+    kCandidateDlc,
+    std::nullopt,
+    std::nullopt,
+    true,
+    "comma.ai/opendbc mazda_2017.dbc @ 95f3d52f; diagnostic-only pending MCAN-19"};
 
 inline constexpr CandidateSignalDefinition kEngineRpmDefinition{
     "RPM",
@@ -282,11 +310,42 @@ inline constexpr CandidateSignalDefinition kActualGearDefinition{
     0.0F,
     14.0F,
     "7-13=undefined; 15=shifting/unknown; 14=reverse"};
+inline constexpr CandidateSignalDefinition kHazardDefinition{
+    "HAZARD", kTurnSwitchId,       10,   1,    1.0F,
+    0.0F,     SignalUnit::Boolean, 0.0F, 1.0F, "none declared by source; candidate bit"};
+inline constexpr CandidateSignalDefinition kTurnRightSwitchDefinition{
+    "TURN_RIGHT_SWITCH",
+    kTurnSwitchId,
+    12,
+    1,
+    1.0F,
+    0.0F,
+    SignalUnit::Boolean,
+    0.0F,
+    1.0F,
+    "none declared by source; candidate bit"};
+inline constexpr CandidateSignalDefinition kTurnLeftSwitchDefinition{
+    "TURN_LEFT_SWITCH",
+    kTurnSwitchId,
+    13,
+    1,
+    1.0F,
+    0.0F,
+    SignalUnit::Boolean,
+    0.0F,
+    1.0F,
+    "none declared by source; candidate bit"};
 
 [[nodiscard]] DecodeStatus decode_engine_data(const RawCanFrame &frame,
                                               VehicleState &state) noexcept;
 [[nodiscard]] DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept;
-[[nodiscard]] DecodeStatus decode(const RawCanFrame &frame, VehicleState &state) noexcept;
+[[nodiscard]] DecodeStatus
+decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
+                   std::optional<TurnEdgeEvent> *edge = nullptr) noexcept;
+// Dispatches only validated candidate messages. BLINK_INFO is deliberately
+// ignored so diagnostic phase bits cannot alter actionable state.
+[[nodiscard]] DecodeStatus decode(const RawCanFrame &frame, VehicleState &state,
+                                  std::optional<TurnEdgeEvent> *edge = nullptr) noexcept;
 
 } // namespace mazda_candidate
 

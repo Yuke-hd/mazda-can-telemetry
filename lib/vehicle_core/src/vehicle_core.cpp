@@ -16,7 +16,11 @@ bool RawCanFrame::is_valid() const noexcept {
 
 std::optional<TurnEdgeEvent> VehicleState::update_turn(TurnState state,
                                                        MonotonicTimestamp timestamp) noexcept {
-  const TurnState previous = turn_state.value;
+  // A mutable receive state can sit without a snapshot between packets. Make
+  // freshness part of the edge decision so recovery is Unknown -> state even
+  // when the raw value happens to match the last stored direction.
+  turn_state.refresh(timestamp);
+  const TurnState previous = effective_turn_state();
   if (!turn_state.update(state, timestamp)) {
     return std::nullopt;
   }
