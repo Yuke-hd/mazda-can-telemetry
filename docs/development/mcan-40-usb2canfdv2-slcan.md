@@ -90,7 +90,7 @@ reviewed termination, and a fresh run label. Do not connect this instrument to
 a vehicle for an active command/no-frame experiment.
 
 ```text
-python3 -m unittest tests/tools/slcan_capture_test.py
+python3 tests/tools/slcan_capture_test.py
 ```
 
 The residual ACK-slot question remains open validation work. Until it is
@@ -109,4 +109,3 @@ auxiliary only and must not be used to claim vehicle-safe listen-only behavior.
 | SavvyCAN sanitized bench/offline use | Required procedure; no vehicle transmit permitted. |
 | USB2CANFDV2 ACK-slot behavior | **NOT MEASURED / OPEN VALIDATION WORK**. |
 | Canonical v1 vehicle capture | WeAct CAN485 V1.1 only. |
-

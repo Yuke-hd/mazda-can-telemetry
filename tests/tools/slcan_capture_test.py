@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -29,6 +30,33 @@ class FakeSerial:
 
     def close(self) -> None:
         self.closed = True
+
+
+class CloseWriteErrorSerial(FakeSerial):
+    def write(self, data: bytes) -> int:
+        if data == b"C\r":
+            self.writes.append(data)
+            raise OSError("synthetic close write failure")
+        return super().write(data)
+
+
+class FailingOutput(io.StringIO):
+    def __init__(self, *, fail_write: bool = False, fail_flush: bool = False) -> None:
+        super().__init__()
+        self.fail_write = fail_write
+        self.fail_flush = fail_flush
+        self.flush_called = False
+
+    def write(self, data: str) -> int:
+        if self.fail_write:
+            raise OSError("synthetic output write failure")
+        return super().write(data)
+
+    def flush(self) -> None:
+        self.flush_called = True
+        if self.fail_flush:
+            raise OSError("synthetic output flush failure")
+        super().flush()
 
 
 class SlcanCaptureTests(unittest.TestCase):
@@ -103,6 +131,68 @@ class SlcanCaptureTests(unittest.TestCase):
         )
         self.assertEqual(frames, 1)
         self.assertEqual(native.getvalue(), "t1230\n")
+
+    def test_invalid_arguments_still_attempt_close(self) -> None:
+        serial_port = FakeSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with self.assertRaises(ValueError):
+            slcan_capture.capture(transport, io.StringIO(), io.StringIO(), duration_s=-1)
+        self.assertEqual(serial_port.writes, [b"C\r"])
+        self.assertTrue(serial_port.closed)
+
+    def test_output_open_failure_still_attempts_close(self) -> None:
+        serial_port = FakeSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with tempfile.TemporaryDirectory() as directory:
+            missing_path = Path(directory) / "no-such-directory" / "output.slcan"
+            with self.assertRaises(OSError):
+                slcan_capture.capture(transport, missing_path, io.StringIO(), duration_s=0)
+        self.assertEqual(serial_port.writes, [b"C\r"])
+        self.assertTrue(serial_port.closed)
+
+    def test_second_output_open_failure_closes_first_output(self) -> None:
+        serial_port = FakeSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with tempfile.TemporaryDirectory() as directory:
+            native_path = Path(directory) / "native.slcan"
+            missing_sidecar = Path(directory) / "no-such-directory" / "sidecar.jsonl"
+            with self.assertRaises(OSError):
+                slcan_capture.capture(transport, native_path, missing_sidecar, duration_s=0)
+            # A closed path output can be reopened immediately, proving cleanup
+            # was attempted after the second output failed to open.
+            native_path.open("a", encoding="ascii").close()
+        self.assertEqual(serial_port.writes, [b"C\r"])
+        self.assertTrue(serial_port.closed)
+
+    def test_header_write_failure_still_attempts_close(self) -> None:
+        serial_port = FakeSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        with self.assertRaises(OSError):
+            slcan_capture.capture(transport, io.StringIO(), FailingOutput(fail_write=True), duration_s=0)
+        self.assertEqual(serial_port.writes, [b"C\r"])
+        self.assertTrue(serial_port.closed)
+
+    def test_flush_failure_does_not_skip_close_attempt(self) -> None:
+        serial_port = FakeSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        native = FailingOutput(fail_flush=True)
+        sidecar = FailingOutput(fail_flush=True)
+        with self.assertRaises(OSError):
+            slcan_capture.capture(transport, native, sidecar, duration_s=0)
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+        self.assertTrue(serial_port.closed)
+        self.assertTrue(native.flush_called)
+        self.assertTrue(sidecar.flush_called)
+
+    def test_close_write_failure_still_flushes_outputs_and_closes_port(self) -> None:
+        serial_port = CloseWriteErrorSerial([])
+        transport = slcan_capture.SlcanTransport(serial_port)
+        native = io.StringIO()
+        sidecar = io.StringIO()
+        with self.assertRaises(OSError):
+            slcan_capture.capture(transport, native, sidecar, duration_s=0)
+        self.assertEqual(serial_port.writes[-1], b"C\r")
+        self.assertTrue(serial_port.closed)
 
     def test_classic_parser_rejects_fd_and_malformed_lines(self) -> None:
         with self.assertRaises(slcan_capture.CanFdFrameError):

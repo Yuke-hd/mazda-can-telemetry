@@ -188,14 +188,10 @@ def capture(
     in-memory serial double without installing pyserial.
     """
 
-    if duration_s is not None and duration_s < 0:
-        raise ValueError("duration_s must be non-negative or None")
-    if max_frames is not None and max_frames < 0:
-        raise ValueError("max_frames must be non-negative")
-    if duration_s is None and max_frames is None:
-        raise ValueError("duration_s=None requires max_frames")
-
     opened: list[IO[str]] = []
+    native: Optional[IO[str]] = None
+    sidecar: Optional[IO[str]] = None
+    cleanup_errors: list[BaseException] = []
 
     def open_output(target: Union[Path, str, IO[str]]) -> IO[str]:
         if hasattr(target, "write"):
@@ -204,28 +200,35 @@ def capture(
         opened.append(handle)
         return handle
 
-    native = open_output(native_output)
-    sidecar = open_output(sidecar_output)
-    start_us = clock_us()
-    frames = 0
-    native_line = 0
-    sidecar.write(
-        json.dumps(
-            {
-                "schema": "mcan-usb-slcan-sidecar",
-                "version": 1,
-                "clock": "host-monotonic-relative",
-                "clock_unit": "us",
-                "source": "usb2canfdv2-stock-slcan",
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
-    )
-
-    deadline_us = None if duration_s is None else start_us + int(duration_s * 1_000_000)
     try:
+        if duration_s is not None and duration_s < 0:
+            raise ValueError("duration_s must be non-negative or None")
+        if max_frames is not None and max_frames < 0:
+            raise ValueError("max_frames must be non-negative")
+        if duration_s is None and max_frames is None:
+            raise ValueError("duration_s=None requires max_frames")
+
+        native = open_output(native_output)
+        sidecar = open_output(sidecar_output)
+        start_us = clock_us()
+        frames = 0
+        native_line = 0
+        sidecar.write(
+            json.dumps(
+                {
+                    "schema": "mcan-usb-slcan-sidecar",
+                    "version": 1,
+                    "clock": "host-monotonic-relative",
+                    "clock_unit": "us",
+                    "source": "usb2canfdv2-stock-slcan",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
+
+        deadline_us = None if duration_s is None else start_us + int(duration_s * 1_000_000)
         transport.configure_vehicle_capture(speed_code)
         while max_frames is None or frames < max_frames:
             now_us = clock_us()
@@ -261,16 +264,32 @@ def capture(
                 + "\n"
             )
             frames += 1
+        return frames
     finally:
         # This is deliberately in the finally block, including malformed-input
         # and output-error paths.  No best-effort transmit or recovery command
         # exists in this module.
-        transport.close()
-        native.flush()
-        sidecar.flush()
-        for handle in opened:
-            handle.close()
-    return frames
+        primary_error = sys.exc_info()[1]
+        try:
+            transport.close()
+        except BaseException as error:
+            cleanup_errors.append(error)
+        for output in (native, sidecar):
+            if output is not None:
+                try:
+                    output.flush()
+                except BaseException as error:
+                    cleanup_errors.append(error)
+        for handle in reversed(opened):
+            try:
+                handle.close()
+            except BaseException as error:
+                cleanup_errors.append(error)
+        # A primary capture error takes precedence, but every cleanup action
+        # above is attempted.  If capture itself succeeded, surface the first
+        # cleanup error instead of silently reporting success.
+        if primary_error is None and cleanup_errors:
+            raise cleanup_errors[0]
 
 
 def _build_parser() -> argparse.ArgumentParser:
