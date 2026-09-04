@@ -1,5 +1,5 @@
 version: "0.1.0"
-description: "Receive-only T-CAN485 exporter skeleton"
+description: "T-CAN485 vehicle listen-only firmware"
 dependencies:
   idf:
     version: "==5.5.4"

@@ -67,3 +67,10 @@ add_test(
           --public-header ${CMAKE_SOURCE_DIR}/components/can_bus/include/can_bus/can_bus.h
           --implementation ${CMAKE_SOURCE_DIR}/components/can_bus/src/can_bus.cpp
 )
+
+add_test(
+  NAME tcan485_artifact_separation
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/validate_tcan485_artifacts.py
+          --root ${CMAKE_SOURCE_DIR}
+)
