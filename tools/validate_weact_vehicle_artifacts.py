@@ -78,7 +78,7 @@ def main() -> int:
         require(board_header, needle, label, failures)
     for forbidden in ("kTcan485", "speed_mode", "boost_enable", "set_can_transceiver_power"):
         forbid(board_header + board_source + can_source, forbidden, "vehicle/shared source", failures)
-    require(board_source, "onboard_rgb.data, 0", "GPIO4 safe/off startup", failures)
+    require(board_source, "onboard_rgb.data, 0", "GPIO4 data-line-low startup", failures)
     require(board_source, "rs485.driver_enable, 0", "RS485 disabled startup", failures)
     require(board_source, "can.tx, 1", "CAN TX recessive startup", failures)
 

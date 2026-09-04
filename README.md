@@ -50,6 +50,9 @@ for its build, release, and physical-isolation boundary.
 The exact WeAct V1.1 pin map, CA-IS2062A/CA-IS2092A/CH343P/FPC-18 identity,
 K3 OFF requirement, and evidence limitations are recorded in
 [`docs/hardware/weact-can485-v1.1.md`](docs/hardware/weact-can485-v1.1.md).
+MCAN-39 holds the WS2812B data line low to prevent new command pulses; that
+cannot clear a pixel latched across a warm reset. The required RMT black frame
+and all semantic color behavior belong to #16.
 
 ## Safety Boundary
 
