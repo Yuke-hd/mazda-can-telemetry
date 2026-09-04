@@ -52,10 +52,10 @@ idf.py build
 The MCAN-3 baseline was deliberately a structure-only scaffold. The board
 component now contains the exact WeAct CAN485 DevBoard V1.1 capability record
 and applies fail-closed electrical defaults: CAN TX recessive, RS485 disabled,
-and the single onboard WS2812B data line low with no new command pulses. A
-latched pixel requires an RMT black frame from the future LED owner. MCAN-7
-extends that baseline with a bounded strict listen-only receive path; it still
-provides no transmit API.
+and the single onboard WS2812B data line low with no new command pulses. MCAN-16
+adds the required RMT black frame before CAN startup. MCAN-7 extends that
+baseline with a bounded strict listen-only receive path; it still provides no
+transmit API.
 
 CI runs the host checks, WeAct vehicle build, and isolated T-CAN485 bench build
 on every pull request.

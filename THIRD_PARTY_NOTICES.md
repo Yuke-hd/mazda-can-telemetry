@@ -51,6 +51,14 @@ source, exact version or commit, license, and required notices.
 - **License:** Apache-2.0, upstream [LICENSE](https://github.com/espressif/esp-idf/blob/v5.5.4/LICENSE)
 - **Role/status:** required firmware toolchain and manifest dependency; no ESP-IDF source is copied into this repository. The upstream notices remain authoritative.
 
+## Espressif led_strip
+
+- **Source:** <https://components.espressif.com/components/espressif/led_strip/versions/3.0.3>
+- **Exact version:** `3.0.3`
+- **License:** Apache-2.0, as published with the registry component.
+- **Role/status:** managed ESP-IDF dependency for the WeAct V1.1 single-pixel
+  WS2812B RMT backend; no component source is copied into this repository.
+
 ## GitHub Actions checkout
 
 - **Source:** <https://github.com/actions/checkout>
