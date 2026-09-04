@@ -2,6 +2,8 @@
 #include "can_bus/can_bus.h"
 #include "esp_log.h"
 
+#include <cstdint>
+
 namespace {
 constexpr char kTag[] = "tcan485_bench_ack_only";
 constexpr char kIsolationWarning[] =
@@ -25,4 +27,30 @@ extern "C" void app_main(void) {
     return;
   }
   ESP_LOGI(kTag, "BENCH_ACK_ONLY isolated classic-CAN acquisition started");
+
+  std::uint64_t received_count = 0;
+  for (;;) {
+    vehicle_core::RawCanFrame frame{};
+    const can_bus::Result result = can_bus::receive(frame, 1'000);
+    if (result == can_bus::Result::kTimeout) {
+      continue;
+    }
+    if (result != can_bus::Result::kOk) {
+      ESP_LOGE(kTag, "BENCH_ACK_ONLY receive failure (%u); stopping safely",
+               static_cast<unsigned>(result));
+      const can_bus::Result stop_result = can_bus::stop();
+      if (stop_result != can_bus::Result::kOk) {
+        ESP_LOGE(kTag, "BENCH_ACK_ONLY stop after receive failure also failed (%u)",
+                 static_cast<unsigned>(stop_result));
+      }
+      return;
+    }
+
+    ++received_count;
+    ESP_LOGI(kTag, "BENCH_ACK_ONLY frame received: count=%llu format=%s id=0x%lx dlc=%u bus=%u",
+             static_cast<unsigned long long>(received_count),
+             frame.is_extended() ? "extended" : "standard",
+             static_cast<unsigned long>(frame.identifier), static_cast<unsigned>(frame.dlc),
+             static_cast<unsigned>(frame.bus_id));
+  }
 }

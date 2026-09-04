@@ -15,6 +15,13 @@ business-level frame transmit operation, TWAI handle, diagnostic operation, or
 recovery API. The acceptance filter remains receive-all for bench protocol
 observation; CAN FD is not enabled or supported.
 
+After startup, the bench application waits on the public receive boundary with
+a one-second timeout. Timeouts are silent so an idle bench does not spam the
+serial console. Each received frame emits one serial line containing only a
+monotonic receipt count, identifier format, identifier, DLC, and bus number;
+payload bytes are never logged. Any non-timeout receive failure is reported and
+the CAN component is stopped before the application exits.
+
 The private mode selector requires both `TCAN485_BENCH_ACK_ONLY` and
 `TCAN485_BENCH_TARGET`. Any missing or ambiguous guard selects
 `TWAI_MODE_LISTEN_ONLY`, so a configuration mistake fails closed. The vehicle

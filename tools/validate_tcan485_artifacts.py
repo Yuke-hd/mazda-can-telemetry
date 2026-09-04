@@ -58,6 +58,13 @@ def main() -> int:
     )
     require(bench_main, "BENCH_ACK_ONLY", "bench startup warning", failures)
     require(bench_main, "never connect to a vehicle", "bench isolation warning", failures)
+    require(bench_main, "can_bus::receive", "bench receive loop", failures)
+    require(bench_main, "frame received", "bench serial receipt indication", failures)
+    require(bench_main, "count=", "bench receipt count", failures)
+    require(bench_main, "kTimeout", "bench quiet timeout handling", failures)
+    require(bench_main, "receive failure", "bench receive failure handling", failures)
+    if "frame.data" in bench_main or "frame.data[" in bench_main:
+        failures.append("bench receipt log exposes CAN payload bytes")
     require(bench_component, "BENCH_ACK_ONLY", "bench artifact label", failures)
 
     require(can_source, "TWAI_MODE_LISTEN_ONLY", "vehicle CAN mode", failures)
