@@ -61,7 +61,7 @@ Before connecting to a vehicle:
 4. Confirm GPIO4's data line remains low at reset and startup. This prevents new
    command pulses but does not clear a color latched across a warm reset or
    failure. Sending an RMT-encoded black frame is required to clear the physical
-   pixel and is deferred to the #16 LED owner; MCAN-39 adds no color policy.
+   pixel; the #16 `local_argb` owner sends it before CAN startup.
 5. Build only `weact_can485_v11_vehicle_listen_only` for vehicle use and confirm
    `TWAI_MODE_LISTEN_ONLY` with a zero-length TX queue.
 
@@ -75,8 +75,9 @@ timestamp, or reconstructable trip information.
 The host tests and structural validators prove the checked pin record, product
 identity, build separation, listen-only configuration, zero TX queue, lack of a
 public or driver data-frame transmit call, and the GPIO4 output latch request.
-They do not prove that the physical WS2812B is black. CI also compiles the
-vehicle and isolated-bench projects with ESP-IDF 5.5.4.
+MCAN-16 additionally sends a checked RMT black frame before CAN startup. These
+checks do not prove physical LED behavior. CI also compiles the vehicle and
+isolated-bench projects with ESP-IDF 5.5.4.
 
 This change does **not** claim a physical V1.1 continuity inspection, protected
 power test, K3 measurement, termination measurement, CAN analyzer no-ACK trace,
