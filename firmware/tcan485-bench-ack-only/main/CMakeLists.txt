@@ -1,7 +1,7 @@
 idf_component_register(
-  SRCS "main.cpp"
+  SRCS "main.cpp" "tcan485_bench_board.cpp"
   INCLUDE_DIRS "."
-  REQUIRES board can_bus
+  REQUIRES board can_bus esp_driver_gpio
 )
 
 # Keep the application-side guard explicit as an additional safety check. The

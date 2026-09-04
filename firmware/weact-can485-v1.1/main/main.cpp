@@ -3,7 +3,7 @@
 #include "esp_log.h"
 
 namespace {
-constexpr char kTag[] = "tcan485";
+constexpr char kTag[] = "weact_can485_v11";
 }
 
 extern "C" void app_main(void) {
@@ -14,8 +14,8 @@ extern "C" void app_main(void) {
 
   constexpr can_bus::Configuration configuration{500'000, 0};
   ESP_LOGI(kTag,
-           "vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; TX queue disabled; receive API "
-           "only",
+           "WeAct CAN485 DevBoard V1.1 vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; "
+           "TX queue disabled; receive API only",
            static_cast<unsigned long>(configuration.bitrate_bps));
   if (can_bus::start(configuration) != can_bus::Result::kOk) {
     ESP_LOGE(kTag, "strict listen-only CAN startup failed; refusing to continue");

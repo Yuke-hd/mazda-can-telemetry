@@ -184,7 +184,7 @@ Its values are synthetic and contain no vehicle data.
 
 ```text
 MCAN-CAPTURE 1
-SESSION firmware=mcan-tcan485%2B0.1.0 board=tcan485-revA bitrate_bps=500000 clock=monotonic clock_unit=us byte_order=big-endian clock_hz=1000000 dropped_frames=0 dropped_records=0
+SESSION firmware=mcan-weact-can485-v11%2B0.1.0 board=weact-can485-v1.1 bitrate_bps=500000 clock=monotonic clock_unit=us byte_order=big-endian clock_hz=1000000 dropped_frames=0 dropped_records=0
 FRAME t_us=1000 bus=0 id=0x091 format=std rtr=0 dlc=8 data=0100000000000000
 FRAME t_us=1100 bus=0 id=0x202 format=std rtr=0 dlc=8 data=0000000000000000
 DROP t_us=1200 bus=0 count=2 reason=queue-overflow

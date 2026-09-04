@@ -88,7 +88,7 @@ Allowed `type` values:
 - `chore`: other maintenance.
 - `revert`: a reverted change.
 
-Recommended scopes: `core`, `can`, `tcan485`, `capture`, `mazda-kf`, `simulator`, `argb`, `protocol`, `docs`, and `repo`.
+Recommended scopes: `core`, `can`, `weact`, `tcan485`, `capture`, `mazda-kf`, `simulator`, `argb`, `protocol`, `docs`, and `repo`.
 
 Requirements:
 
