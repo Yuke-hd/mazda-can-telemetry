@@ -51,7 +51,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/ccache-firmware
-          key: ${{ runner.os }}-firmware-ccache-v1-${{ hashFiles('.github/workflows/ci.yml', 'firmware/tcan485/**', 'components/**', 'lib/**', 'tools/check_toolchain.py') }}
+          key: ${{ runner.os }}-firmware-ccache-v1-${{ hashFiles('.github/workflows/ci.yml', 'firmware/**', 'components/**', 'lib/**', 'tools/check_toolchain.py') }}
           restore-keys: |
             ${{ runner.os }}-firmware-ccache-v1-
       - name: Check and build with ESP-IDF v5.5.4
