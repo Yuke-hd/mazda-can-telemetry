@@ -6,7 +6,7 @@ telemetry, or provide a CAN data-generation path.
 
 ## Pinned toolchains
 
-- T-CAN485 firmware: ESP-IDF `v5.5.4`, target `esp32`.
+- ESP32 firmware: ESP-IDF `v5.5.4`, target `esp32`.
 - Host library and tests: C++17, CMake `3.20`, clang-format major version `14`,
   doctest tag `v2.4.11` at commit
   `ae7a13539fb71f270b87eb2e874fbac80bc8dda2` (MIT license).
@@ -41,7 +41,7 @@ For the ESP-IDF application, install and activate ESP-IDF `v5.5.4`, verify the
 firmware scope, and run:
 
 ```text
-cd firmware/tcan485
+cd firmware/weact-can485-v1.1
 python3 ../../tools/check_toolchain.py --scope firmware
 idf.py set-target esp32
 idf.py build
@@ -50,12 +50,15 @@ idf.py build
 ## Safety and scope
 
 The MCAN-3 baseline was deliberately a structure-only scaffold. The board
-component contains the revision-pending T-CAN485 capability record and applies
-fail-closed electrical defaults (CAN TX recessive, boost disabled, and onboard
-LED off) before the application stops. MCAN-7 extends that baseline with a
-bounded strict listen-only receive path; it still provides no transmit API.
+component now contains the exact WeAct CAN485 DevBoard V1.1 capability record
+and applies fail-closed electrical defaults: CAN TX recessive, RS485 disabled,
+and the single onboard WS2812B data line low with no new command pulses. A
+latched pixel requires an RMT black frame from the future LED owner. MCAN-7
+extends that baseline with a bounded strict listen-only receive path; it still
+provides no transmit API.
 
-CI runs the host checks and the T-CAN485 ESP-IDF build on every pull request.
+CI runs the host checks, WeAct vehicle build, and isolated T-CAN485 bench build
+on every pull request.
 These are compile/configuration checks, not bench or vehicle validation.
 
 

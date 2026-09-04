@@ -255,9 +255,9 @@ def validate_negative_cases(fixture: str) -> None:
         "drop timestamp overflow": fixture.replace("DROP t_us=1200", "DROP t_us=18446744073709551616", 1),
         "discontinuity timestamp overflow": fixture.replace("DISCONTINUITY t_us=2000", "DISCONTINUITY t_us=18446744073709551616", 1),
         "timestamp order": fixture.replace("DROP t_us=1200", "DROP t_us=900", 1),
-        "escaped unreserved byte": fixture.replace("firmware=mcan-tcan485%2B0.1.0", "firmware=mcan-tcan485%41.1.0", 1),
-        "invalid UTF-8 percent bytes": fixture.replace("firmware=mcan-tcan485%2B0.1.0", "firmware=mcan-tcan485%FF.1.0", 1),
-        "malformed percent escape": fixture.replace("firmware=mcan-tcan485%2B0.1.0", "firmware=mcan-tcan485%G1.1.0", 1),
+        "escaped unreserved byte": fixture.replace("firmware=mcan-weact-can485-v11%2B0.1.0", "firmware=mcan-weact-can485-v11%41.1.0", 1),
+        "invalid UTF-8 percent bytes": fixture.replace("firmware=mcan-weact-can485-v11%2B0.1.0", "firmware=mcan-weact-can485-v11%FF.1.0", 1),
+        "malformed percent escape": fixture.replace("firmware=mcan-weact-can485-v11%2B0.1.0", "firmware=mcan-weact-can485-v11%G1.1.0", 1),
     }
     for name, candidate in cases.items():
         try:

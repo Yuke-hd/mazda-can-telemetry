@@ -40,8 +40,8 @@ def main() -> int:
         failures.append("the hardware TX queue is not explicitly disabled")
     if "twai_get_status_info" not in implementation or "twai_status_info_t" not in implementation:
         failures.append("driver loss/error counters are not sampled from TWAI status")
-    if implementation.count("set_can_transceiver_power(false)") < 5:
-        failures.append("startup and stop paths do not visibly reassert transceiver power off")
+    if "set_can_transceiver_power" in implementation or "set_can_transceiver_power" in header:
+        failures.append("vehicle CAN code exposes a nonexistent transceiver power control")
     forbidden_public_terms = (
         r"\btwai_handle_t\b",
         r"\bdriver[_ ]?handle\b",
