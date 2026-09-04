@@ -16,11 +16,15 @@ recovery API. The acceptance filter remains receive-all for bench protocol
 observation; CAN FD is not enabled or supported.
 
 After startup, the bench application waits on the public receive boundary with
-a one-second timeout. Timeouts are silent so an idle bench does not spam the
-serial console. Each received frame emits one serial line containing only a
-monotonic receipt count, identifier format, identifier, DLC, and bus number;
-payload bytes are never logged. Any non-timeout receive failure is reported and
-the CAN component is stopped before the application exits.
+a one-second timeout and drains at most 16 frames per batch. Timeouts are
+silent so an idle bench does not spam the serial console. The first received
+frame emits an immediate serial proof; subsequent output is aggregated to at
+most one summary per second, containing only cumulative/interval counts and
+the latest identifier format, identifier, DLC, and bus number. Payload bytes
+are never logged. A 10 ms `vTaskDelay` follows every non-empty batch so a
+permanently ready receive queue cannot starve the ESP-IDF idle task/watchdog;
+`taskYIELD` alone is insufficient. Any non-timeout receive failure is reported
+and the CAN component is stopped before the application exits.
 
 The private mode selector requires both `TCAN485_BENCH_ACK_ONLY` and
 `TCAN485_BENCH_TARGET`. Any missing or ambiguous guard selects

@@ -61,6 +61,15 @@ def main() -> int:
     require(bench_main, "can_bus::receive", "bench receive loop", failures)
     require(bench_main, "frame received", "bench serial receipt indication", failures)
     require(bench_main, "count=", "bench receipt count", failures)
+    require(bench_main, "kMaxFramesPerBatch", "bench receive batch bound", failures)
+    require(bench_main, "kSummaryPeriodTicks", "bench log rate limit", failures)
+    require(bench_main, "vTaskDelay", "bench scheduler delay", failures)
+    require(
+        bench_main,
+        "taskYIELD alone is not enough",
+        "bench scheduler safety rationale",
+        failures,
+    )
     require(bench_main, "kTimeout", "bench quiet timeout handling", failures)
     require(bench_main, "receive failure", "bench receive failure handling", failures)
     if "frame.data" in bench_main or "frame.data[" in bench_main:
