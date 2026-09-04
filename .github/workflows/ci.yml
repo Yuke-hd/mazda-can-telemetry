@@ -8,12 +8,21 @@ on:
 jobs:
   host:
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache-host
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Restore host compiler cache
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+        with:
+          path: .cache/ccache-host
+          key: ${{ runner.os }}-host-ccache-v1-${{ hashFiles('.github/workflows/ci.yml', 'CMakeLists.txt', 'components/**', 'lib/**', 'tests/**', 'tools/**') }}
+          restore-keys: |
+            ${{ runner.os }}-host-ccache-v1-
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build ripgrep python3
+          sudo apt-get install --no-install-recommends -y clang-format-14 cmake ccache ninja-build ripgrep python3
       - name: Check host toolchain versions
         run: python3 tools/check_toolchain.py --scope host
       - name: Validate T-CAN485 artifact separation
@@ -27,16 +36,30 @@ jobs:
           test "${#sources[@]}" -gt 0
           clang-format-14 --dry-run --Werror "${sources[@]}"
       - name: Configure host tests
-        run: cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+        run: cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build host tests
         run: cmake --build build/host --parallel
       - name: Run host tests
         run: ctest --test-dir build/host --output-on-failure
   firmware:
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache-firmware
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Restore firmware compiler cache
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+        with:
+          path: .cache/ccache-firmware
+          key: ${{ runner.os }}-firmware-ccache-v1-${{ hashFiles('.github/workflows/ci.yml', 'firmware/tcan485/**', 'components/**', 'lib/**', 'tools/check_toolchain.py') }}
+          restore-keys: |
+            ${{ runner.os }}-firmware-ccache-v1-
       - name: Check and build with ESP-IDF v5.5.4
         run: |
-          docker run --rm -v "$PWD:/project" -w /project espressif/idf:v5.5.4 \
-            bash -lc 'source /opt/esp/idf/export.sh >/dev/null && python3 tools/check_toolchain.py --scope firmware && python3 tools/validate_tcan485_artifacts.py && cd firmware/tcan485 && idf.py set-target esp32 && idf.py build && cd ../tcan485-bench-ack-only && idf.py set-target esp32 && idf.py build'
+          mkdir -p .cache/ccache-firmware
+          docker run --rm -v "$PWD:/project" -w /project \
+            -e CCACHE_DIR=/project/.cache/ccache-firmware \
+            -e CCACHE_BASEDIR=/project \
+            -e IDF_CCACHE_ENABLE=1 \
+            espressif/idf:v5.5.4 \
+            bash -lc 'source /opt/esp/idf/export.sh >/dev/null && python3 tools/check_toolchain.py --scope firmware && python3 tools/validate_tcan485_artifacts.py && cd firmware/tcan485 && idf.py set-target esp32 && idf.py build && cd ../tcan485-bench-ack-only && idf.py set-target esp32 && idf.py build && chmod -R a+rwX /project/.cache/ccache-firmware'
