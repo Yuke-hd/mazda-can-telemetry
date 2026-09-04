@@ -63,6 +63,9 @@ def main() -> int:
     require(bench_main, "count=", "bench receipt count", failures)
     require(bench_main, "kMaxFramesPerBatch", "bench receive batch bound", failures)
     require(bench_main, "kSummaryPeriodTicks", "bench log rate limit", failures)
+    require(bench_main, "summary_deadline", "bench summary deadline", failures)
+    require(bench_main, "received_count == 1", "bench immediate first receipt", failures)
+    require(bench_main, "kSchedulerDelayTicks", "bench scheduler delay duration", failures)
     require(bench_main, "vTaskDelay", "bench scheduler delay", failures)
     require(
         bench_main,
