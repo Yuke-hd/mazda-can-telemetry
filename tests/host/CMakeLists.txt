@@ -51,6 +51,21 @@ target_link_libraries(can_bus_boundary_tests PRIVATE doctest::doctest)
 target_compile_features(can_bus_boundary_tests PRIVATE cxx_std_17)
 doctest_discover_tests(can_bus_boundary_tests)
 
+add_executable(
+  local_argb_tests
+  local_argb_tests.cpp
+  ${CMAKE_SOURCE_DIR}/components/local_argb/src/local_argb.cpp
+)
+target_include_directories(
+  local_argb_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/components/local_argb/include
+    ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
+)
+target_link_libraries(local_argb_tests PRIVATE vehicle_core doctest::doctest)
+target_compile_features(local_argb_tests PRIVATE cxx_std_17)
+doctest_discover_tests(local_argb_tests)
+
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(
   NAME capture_format_fixture
@@ -72,5 +87,12 @@ add_test(
   NAME weact_vehicle_artifact_separation
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/validate_weact_vehicle_artifacts.py
+          --root ${CMAKE_SOURCE_DIR}
+)
+
+add_test(
+  NAME local_argb_semantic_boundary
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/validate_local_argb_boundary.py
           --root ${CMAKE_SOURCE_DIR}
 )
