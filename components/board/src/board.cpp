@@ -13,7 +13,7 @@ esp_err_t configure_output(const std::int8_t pin, const int level) {
   }
 
   // Set the output latch before enabling output so the transition cannot drive
-  // a dominant CAN bit, enable RS485, or send an LED pulse during startup.
+  // a dominant CAN bit, enable RS485, or create a new LED command pulse.
   result = gpio_set_level(gpio, level);
   if (result != ESP_OK) {
     return result;

@@ -13,6 +13,14 @@ transceiver, and a CH343P native USB serial bridge. The FPC-18 connector carries
 the board I/O described below. These identities are release inputs and must be
 checked against the physical board before vehicle use.
 
+This record was reviewed on 2026-09-04 against official WeAct Studio material
+at commit `0865d397b931602d10bc740aa135b3a2c782340a` (upstream commit date
+2026-05-25):
+
+- [Official WeActStudio.CAN485DevBoardV1_ESP32 repository](https://github.com/WeActStudio/WeActStudio.CAN485DevBoardV1_ESP32/tree/0865d397b931602d10bc740aa135b3a2c782340a)
+- [Pinout and V1.1 revision record](https://github.com/WeActStudio/WeActStudio.CAN485DevBoardV1_ESP32/blob/0865d397b931602d10bc740aa135b3a2c782340a/README.md)
+- [V1.1 SchDoc.pdf](https://github.com/WeActStudio/WeActStudio.CAN485DevBoardV1_ESP32/blob/0865d397b931602d10bc740aa135b3a2c782340a/Hardware/WeAct-CAN485DevBoardV1_ESP32_V1.1%20SchDoc.pdf)
+
 ## Central capability record
 
 | Capability | GPIO | Startup handling |
@@ -26,7 +34,7 @@ checked against the physical board before vehicle use.
 | microSD MOSI | 15 | Input until a storage driver owns it |
 | microSD SCLK | 14 | Input until a storage driver owns it |
 | microSD CS | 13 | Input until a storage driver owns it |
-| Onboard WS2812B data | 4 | Output low/off; exactly one onboard pixel |
+| Onboard WS2812B data | 4 | Output low; no new command pulses; exactly one pixel |
 | VIN sense | 36 | Input-only |
 | User key | 0 | Input |
 
@@ -50,7 +58,10 @@ Before connecting to a vehicle:
    termination resistor to an already terminated vehicle bus.
 3. Verify CAN H, CAN L, ground, and protected power wiring against the physical
    V1.1 board and vehicle integration plan.
-4. Confirm GPIO4 remains off at reset and startup; MCAN-39 adds no color policy.
+4. Confirm GPIO4's data line remains low at reset and startup. This prevents new
+   command pulses but does not clear a color latched across a warm reset or
+   failure. Sending an RMT-encoded black frame is required to clear the physical
+   pixel and is deferred to the #16 LED owner; MCAN-39 adds no color policy.
 5. Build only `weact_can485_v11_vehicle_listen_only` for vehicle use and confirm
    `TWAI_MODE_LISTEN_ONLY` with a zero-length TX queue.
 
@@ -62,9 +73,10 @@ timestamp, or reconstructable trip information.
 ## Evidence status and limitations
 
 The host tests and structural validators prove the checked pin record, product
-identity, build separation, listen-only configuration, zero TX queue, and lack
-of a public or driver data-frame transmit call. CI also compiles the vehicle and
-isolated-bench projects with ESP-IDF 5.5.4.
+identity, build separation, listen-only configuration, zero TX queue, lack of a
+public or driver data-frame transmit call, and the GPIO4 output latch request.
+They do not prove that the physical WS2812B is black. CI also compiles the
+vehicle and isolated-bench projects with ESP-IDF 5.5.4.
 
 This change does **not** claim a physical V1.1 continuity inspection, protected
 power test, K3 measurement, termination measurement, CAN analyzer no-ACK trace,

@@ -129,8 +129,9 @@ static_assert(is_configuration_valid(),
 
 // Apply the electrical safe state before any peripheral driver is started:
 // CAN TX is recessive, RS485 driver output is disabled, and GPIO4 is held low
-// so the single onboard WS2812B remains off. No CAN driver is started.
-// Returns false if any ESP-IDF GPIO operation fails.
+// so it emits no new WS2812B command pulses. A low data line cannot clear a
+// color latched before a warm reset; an RMT-encoded black frame is deferred to
+// the LED owner. No CAN driver is started. Returns false if a GPIO call fails.
 bool initialize_safe_defaults();
 
 } // namespace board
