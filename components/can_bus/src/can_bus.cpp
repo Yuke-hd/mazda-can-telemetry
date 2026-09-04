@@ -123,7 +123,6 @@ Result start(const Configuration &configuration) noexcept {
     g_task_stopped = xSemaphoreCreateBinaryStatic(&g_task_stopped_storage);
   }
   if (g_available == nullptr || g_task_stopped == nullptr) {
-    (void)board::set_can_transceiver_power(false);
     return Result::kTaskFailure;
   }
 
@@ -133,8 +132,8 @@ Result start(const Configuration &configuration) noexcept {
   }
 
   twai_general_config_t general =
-      TWAI_GENERAL_CONFIG_DEFAULT(static_cast<gpio_num_t>(board::kTcan485.can.tx),
-                                  static_cast<gpio_num_t>(board::kTcan485.can.rx),
+      TWAI_GENERAL_CONFIG_DEFAULT(static_cast<gpio_num_t>(board::kWeActCan485V11.can.tx),
+                                  static_cast<gpio_num_t>(board::kWeActCan485V11.can.rx),
 #if !defined(TCAN485_BENCH_ACK_ONLY) || !defined(TCAN485_BENCH_TARGET)
                                   TWAI_MODE_LISTEN_ONLY);
 #else
@@ -146,17 +145,11 @@ Result start(const Configuration &configuration) noexcept {
                            TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF;
   const twai_timing_config_t timing = timing_for(configuration.bitrate_bps);
   const twai_filter_config_t filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-  if (!board::set_can_transceiver_power(true)) {
-    (void)board::set_can_transceiver_power(false);
-    return Result::kDriverFailure;
-  }
   if (twai_driver_install(&general, &timing, &filter) != ESP_OK) {
-    (void)board::set_can_transceiver_power(false);
     return Result::kDriverFailure;
   }
   if (twai_start() != ESP_OK) {
     (void)twai_driver_uninstall();
-    (void)board::set_can_transceiver_power(false);
     return Result::kDriverFailure;
   }
 
@@ -175,7 +168,6 @@ Result start(const Configuration &configuration) noexcept {
     g_running.store(false, std::memory_order_release);
     (void)twai_stop();
     (void)twai_driver_uninstall();
-    (void)board::set_can_transceiver_power(false);
     g_receive_task = nullptr;
     return Result::kTaskFailure;
   }
@@ -190,14 +182,11 @@ Result stop() noexcept {
 
   const bool driver_stopped = twai_stop() == ESP_OK;
   if (xSemaphoreTake(g_task_stopped, pdMS_TO_TICKS(100)) != pdTRUE) {
-    (void)board::set_can_transceiver_power(false);
     return Result::kTaskFailure;
   }
   g_receive_task = nullptr;
   const bool driver_uninstalled = twai_driver_uninstall() == ESP_OK;
-  const bool power_disabled = board::set_can_transceiver_power(false);
-  return driver_stopped && driver_uninstalled && power_disabled ? Result::kOk
-                                                                : Result::kDriverFailure;
+  return driver_stopped && driver_uninstalled ? Result::kOk : Result::kDriverFailure;
 }
 
 Result receive(vehicle_core::RawCanFrame &frame, const std::uint32_t timeout_ms) noexcept {

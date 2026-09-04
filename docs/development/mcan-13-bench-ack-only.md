@@ -30,15 +30,15 @@ The private mode selector requires both `TCAN485_BENCH_ACK_ONLY` and
 `TCAN485_BENCH_TARGET`. Any missing or ambiguous guard selects
 `TWAI_MODE_LISTEN_ONLY`, so a configuration mistake fails closed. The vehicle
 project explicitly forces the guard off and is built as
-`tcan485_vehicle_listen_only`.
+`weact_can485_v11_vehicle_listen_only`.
 
 ## Build and artifact checks
 
 From an ESP-IDF v5.5.4 environment, build each project in its own directory:
 
 ```text
-python3 tools/validate_tcan485_artifacts.py
-cd firmware/tcan485
+python3 tools/validate_weact_vehicle_artifacts.py
+cd firmware/weact-can485-v1.1
 idf.py set-target esp32
 idf.py build
 cd ../tcan485-bench-ack-only
@@ -65,4 +65,5 @@ VIN, credentials, precise location, or reconstructable trip data belong in
 build evidence, Issues, PRs, or releases.
 
 Integrated hardware ACK validation is not claimed by this software change; it
-requires the physical bench procedure and an approved board/wiring record.
+requires the physical bench procedure. It is not evidence for the WeAct V1.1
+vehicle board or its always-powered CA-IS2062A receive-only behavior.

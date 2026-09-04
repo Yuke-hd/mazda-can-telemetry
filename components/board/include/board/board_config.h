@@ -8,14 +8,18 @@ namespace board {
 // This record is the only board-specific input consumed by firmware assembly.
 // vehicle_core and Mazda decoders must not include this header.
 enum class HardwareRevision : std::uint8_t {
-  kTcan485VendorMaterialRevisionPending = 0,
+  kWeActCan485DevBoardV11 = 0,
 };
 
 struct CanPins {
   std::int8_t tx;
   std::int8_t rx;
-  std::int8_t speed_mode;
-  std::int8_t boost_enable;
+};
+
+struct Rs485Pins {
+  std::int8_t driver_enable;
+  std::int8_t receiver_output;
+  std::int8_t driver_input;
 };
 
 struct MicroSdPins {
@@ -25,26 +29,47 @@ struct MicroSdPins {
   std::int8_t cs;
 };
 
-struct ArgbPins {
+struct OnboardRgb {
   std::int8_t data;
+  std::uint8_t pixel_count;
+};
+
+struct AuxiliaryPins {
+  std::int8_t vin_sense;
+  std::int8_t user_key;
+};
+
+struct UsbSerialInterface {
+  const char *transport;
+  const char *bridge;
 };
 
 struct Capabilities {
   HardwareRevision revision;
   CanPins can;
+  Rs485Pins rs485;
   MicroSdPins micro_sd;
-  ArgbPins argb;
+  OnboardRgb onboard_rgb;
+  AuxiliaryPins auxiliary;
+  UsbSerialInterface usb_serial;
+  // The CA-IS2062A CAN transceiver is always powered on this board. There is
+  // deliberately no controllable transceiver-control pin or board API.
+  bool can_transceiver_always_powered;
   // Vehicle firmware is permanently receive-only. There is intentionally no
-  // board API for sending a CAN frame.
+  // board or CAN API for sending a CAN frame.
   bool vehicle_listen_only;
   bool can_transmit_api_exposed;
 };
 
-inline constexpr Capabilities kTcan485{
-    HardwareRevision::kTcan485VendorMaterialRevisionPending,
-    CanPins{27, 26, 23, 16},
+inline constexpr Capabilities kWeActCan485V11{
+    HardwareRevision::kWeActCan485DevBoardV11,
+    CanPins{27, 26},
+    Rs485Pins{17, 21, 22},
     MicroSdPins{2, 15, 14, 13},
-    ArgbPins{4},
+    OnboardRgb{4, 1},
+    AuxiliaryPins{36, 0},
+    UsbSerialInterface{"native USB serial", "CH343P"},
+    true,
     true,
     false,
 };
@@ -60,9 +85,18 @@ constexpr bool is_output_gpio(const std::int8_t pin) { return is_valid_gpio(pin)
 
 constexpr bool pins_are_distinct(const Capabilities &capabilities) {
   const std::int8_t pins[] = {
-      capabilities.can.tx,           capabilities.can.rx,        capabilities.can.speed_mode,
-      capabilities.can.boost_enable, capabilities.micro_sd.miso, capabilities.micro_sd.mosi,
-      capabilities.micro_sd.sclk,    capabilities.micro_sd.cs,   capabilities.argb.data,
+      capabilities.can.tx,
+      capabilities.can.rx,
+      capabilities.rs485.driver_enable,
+      capabilities.rs485.receiver_output,
+      capabilities.rs485.driver_input,
+      capabilities.micro_sd.miso,
+      capabilities.micro_sd.mosi,
+      capabilities.micro_sd.sclk,
+      capabilities.micro_sd.cs,
+      capabilities.onboard_rgb.data,
+      capabilities.auxiliary.vin_sense,
+      capabilities.auxiliary.user_key,
   };
   for (std::size_t first = 0; first < sizeof(pins) / sizeof(pins[0]); ++first) {
     for (std::size_t second = first + 1; second < sizeof(pins) / sizeof(pins[0]); ++second) {
@@ -74,27 +108,29 @@ constexpr bool pins_are_distinct(const Capabilities &capabilities) {
   return true;
 }
 
-constexpr bool is_configuration_valid(const Capabilities &capabilities = kTcan485) {
+constexpr bool is_configuration_valid(const Capabilities &capabilities = kWeActCan485V11) {
   return is_output_gpio(capabilities.can.tx) && is_valid_gpio(capabilities.can.rx) &&
-         is_output_gpio(capabilities.can.speed_mode) &&
-         is_output_gpio(capabilities.can.boost_enable) &&
-         is_valid_gpio(capabilities.micro_sd.miso) && is_valid_gpio(capabilities.micro_sd.mosi) &&
-         is_valid_gpio(capabilities.micro_sd.sclk) && is_valid_gpio(capabilities.micro_sd.cs) &&
-         is_output_gpio(capabilities.argb.data) && pins_are_distinct(capabilities) &&
-         capabilities.vehicle_listen_only && !capabilities.can_transmit_api_exposed;
+         is_output_gpio(capabilities.rs485.driver_enable) &&
+         is_valid_gpio(capabilities.rs485.receiver_output) &&
+         is_output_gpio(capabilities.rs485.driver_input) &&
+         is_valid_gpio(capabilities.micro_sd.miso) && is_output_gpio(capabilities.micro_sd.mosi) &&
+         is_output_gpio(capabilities.micro_sd.sclk) && is_output_gpio(capabilities.micro_sd.cs) &&
+         is_output_gpio(capabilities.onboard_rgb.data) &&
+         capabilities.onboard_rgb.pixel_count == 1 &&
+         is_valid_gpio(capabilities.auxiliary.vin_sense) &&
+         !is_output_gpio(capabilities.auxiliary.vin_sense) &&
+         is_valid_gpio(capabilities.auxiliary.user_key) && pins_are_distinct(capabilities) &&
+         capabilities.can_transceiver_always_powered && capabilities.vehicle_listen_only &&
+         !capabilities.can_transmit_api_exposed;
 }
 
-static_assert(is_configuration_valid(), "T-CAN485 board configuration must be safe and complete");
+static_assert(is_configuration_valid(),
+              "WeAct CAN485 DevBoard V1.1 configuration must be safe and complete");
 
 // Apply the electrical safe state before any peripheral driver is started:
-// CAN TX is recessive, CAN speed mode is high-speed select (low), the CAN/RS485
-// boost supply is disabled, and the onboard LED data line is low (off).
-// Returns false if any ESP-IDF GPIO operation fails. No CAN driver is started.
+// CAN TX is recessive, RS485 driver output is disabled, and GPIO4 is held low
+// so the single onboard WS2812B remains off. No CAN driver is started.
+// Returns false if any ESP-IDF GPIO operation fails.
 bool initialize_safe_defaults();
-
-// Enable or disable the board's shared CAN/RS485 boost supply. CAN startup
-// enables it only after safe defaults are applied; stop and every startup
-// failure disable it again. Returns false if the GPIO operation fails.
-bool set_can_transceiver_power(bool enabled);
 
 } // namespace board

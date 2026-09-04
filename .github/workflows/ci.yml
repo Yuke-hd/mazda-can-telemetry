@@ -16,8 +16,8 @@ jobs:
           sudo apt-get install --no-install-recommends -y clang-format-14 cmake ninja-build ripgrep python3
       - name: Check host toolchain versions
         run: python3 tools/check_toolchain.py --scope host
-      - name: Validate T-CAN485 artifact separation
-        run: python3 tools/validate_tcan485_artifacts.py
+      - name: Validate WeAct vehicle and T-CAN485 bench separation
+        run: python3 tools/validate_weact_vehicle_artifacts.py
       - name: Test toolchain checker diagnostics
         run: python3 -m unittest discover -s tests/tools -p '*_test.py'
       - name: Validate C++ formatting
@@ -39,4 +39,4 @@ jobs:
       - name: Check and build with ESP-IDF v5.5.4
         run: |
           docker run --rm -v "$PWD:/project" -w /project espressif/idf:v5.5.4 \
-            bash -lc 'source /opt/esp/idf/export.sh >/dev/null && python3 tools/check_toolchain.py --scope firmware && python3 tools/validate_tcan485_artifacts.py && cd firmware/tcan485 && idf.py set-target esp32 && idf.py build && cd ../tcan485-bench-ack-only && idf.py set-target esp32 && idf.py build'
+            bash -lc 'source /opt/esp/idf/export.sh >/dev/null && python3 tools/check_toolchain.py --scope firmware && python3 tools/validate_weact_vehicle_artifacts.py && cd firmware/weact-can485-v1.1 && idf.py set-target esp32 && idf.py build && cd ../tcan485-bench-ack-only && idf.py set-target esp32 && idf.py build'
