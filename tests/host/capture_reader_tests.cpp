@@ -14,7 +14,8 @@
 namespace {
 const char *const kGoldenFallback =
     "MCAN-CAPTURE 1\n"
-    "SESSION firmware=mcan-tcan485%2B0.1.0 board=tcan485-revA bitrate_bps=500000 clock=monotonic "
+    "SESSION firmware=mcan-weact-can485-v11%2B0.1.0 board=weact-can485-v1.1 "
+    "bitrate_bps=500000 clock=monotonic "
     "clock_unit=us byte_order=big-endian clock_hz=1000000 dropped_frames=0 dropped_records=0\n"
     "FRAME t_us=1000 bus=0 id=0x091 format=std rtr=0 dlc=8 data=0100000000000000\n"
     "FRAME t_us=1100 bus=0 id=0x202 format=std rtr=0 dlc=8 data=0000000000000000\n"
@@ -50,7 +51,7 @@ TEST_CASE("golden capture parses all record types without loss") {
   const auto result = raw_capture::CaptureReader{}.read(golden_fixture());
   REQUIRE(result.ok);
   REQUIRE(result.errors.empty());
-  CHECK(result.session.firmware == "mcan-tcan485+0.1.0");
+  CHECK(result.session.firmware == "mcan-weact-can485-v11+0.1.0");
   REQUIRE(result.records.size() == 8);
   vehicle_core::RawCanFrame expected0{};
   expected0.timestamp_us = 1000;

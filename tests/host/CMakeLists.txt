@@ -69,8 +69,8 @@ add_test(
 )
 
 add_test(
-  NAME tcan485_artifact_separation
+  NAME weact_vehicle_artifact_separation
   COMMAND ${Python3_EXECUTABLE}
-          ${CMAKE_SOURCE_DIR}/tools/validate_tcan485_artifacts.py
+          ${CMAKE_SOURCE_DIR}/tools/validate_weact_vehicle_artifacts.py
           --root ${CMAKE_SOURCE_DIR}
 )

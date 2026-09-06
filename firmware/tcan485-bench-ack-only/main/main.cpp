@@ -1,8 +1,8 @@
-#include "board/board_config.h"
 #include "can_bus/can_bus.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "tcan485_bench_board.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +38,7 @@ void log_frame_summary(const std::uint64_t total_count, const std::uint32_t inte
 } // namespace
 
 extern "C" void app_main(void) {
-  if (!board::initialize_safe_defaults()) {
+  if (!tcan485_bench_board::initialize()) {
     ESP_LOGE(kTag, "BENCH_ACK_ONLY safe-default initialization failed; refusing to start");
     return;
   }
@@ -50,6 +50,7 @@ extern "C" void app_main(void) {
            "no frame transmit API",
            static_cast<unsigned long>(configuration.bitrate_bps));
   if (can_bus::start(configuration) != can_bus::Result::kOk) {
+    tcan485_bench_board::disable();
     ESP_LOGE(kTag, "BENCH_ACK_ONLY CAN startup failed; refusing to continue");
     return;
   }
@@ -75,6 +76,7 @@ extern "C" void app_main(void) {
           ESP_LOGE(kTag, "BENCH_ACK_ONLY stop after receive failure also failed (%u)",
                    static_cast<unsigned>(stop_result));
         }
+        tcan485_bench_board::disable();
         return;
       }
 

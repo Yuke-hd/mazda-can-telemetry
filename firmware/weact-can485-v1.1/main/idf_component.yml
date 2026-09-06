@@ -1,0 +1,5 @@
+version: "0.1.0"
+description: "WeAct CAN485 DevBoard V1.1 vehicle listen-only firmware"
+dependencies:
+  idf:
+    version: "==5.5.4"
