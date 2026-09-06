@@ -51,8 +51,12 @@ The exact WeAct V1.1 pin map, CA-IS2062A/CA-IS2092A/CH343P/FPC-18 identity,
 K3 OFF requirement, and evidence limitations are recorded in
 [`docs/hardware/weact-can485-v1.1.md`](docs/hardware/weact-can485-v1.1.md).
 MCAN-39 holds the WS2812B data line low to prevent new command pulses; that
-cannot clear a pixel latched across a warm reset. The required RMT black frame
-and all semantic color behavior belong to #16.
+cannot clear a pixel latched across a warm reset. MCAN-16 adds the required RMT
+black startup frame and a lower-priority, fail-off semantic LED worker. See
+[`docs/development/mcan-16-local-argb.md`](docs/development/mcan-16-local-argb.md).
+Its blocking third-party RMT refresh and complete worker progress are separately
+supervised: a stall exceeding 100 ms triggers a reboot path that sends startup
+black again before CAN starts.
 
 ## Safety Boundary
 
