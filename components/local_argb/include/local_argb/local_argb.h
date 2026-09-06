@@ -8,6 +8,11 @@ namespace local_argb {
 
 inline constexpr std::uint8_t kBrightnessCeiling = 16;
 inline constexpr vehicle_core::Microseconds kFailOffTimeoutUs = 250'000;
+inline constexpr vehicle_core::Microseconds kPublishHeartbeatUs = 100'000;
+inline constexpr vehicle_core::Microseconds kDriverHangRestartUs = 100'000;
+inline constexpr vehicle_core::Microseconds kSupervisorPollUs = 10'000;
+inline constexpr vehicle_core::Microseconds kDriverRestartRequestBoundUs =
+    kDriverHangRestartUs + kSupervisorPollUs;
 
 struct Rgb {
   std::uint8_t red{0};
@@ -86,6 +91,38 @@ public:
 private:
   SemanticSnapshot pending_{};
   bool has_pending_{false};
+};
+
+// Limits producer-to-worker wakeups to visible semantic changes and a bounded
+// health heartbeat. The heartbeat carries the latest freshness timestamp
+// without waking the worker for every repeated turn frame.
+class PublicationPolicy {
+public:
+  [[nodiscard]] bool should_publish(SemanticSnapshot snapshot,
+                                    vehicle_core::MonotonicTimestamp now_us) noexcept;
+
+private:
+  SemanticSnapshot last_published_{};
+  vehicle_core::MonotonicTimestamp last_publish_us_{0};
+  bool has_published_{false};
+};
+
+// Portable model for the supervisor around the third-party blocking refresh
+// call. Production synchronizes access to this model between two tasks.
+class DriverWatchdog {
+public:
+  void begin(vehicle_core::MonotonicTimestamp now_us) noexcept {
+    started_us_ = now_us;
+    in_progress_ = true;
+  }
+  void end() noexcept { in_progress_ = false; }
+  [[nodiscard]] bool restart_due(vehicle_core::MonotonicTimestamp now_us) const noexcept {
+    return in_progress_ && (now_us < started_us_ || now_us - started_us_ > kDriverHangRestartUs);
+  }
+
+private:
+  vehicle_core::MonotonicTimestamp started_us_{0};
+  bool in_progress_{false};
 };
 
 // ESP-IDF runtime. start() sends an explicit black RMT frame before returning.

@@ -28,6 +28,9 @@ def main() -> int:
     bench_cmake = (root / "firmware/tcan485-bench-ack-only/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
+    vehicle_main = (root / "firmware/weact-can485-v1.1/main/main.cpp").read_text(
+        encoding="utf-8"
+    )
 
     for forbidden in (
         "RawCanFrame",
@@ -54,6 +57,10 @@ def main() -> int:
         "kWorkerPriority = tskIDLE_PRIORITY + 2": "lower-priority worker",
         "g_controller.tick": "independent timeout tick",
         "g_controller.start": "explicit startup black frame",
+        "xTaskCreate(supervisor": "independent driver-hang supervisor",
+        "kSupervisorPriority = configMAX_PRIORITIES - 1": "supervisor above can_rx",
+        "g_driver_watchdog.restart_due": "bounded driver timeout",
+        "esp_restart()": "driver-hang reset recovery",
     }
     for needle, label in requirements.items():
         if needle not in idf_source:
@@ -63,6 +70,13 @@ def main() -> int:
             failures.append(f"{label} is missing: {needle}")
     if '"${CMAKE_CURRENT_LIST_DIR}/../../components"' in bench_cmake:
         failures.append("isolated bench discovers local_argb through the whole components tree")
+    for needle, label in (
+        ("PublicationPolicy", "change/heartbeat publication policy"),
+        ("publication.should_publish", "publication throttling"),
+        ("process_received_frame", "turn-scoped health integration"),
+    ):
+        if needle not in vehicle_main:
+            failures.append(f"{label} is missing from vehicle integration: {needle}")
 
     if failures:
         for failure in failures:

@@ -30,9 +30,13 @@ not clear a previously latched WS2812B color.
 LED writes run in a dedicated `local_argb` task at `tskIDLE_PRIORITY + 2`, below
 the `can_rx` task. Producers copy semantic snapshots into a statically allocated
 length-one queue with `xQueueOverwrite`, so they never wait for LED/RMT work and
-new state replaces obsolete backpressure. The worker checks freshness at least
-every 10 ms and clears when elapsed time becomes greater than 250,000 us even
-if semantic updates stop. The controller suppresses redundant refreshes.
+new state replaces obsolete backpressure. The application publishes only when
+turn value/status or health changes, plus a bounded 100 ms heartbeat carrying
+the latest freshness timestamp; repeated turn, engine, gear, and unrelated
+frames do not cause per-frame LED-task wakeups. The worker checks freshness at
+least every 10 ms and clears
+when elapsed time becomes greater than 250,000 us even if semantic updates stop.
+The controller suppresses redundant hardware refreshes.
 
 Every pixel-set and refresh result is checked. A failed colored write
 immediately attempts black, remains fail-off for that submission, and retries
@@ -41,6 +45,17 @@ color can be attempted again. Failure to create or initially clear the strip
 prevents CAN startup. CAN startup/runtime failure and semantic submission
 failure request black and stop acquisition.
 
+`led_strip` 3.0.3 waits indefinitely for RMT completion internally. Every
+set/refresh operation is therefore supervised by a separate task at
+`configMAX_PRIORITIES - 1`, above `can_rx`; it performs only a timestamp check
+and no LED/RMT work. If the operation remains active for more than 100,000 us,
+the supervisor requests `esp_restart`. Its 10,000 us polling interval gives a
+configured reset-request bound of 110,000 us under scheduler operation. On
+reboot, GPIO4 is first held low and an RMT black frame is sent before CAN starts.
+The reboot duration and successful physical black transmission cannot be
+bounded if scheduling is disabled or the CPU, RMT peripheral, or LED remains
+faulty.
+
 The isolated T-CAN485 bench project discovers only the shared `board` and
 `can_bus` components, so it neither resolves nor links `local_argb` or
 `led_strip`. Its ACK-only hardware behavior remains separate.
@@ -48,15 +63,18 @@ The isolated T-CAN485 bench project discovers only the shared `board` and
 `DecodeStatus::Ignored` is normal unrelated traffic. It establishes initial CAN
 online health without changing turn state and does not erase an existing
 decoder error. `DecodeStatus::Invalid` sets decoder-error health and therefore
-black; a subsequent valid semantic update recovers.
+black. Engine or gear `Updated` traffic also cannot erase that error: only a
+newer valid turn update, including the same direction, recovers it.
 
 ## Evidence and physical limitation
 
 Deterministic host tests cover startup black, every mapping, the exact
 250,000/250,001 us boundary, same-direction recovery, offline/error fail-off,
 brightness limits, duplicate coalescing, length-one overwrite behavior, and
-driver failure/black retry. A structural validator enforces semantic isolation
-and the fixed WeAct/RMT configuration. CI builds both ESP-IDF projects.
+driver failure/black retry. Mixed turn/engine/ignored traffic, publication
+throttling/heartbeat boundaries, and the supervisor timeout/disarm behavior are
+also deterministic host tests. A structural validator enforces semantic
+isolation and the fixed WeAct/RMT configuration. CI builds both ESP-IDF projects.
 
 No physical bench or vehicle test is claimed by this change. A total CPU/RMT
 failure cannot transmit a black frame, and a WS2812B retains its last color

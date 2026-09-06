@@ -54,6 +54,8 @@ MCAN-39 holds the WS2812B data line low to prevent new command pulses; that
 cannot clear a pixel latched across a warm reset. MCAN-16 adds the required RMT
 black startup frame and a lower-priority, fail-off semantic LED worker. See
 [`docs/development/mcan-16-local-argb.md`](docs/development/mcan-16-local-argb.md).
+Its blocking third-party RMT refresh is separately supervised: a write exceeding
+100 ms triggers a reboot path that sends startup black again before CAN starts.
 
 ## Safety Boundary
 

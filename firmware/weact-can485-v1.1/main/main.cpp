@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "local_argb/local_argb.h"
+#include "semantic_led_policy.h"
 
 namespace {
 constexpr char kTag[] = "weact_can485_v11";
@@ -30,29 +31,14 @@ extern "C" void app_main(void) {
   }
   ESP_LOGI(kTag, "strict listen-only CAN acquisition started");
 
-  vehicle_core::VehicleState state{};
-  local_argb::SemanticHealth health = local_argb::SemanticHealth::CanOffline;
+  weact_app::Context context{};
+  local_argb::PublicationPolicy publication{};
   for (;;) {
     vehicle_core::RawCanFrame frame{};
     const can_bus::Result receive_result = can_bus::receive(frame, 50);
     const auto now = static_cast<vehicle_core::MonotonicTimestamp>(esp_timer_get_time());
     if (receive_result == can_bus::Result::kOk) {
-      const auto decode_status = vehicle_core::mazda_candidate::decode(frame, state);
-      switch (decode_status) {
-      case vehicle_core::mazda_candidate::DecodeStatus::Updated:
-        health = local_argb::SemanticHealth::Online;
-        break;
-      case vehicle_core::mazda_candidate::DecodeStatus::Ignored:
-        // Unrelated valid traffic is normal and proves that CAN is online. It
-        // must not erase a prior decoder error until a valid update arrives.
-        if (health == local_argb::SemanticHealth::CanOffline) {
-          health = local_argb::SemanticHealth::Online;
-        }
-        break;
-      case vehicle_core::mazda_candidate::DecodeStatus::Invalid:
-        health = local_argb::SemanticHealth::DecoderError;
-        break;
-      }
+      weact_app::process_received_frame(context, frame);
     } else if (receive_result != can_bus::Result::kTimeout) {
       local_argb::fail_off();
       (void)can_bus::stop();
@@ -60,8 +46,8 @@ extern "C" void app_main(void) {
       return;
     }
 
-    const auto semantic = local_argb::from_vehicle_state(state.snapshot(now), health);
-    if (!local_argb::submit(semantic)) {
+    const auto semantic = weact_app::semantic_snapshot(context, now);
+    if (publication.should_publish(semantic, now) && !local_argb::submit(semantic)) {
       local_argb::fail_off();
       (void)can_bus::stop();
       ESP_LOGE(kTag, "semantic LED submission failed; acquisition stopped fail-off");

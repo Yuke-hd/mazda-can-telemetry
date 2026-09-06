@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "local_argb/local_argb.h"
+#include "semantic_led_policy.h"
 
 namespace {
 
@@ -26,6 +27,23 @@ public:
 local_argb::SemanticSnapshot valid(const vehicle_core::TurnState turn,
                                    const vehicle_core::MonotonicTimestamp timestamp = 100) {
   return {turn, vehicle_core::SignalStatus::Valid, timestamp, local_argb::SemanticHealth::Online};
+}
+
+vehicle_core::RawCanFrame frame(const std::uint32_t id,
+                                const vehicle_core::MonotonicTimestamp timestamp,
+                                const std::uint8_t dlc = 8) {
+  vehicle_core::RawCanFrame result{};
+  result.timestamp_us = timestamp;
+  result.identifier = id;
+  result.dlc = dlc;
+  return result;
+}
+
+vehicle_core::RawCanFrame turn_frame(const vehicle_core::MonotonicTimestamp timestamp,
+                                     const bool left) {
+  auto result = frame(vehicle_core::mazda_candidate::kTurnSwitchId, timestamp);
+  result.data[1] = left ? 1U << 5U : 1U << 4U;
+  return result;
 }
 
 } // namespace
@@ -149,4 +167,92 @@ TEST_CASE("failed fallback clear blocks color until black succeeds") {
   REQUIRE(controller.apply(valid(vehicle_core::TurnState::Right, 120), 120));
   CHECK(sink.attempts.back() == local_argb::kRightBlue);
   CHECK_FALSE(controller.faulted());
+}
+
+TEST_CASE("only a valid turn update recovers decoder error after mixed traffic") {
+  weact_app::Context context{};
+  weact_app::process_received_frame(context, turn_frame(100, true));
+  REQUIRE(context.health == local_argb::SemanticHealth::Online);
+  REQUIRE(weact_app::semantic_snapshot(context, 100).turn == vehicle_core::TurnState::Left);
+
+  weact_app::process_received_frame(context,
+                                    frame(vehicle_core::mazda_candidate::kTurnSwitchId, 110, 7));
+  REQUIRE(context.health == local_argb::SemanticHealth::DecoderError);
+  CHECK(local_argb::color_for(weact_app::semantic_snapshot(context, 110), 110) ==
+        local_argb::kBlack);
+
+  auto engine = frame(vehicle_core::mazda_candidate::kEngineDataId, 120);
+  engine.data[0] = 1;
+  weact_app::process_received_frame(context, engine);
+  CHECK(context.health == local_argb::SemanticHealth::DecoderError);
+  auto gear = frame(vehicle_core::mazda_candidate::kGearId, 125);
+  gear.data[0] = 4;
+  gear.data[4] = 4;
+  weact_app::process_received_frame(context, gear);
+  CHECK(context.health == local_argb::SemanticHealth::DecoderError);
+  weact_app::process_received_frame(context, frame(0x123, 130));
+  CHECK(context.health == local_argb::SemanticHealth::DecoderError);
+
+  // A valid replay older than the frame that raised the error stays fail-off.
+  weact_app::process_received_frame(context, turn_frame(105, true));
+  CHECK(context.health == local_argb::SemanticHealth::DecoderError);
+
+  // A newer, valid update of the same direction is sufficient recovery.
+  weact_app::process_received_frame(context, turn_frame(140, true));
+  CHECK(context.health == local_argb::SemanticHealth::Online);
+  CHECK(local_argb::color_for(weact_app::semantic_snapshot(context, 140), 140) ==
+        local_argb::kLeftGreen);
+}
+
+TEST_CASE("publication policy emits changes and bounded heartbeat only") {
+  local_argb::PublicationPolicy policy;
+  const auto left = valid(vehicle_core::TurnState::Left, 10);
+  CHECK(policy.should_publish(left, 10));
+  CHECK_FALSE(policy.should_publish(left, 10 + local_argb::kPublishHeartbeatUs - 1));
+  CHECK(policy.should_publish(left, 10 + local_argb::kPublishHeartbeatUs));
+  CHECK_FALSE(policy.should_publish(left, 10 + local_argb::kPublishHeartbeatUs + 1));
+
+  auto refreshed_left = left;
+  refreshed_left.turn_last_update_us = 20;
+  CHECK_FALSE(policy.should_publish(refreshed_left, 10 + local_argb::kPublishHeartbeatUs + 2));
+  auto failed = refreshed_left;
+  failed.health = local_argb::SemanticHealth::DecoderError;
+  CHECK(policy.should_publish(failed, 10 + local_argb::kPublishHeartbeatUs + 3));
+}
+
+TEST_CASE("engine gear and unrelated frames do not wake LED publication") {
+  weact_app::Context context{};
+  local_argb::PublicationPolicy policy;
+  weact_app::process_received_frame(context, turn_frame(100, true));
+  REQUIRE(policy.should_publish(weact_app::semantic_snapshot(context, 100), 100));
+
+  auto engine = frame(vehicle_core::mazda_candidate::kEngineDataId, 110);
+  engine.data[0] = 1;
+  weact_app::process_received_frame(context, engine);
+  CHECK_FALSE(policy.should_publish(weact_app::semantic_snapshot(context, 110), 110));
+
+  auto gear = frame(vehicle_core::mazda_candidate::kGearId, 120);
+  gear.data[0] = 4;
+  gear.data[4] = 4;
+  weact_app::process_received_frame(context, gear);
+  CHECK_FALSE(policy.should_publish(weact_app::semantic_snapshot(context, 120), 120));
+  weact_app::process_received_frame(context, frame(0x123, 130));
+  CHECK_FALSE(policy.should_publish(weact_app::semantic_snapshot(context, 130), 130));
+
+  weact_app::process_received_frame(context, turn_frame(140, true));
+  CHECK_FALSE(policy.should_publish(weact_app::semantic_snapshot(context, 140), 140));
+  CHECK(policy.should_publish(weact_app::semantic_snapshot(context, 100'100), 100'100));
+}
+
+TEST_CASE("driver watchdog requests bounded restart and can be disarmed") {
+  local_argb::DriverWatchdog watchdog;
+  watchdog.begin(50);
+  CHECK_FALSE(watchdog.restart_due(50 + local_argb::kDriverHangRestartUs));
+  CHECK(watchdog.restart_due(51 + local_argb::kDriverHangRestartUs));
+  CHECK(local_argb::kDriverRestartRequestBoundUs == 110'000);
+  watchdog.end();
+  CHECK_FALSE(watchdog.restart_due(1'000'000));
+
+  watchdog.begin(500);
+  CHECK(watchdog.restart_due(499));
 }

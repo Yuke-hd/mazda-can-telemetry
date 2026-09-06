@@ -73,4 +73,20 @@ bool Controller::write_desired(const Rgb desired) noexcept {
   return false;
 }
 
+bool PublicationPolicy::should_publish(const SemanticSnapshot snapshot,
+                                       const vehicle_core::MonotonicTimestamp now_us) noexcept {
+  const bool changed = !has_published_ || snapshot.turn != last_published_.turn ||
+                       snapshot.turn_status != last_published_.turn_status ||
+                       snapshot.health != last_published_.health;
+  const bool heartbeat = has_published_ && (now_us < last_publish_us_ ||
+                                            now_us - last_publish_us_ >= kPublishHeartbeatUs);
+  if (!changed && !heartbeat) {
+    return false;
+  }
+  last_published_ = snapshot;
+  last_publish_us_ = now_us;
+  has_published_ = true;
+  return true;
+}
+
 } // namespace local_argb

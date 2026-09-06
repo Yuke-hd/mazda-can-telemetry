@@ -55,11 +55,13 @@ add_executable(
   local_argb_tests
   local_argb_tests.cpp
   ${CMAKE_SOURCE_DIR}/components/local_argb/src/local_argb.cpp
+  ${CMAKE_SOURCE_DIR}/firmware/weact-can485-v1.1/main/semantic_led_policy.cpp
 )
 target_include_directories(
   local_argb_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/components/local_argb/include
+    ${CMAKE_SOURCE_DIR}/firmware/weact-can485-v1.1/main
     ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
 )
 target_link_libraries(local_argb_tests PRIVATE vehicle_core doctest::doctest)

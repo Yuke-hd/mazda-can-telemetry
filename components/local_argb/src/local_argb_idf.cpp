@@ -2,6 +2,7 @@
 
 #include "board/board_config.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -16,19 +17,46 @@ namespace {
 constexpr char kTag[] = "local_argb";
 constexpr std::uint32_t kRmtResolutionHz = 10'000'000;
 constexpr UBaseType_t kWorkerPriority = tskIDLE_PRIORITY + 2;
+// The guard performs no LED/RMT work and is above can_rx (MAX-2), so a stuck
+// lower-priority LED call cannot prevent the configured reset bound.
+constexpr UBaseType_t kSupervisorPriority = configMAX_PRIORITIES - 1;
 constexpr std::uint32_t kWorkerStackDepth = 4096;
-constexpr TickType_t kWorkerPollTicks = pdMS_TO_TICKS(10) == 0 ? 1 : pdMS_TO_TICKS(10);
+constexpr std::uint32_t kSupervisorStackDepth = 2048;
+constexpr TickType_t kWorkerPollTicks =
+    pdMS_TO_TICKS(kSupervisorPollUs / 1'000) == 0 ? 1 : pdMS_TO_TICKS(kSupervisorPollUs / 1'000);
+
+DriverWatchdog g_driver_watchdog{};
+portMUX_TYPE g_watchdog_lock = portMUX_INITIALIZER_UNLOCKED;
+
+vehicle_core::MonotonicTimestamp now_us() noexcept {
+  return static_cast<vehicle_core::MonotonicTimestamp>(esp_timer_get_time());
+}
+
+void begin_driver_write() noexcept {
+  const auto started_us = now_us();
+  taskENTER_CRITICAL(&g_watchdog_lock);
+  g_driver_watchdog.begin(started_us);
+  taskEXIT_CRITICAL(&g_watchdog_lock);
+}
+
+void end_driver_write() noexcept {
+  taskENTER_CRITICAL(&g_watchdog_lock);
+  g_driver_watchdog.end();
+  taskEXIT_CRITICAL(&g_watchdog_lock);
+}
 
 class LedStripSink final : public PixelSink {
 public:
   void set_handle(const led_strip_handle_t handle) noexcept { handle_ = handle; }
 
   bool write(const Rgb color) noexcept override {
-    if (handle_ == nullptr ||
-        led_strip_set_pixel(handle_, 0, color.red, color.green, color.blue) != ESP_OK) {
-      return false;
-    }
-    return led_strip_refresh(handle_) == ESP_OK;
+    begin_driver_write();
+    const bool success =
+        handle_ != nullptr &&
+        led_strip_set_pixel(handle_, 0, color.red, color.green, color.blue) == ESP_OK &&
+        led_strip_refresh(handle_) == ESP_OK;
+    end_driver_write();
+    return success;
   }
 
 private:
@@ -42,11 +70,8 @@ StaticQueue_t g_queue_storage{};
 std::uint8_t g_queue_buffer[sizeof(SemanticSnapshot)]{};
 QueueHandle_t g_queue{nullptr};
 TaskHandle_t g_worker{nullptr};
+TaskHandle_t g_supervisor{nullptr};
 bool g_started{false};
-
-vehicle_core::MonotonicTimestamp now_us() noexcept {
-  return static_cast<vehicle_core::MonotonicTimestamp>(esp_timer_get_time());
-}
 
 void worker(void *) noexcept {
   for (;;) {
@@ -61,6 +86,29 @@ void worker(void *) noexcept {
   }
 }
 
+void supervisor(void *) noexcept {
+  for (;;) {
+    vTaskDelay(kWorkerPollTicks);
+    const auto checked_us = now_us();
+    taskENTER_CRITICAL(&g_watchdog_lock);
+    const bool restart_due = g_driver_watchdog.restart_due(checked_us);
+    taskEXIT_CRITICAL(&g_watchdog_lock);
+    if (restart_due) {
+      // led_strip 3.0.3 waits indefinitely for RMT completion. A reset is the
+      // only bounded recovery available without access to its private channel;
+      // boot safe-defaults and startup black run again before CAN can restart.
+      esp_restart();
+    }
+  }
+}
+
+void stop_supervisor() noexcept {
+  if (g_supervisor != nullptr) {
+    vTaskDelete(g_supervisor);
+    g_supervisor = nullptr;
+  }
+}
+
 } // namespace
 
 bool start() noexcept {
@@ -71,6 +119,11 @@ bool start() noexcept {
                 "local ARGB is fixed to the WeAct V1.1 onboard pixel");
   static_assert(board::kWeActCan485V11.onboard_rgb.pixel_count == 1,
                 "local ARGB supports exactly one onboard pixel");
+
+  if (xTaskCreate(supervisor, "argb_guard", kSupervisorStackDepth, nullptr, kSupervisorPriority,
+                  &g_supervisor) != pdPASS) {
+    return false;
+  }
 
   led_strip_config_t strip_config{};
   strip_config.strip_gpio_num = board::kWeActCan485V11.onboard_rgb.data;
@@ -85,6 +138,7 @@ bool start() noexcept {
   rmt_config.mem_block_symbols = 64;
   rmt_config.flags.with_dma = false;
   if (led_strip_new_rmt_device(&strip_config, &rmt_config, &g_strip) != ESP_OK) {
+    stop_supervisor();
     return false;
   }
   g_sink.set_handle(g_strip);
@@ -99,6 +153,7 @@ bool start() noexcept {
     (void)led_strip_del(g_strip);
     g_strip = nullptr;
     g_sink.set_handle(nullptr);
+    stop_supervisor();
     return false;
   }
 
@@ -110,6 +165,7 @@ bool start() noexcept {
     g_strip = nullptr;
     g_sink.set_handle(nullptr);
     g_queue = nullptr;
+    stop_supervisor();
     return false;
   }
   g_started = true;
