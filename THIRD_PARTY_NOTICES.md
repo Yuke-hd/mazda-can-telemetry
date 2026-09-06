@@ -20,10 +20,14 @@ not relicense third-party material.
 - **Role:** candidate Mazda signal definitions and decoder-reference material;
   see [the MCAN-10 evidence matrix](docs/development/mcan-10-opendbc-signal-evidence.md).
 - **Current status:** the evidence matrix is an opendbc-derived field
-  extraction distributed as project documentation. No full opendbc source tree,
-  DBC file, generated definition, or vehicle capture is vendored. The pin is
-  documentation provenance only; CMake, CI, tests, and firmware do not fetch a
-  branch or depend on opendbc.
+  extraction distributed as project documentation. No full opendbc source tree
+  or upstream DBC file is vendored. A separate contributor-supplied,
+  capture-derived DBC is tracked at
+  [`docs/protocol/mazda_custom.dbc`](docs/protocol/mazda_custom.dbc); it records
+  the reviewed #51 subset alongside reference-only fields and is governed by
+  its own provenance and vehicle-data review. The pin is documentation
+  provenance only; CMake, CI, tests, and firmware do not fetch a branch or
+  depend on opendbc.
 - **Local modifications:** none were made to upstream source. The derived
   matrix is not a redistribution of the full upstream DBC.
 

@@ -67,5 +67,7 @@ None is a vehicle capture or a claim of Australian-market compatibility.
 | `0x09A` | `00 00 0C 00 02 00 00 00` | both lamps on, low wiper on | synthetic lamp/wiper vector |
 | `0x091` | `00 00 30 00 00 00 00 00` | front wiper `Intermittent`, turn requests off | synthetic switch vector |
 
-The source DBC and raw captures remain outside the repository. Only reviewed
-signal definitions and synthetic test vectors are represented here.
+The reviewed source DBC is committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc). Raw captures
+remain private and outside the repository. Only the reviewed signal definitions
+and synthetic test vectors are represented in the decoder and tests.

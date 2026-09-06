@@ -2,7 +2,7 @@
 
 A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct Studio CAN485 DevBoard V1.1. Its `firmware/weact-can485-v1.1` image is strict classic-CAN listen-only. The separately named `firmware/tcan485-bench-ack-only` target is reserved for isolated LILYGO/TTGO bench ACK testing and must never be connected to a vehicle. Host-side capture and replay tools support analysis, while a real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
 
-The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
+The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; the reviewed capture-derived definitions for Issue #51 are committed in [`docs/protocol/mazda_custom.dbc`](docs/protocol/mazda_custom.dbc) and only the listed signals are confirmed for this vehicle.
 
 ## MCAN-3 build scaffold
 

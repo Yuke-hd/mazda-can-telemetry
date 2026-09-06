@@ -34,8 +34,9 @@ including when it recovers to the same stored direction.
 `BLINK_INFO` (`0x09A`) is also decoded as confirmed status: the left and right
 indicator lamps use byte 2 bits 2 and 3, and `WiperLow` uses byte 4 bit 1. It
 does not alter request or normalized turn state. These definitions are
-capture-derived from the reviewed DBC supplied for #51; signal timing remains
-unspecified because the DBC has no cycle-time declaration. Tests use synthetic
-frames and a simulated monotonic replay clock; no capture or vehicle-derived
-data is included. The decoder only receives frames and writes in-memory state;
-it has no CAN transmit or vehicle-control interface.
+capture-derived from the reviewed DBC committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc); signal timing
+remains unspecified because the DBC has no cycle-time declaration. Tests use
+synthetic frames and a simulated monotonic replay clock; no capture or
+vehicle-derived data is included. The decoder only receives frames and writes
+in-memory state; it has no CAN transmit or vehicle-control interface.

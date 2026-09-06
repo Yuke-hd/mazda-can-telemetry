@@ -1,8 +1,9 @@
 # MCAN-10 Mazda signal evidence
 
-Status: the #51 capture-derived DBC definitions below are confirmed for the
-listed signals; the upstream matrix remains an unverified source of unrelated
-candidate signals.
+Status: the reviewed capture-derived DBC is committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc). Its #51
+definitions below are confirmed for the listed signals; the upstream matrix
+remains an unverified source of unrelated candidate signals.
 
 ## Pin and provenance
 
@@ -27,10 +28,14 @@ The extraction reads these paths at that commit:
   for the upstream model-scope lead.
 
 The candidate matrix is an opendbc-derived field extraction distributed as
-project documentation. No full opendbc source tree or DBC file is vendored in
-this repository, and no vehicle capture is included. This document is a
-provenance record and candidate lead, not a compatibility claim. Build and test
-tooling has no opendbc download or floating-branch input.
+project documentation. No full opendbc source tree or upstream DBC file is
+vendored in this repository. The separate capture-derived source artifact for
+#51 is committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc); it is not an
+opendbc distribution. No vehicle capture is included. This document is a
+provenance record and candidate lead for the upstream matrix, not a broader
+compatibility claim. Build and test tooling has no opendbc download or
+floating-branch input.
 
 ## Upstream candidate matrix
 
@@ -72,7 +77,9 @@ The following definitions were reviewed from the capture-derived DBC supplied
 for #51. They are limited to the confirmed signals in that ticket. The DBC
 start-bit notation, byte order, scale, offset, range, and value table are
 recorded here so the allocation-free decoder can be checked without bundling a
-DBC parser or publishing the source file.
+DBC parser. The reviewed source file is committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc); its
+reference-only fields remain outside the confirmed decoder scope.
 
 | Message (hex ID) | Signal | DBC definition | Confirmed value table |
 | --- | --- | --- | --- |
