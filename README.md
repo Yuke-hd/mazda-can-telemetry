@@ -4,6 +4,13 @@ A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehic
 
 The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; every signal must be validated against this vehicle.
 
+The host build is portable CMake/C++ and is supported on Linux and macOS; it
+does not depend on a Windows-only compiler or generator. CMake is still
+required for the host library/tests and is also the build engine used by
+ESP-IDF for both firmware targets. Ninja is required by the reproducible host
+commands below because they select the Ninja generator; another CMake
+generator can be used locally if Ninja is unavailable.
+
 ## MCAN-3 build scaffold
 
 The portable C++17 `vehicle_core` library and its host tests are configured at
@@ -26,13 +33,15 @@ official installation link.
 
 | Workflow | Required tool | Supported version or constraint | Purpose and installation |
 | --- | --- | --- | --- |
-| Host library/tests | Bash/Linux shell, Git, Python 3, ripgrep | Bash and Git current supported releases; Python >= 3.8; ripgrep current supported release | Repository commands and source discovery ([Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/), [ripgrep](https://github.com/BurntSushi/ripgrep#installation)) |
-| Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release | Configure and build the portable library/tests ([compiler](https://gcc.gnu.org/install/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
-| Host library/tests | clang-format | Major version 14 (`clang-format-14`) | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
+| Host library/tests | Git, Python 3 | Git current supported release; Python >= 3.8 | Fetch the pinned doctest source and run scripted validation tests ([Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/)) |
+| Host library/tests | C++17 compiler, CMake, Ninja | C++17; CMake >= 3.20; Ninja current supported release when using the documented Ninja generator | Configure and build the portable library/tests ([compiler](https://clang.llvm.org/get_started/), [CMake](https://cmake.org/download/), [Ninja](https://ninja-build.org/)) |
+| Host formatting | clang-format | Major version 14; executable may be `clang-format-14` or `clang-format` | Enforce C++ formatting ([LLVM documentation](https://clang.llvm.org/docs/ClangFormat.html)) |
 | ESP32 firmware targets | ESP-IDF and `idf.py` | Exactly v5.5.4, target `esp32` | Build the WeAct V1.1 strict vehicle listen-only target or the separately named T-CAN485 isolated `BENCH_ACK_ONLY` target ([official guide](https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/)) |
 
 Host tools are required for the common library, formatting, and test workflow;
-ESP-IDF and its ESP32 toolchain apply to both firmware targets.
+ESP-IDF and its ESP32 toolchain apply to both firmware targets. A POSIX shell
+and ripgrep are useful for repository exploration and CI scripts but are not
+required to configure, build, or test the host project.
 CMake's doctest dependency and ESP-IDF managed components are resolved by their
 respective build systems, not installed as separate repository prerequisites.
 ESP-IDF must be installed and activated using its upstream guide.

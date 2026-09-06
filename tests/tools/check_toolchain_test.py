@@ -57,6 +57,22 @@ class ToolchainCheckerTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("reported 6.1.17; need exactly 6.1.18", output)
 
+    def test_alternative_executable_is_used(self) -> None:
+        with patch.object(
+            check_toolchain,
+            "_executable_candidates",
+            side_effect=[(), ("/usr/local/bin/clang-format",)],
+        ):
+            selected = check_toolchain._find_executable("clang-format-14", ("clang-format",))
+        self.assertEqual(selected, "/usr/local/bin/clang-format")
+
+    def test_formatter_accepts_platform_specific_executable_names(self) -> None:
+        formatter = next(
+            requirement for requirement in check_toolchain.REQUIREMENTS if requirement.name == "clang-format"
+        )
+        self.assertEqual(formatter.executable, "clang-format-14")
+        self.assertEqual(formatter.alternatives, ("clang-format",))
+
     def test_exact_version_rejects_prerelease_suffix(self) -> None:
         valid, detail = check_toolchain._exact((5, 5, 4))("ESP-IDF v5.5.4-dev")
         self.assertFalse(valid)

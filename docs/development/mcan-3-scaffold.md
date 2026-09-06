@@ -7,7 +7,8 @@ telemetry, or provide a CAN data-generation path.
 ## Pinned toolchains
 
 - ESP32 firmware: ESP-IDF `v5.5.4`, target `esp32`.
-- Host library and tests: C++17, CMake `3.20`, clang-format major version `14`,
+- Host library and tests: C++17, CMake `>=3.20`, Ninja for the documented host
+  generator, and clang-format major version `14`,
   doctest tag `v2.4.11` at commit
   `ae7a13539fb71f270b87eb2e874fbac80bc8dda2` (MIT license).
 
@@ -26,6 +27,13 @@ python3 tools/check_toolchain.py --scope firmware
 The checker does not install tools or change system packages. Install and
 activate ESP-IDF `v5.5.4` with the official Espressif guide before the firmware
 check.
+
+The host project is supported on Linux and macOS with the platform's native
+C++ compiler. The checker accepts the Linux package name `clang-format-14` and
+the macOS/Homebrew-style name `clang-format`, but both must report major
+version 14. Ninja is needed for the exact commands below; CMake's other native
+generators are also valid for local host builds. CMake 4.x is supported with a
+compatibility policy floor for the pinned doctest release.
 
 ## Reproducible commands
 

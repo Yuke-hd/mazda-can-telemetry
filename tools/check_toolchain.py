@@ -29,6 +29,7 @@ class Requirement:
     scopes: FrozenSet[str]
     check: Callable[[str], Tuple[bool, str]]
     install_hint: str
+    alternatives: Tuple[str, ...] = ()
 
 
 _VERSION_RE = re.compile(
@@ -88,15 +89,42 @@ def _present(output: str) -> Tuple[bool, str]:
 
 
 REQUIREMENTS = (
-    Requirement("Git", "git", ("--version",), frozenset({"host", "firmware"}), _present, "https://git-scm.com/book/en/v2/Getting-Started-Installing-Git"),
-    Requirement("Bash", "bash", ("--version",), frozenset({"host", "firmware"}), _present, "https://www.gnu.org/software/bash/"),
+    Requirement(
+        "Git",
+        "git",
+        ("--version",),
+        frozenset({"host", "firmware"}),
+        _present,
+        "https://git-scm.com/book/en/v2/Getting-Started-Installing-Git",
+    ),
     Requirement("CMake", "cmake", ("--version",), frozenset({"host"}), _at_least((3, 20)), "https://cmake.org/download/"),
     Requirement("Ninja", "ninja", ("--version",), frozenset({"host"}), _present, "https://ninja-build.org/"),
-    Requirement("C++ compiler", "c++", ("--version",), frozenset({"host"}), _present, "https://gcc.gnu.org/install/"),
-    Requirement("clang-format", "clang-format-14", ("--version",), frozenset({"host"}), _major_exact(14), "https://clang.llvm.org/docs/ClangFormat.html"),
+    Requirement(
+        "C++ compiler",
+        "c++",
+        ("--version",),
+        frozenset({"host"}),
+        _present,
+        "https://clang.llvm.org/get_started/",
+    ),
+    Requirement(
+        "clang-format",
+        "clang-format-14",
+        ("--version",),
+        frozenset({"host"}),
+        _major_exact(14),
+        "https://clang.llvm.org/docs/ClangFormat.html",
+        ("clang-format",),
+    ),
     Requirement("Python", "python3", ("--version",), frozenset({"host", "firmware"}), _at_least((3, 8)), "https://www.python.org/downloads/"),
-    Requirement("ripgrep", "rg", ("--version",), frozenset({"host"}), _present, "https://github.com/BurntSushi/ripgrep#installation"),
-    Requirement("ESP-IDF", "idf.py", ("--version",), frozenset({"firmware"}), _exact((5, 5, 4)), "https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/"),
+    Requirement(
+        "ESP-IDF",
+        "idf.py",
+        ("--version",),
+        frozenset({"firmware"}),
+        _exact((5, 5, 4)),
+        "https://docs.espressif.com/projects/esp-idf/en/v5.5.4/esp32/get-started/",
+    ),
 )
 
 
@@ -148,9 +176,12 @@ def _executable_candidates(executable: str) -> Tuple[str, ...]:
     return tuple(candidates)
 
 
-def _find_executable(executable: str) -> Optional[str]:
-    candidates = _executable_candidates(executable)
-    return candidates[0] if candidates else None
+def _find_executable(executable: str, alternatives: Sequence[str] = ()) -> Optional[str]:
+    for candidate_name in (executable, *alternatives):
+        candidates = _executable_candidates(candidate_name)
+        if candidates:
+            return candidates[0]
+    return None
 
 
 def check(scope: str) -> int:
@@ -159,9 +190,14 @@ def check(scope: str) -> int:
     for requirement in REQUIREMENTS:
         if scope not in requirement.scopes:
             continue
-        path = _find_executable(requirement.executable)
+        path = _find_executable(requirement.executable, requirement.alternatives)
         if path is None:
-            print(f"FAIL {requirement.name}: '{requirement.executable}' not found")
+            executable_names = (requirement.executable, *requirement.alternatives)
+            if len(executable_names) == 1:
+                missing = f"'{executable_names[0]}' not found"
+            else:
+                missing = "none of " + " or ".join(f"'{name}'" for name in executable_names) + " found"
+            print(f"FAIL {requirement.name}: {missing}")
             print(f"     Install: {requirement.install_hint}")
             failures += 1
             continue

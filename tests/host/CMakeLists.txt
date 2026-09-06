@@ -1,5 +1,12 @@
 include(FetchContent)
 
+# doctest v2.4.11 predates CMake 4's policy compatibility floor. Keep the
+# pinned dependency usable with current CMake releases without changing the
+# policy version of this project or the ESP-IDF projects.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0)
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.20)
+endif()
+
 # Keep the host test dependency reproducible. Upgrade only in a dedicated change.
 FetchContent_Declare(
   doctest
