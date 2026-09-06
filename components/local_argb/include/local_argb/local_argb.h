@@ -10,9 +10,12 @@ inline constexpr std::uint8_t kBrightnessCeiling = 16;
 inline constexpr vehicle_core::Microseconds kFailOffTimeoutUs = 250'000;
 inline constexpr vehicle_core::Microseconds kPublishHeartbeatUs = 100'000;
 inline constexpr vehicle_core::Microseconds kDriverHangRestartUs = 100'000;
+inline constexpr vehicle_core::Microseconds kWorkerStallRestartUs = 100'000;
 inline constexpr vehicle_core::Microseconds kSupervisorPollUs = 10'000;
 inline constexpr vehicle_core::Microseconds kDriverRestartRequestBoundUs =
     kDriverHangRestartUs + kSupervisorPollUs;
+inline constexpr vehicle_core::Microseconds kWorkerRestartRequestBoundUs =
+    kWorkerStallRestartUs + kSupervisorPollUs;
 
 struct Rgb {
   std::uint8_t red{0};
@@ -123,6 +126,31 @@ public:
 private:
   vehicle_core::MonotonicTimestamp started_us_{0};
   bool in_progress_{false};
+};
+
+// Portable progress lease for the complete worker loop, including code before
+// and after the blocking driver call. Production protects it with the same
+// supervisor lock as DriverWatchdog.
+class WorkerLease {
+public:
+  void arm(vehicle_core::MonotonicTimestamp now_us) noexcept {
+    last_progress_us_ = now_us;
+    armed_ = true;
+  }
+  void heartbeat(vehicle_core::MonotonicTimestamp now_us) noexcept {
+    if (armed_) {
+      last_progress_us_ = now_us;
+    }
+  }
+  void disarm() noexcept { armed_ = false; }
+  [[nodiscard]] bool restart_due(vehicle_core::MonotonicTimestamp now_us) const noexcept {
+    return armed_ &&
+           (now_us < last_progress_us_ || now_us - last_progress_us_ > kWorkerStallRestartUs);
+  }
+
+private:
+  vehicle_core::MonotonicTimestamp last_progress_us_{0};
+  bool armed_{false};
 };
 
 // ESP-IDF runtime. start() sends an explicit black RMT frame before returning.

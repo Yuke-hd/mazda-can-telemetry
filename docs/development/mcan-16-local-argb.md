@@ -47,14 +47,18 @@ failure request black and stop acquisition.
 
 `led_strip` 3.0.3 waits indefinitely for RMT completion internally. Every
 set/refresh operation is therefore supervised by a separate task at
-`configMAX_PRIORITIES - 1`, above `can_rx`; it performs only a timestamp check
-and no LED/RMT work. If the operation remains active for more than 100,000 us,
-the supervisor requests `esp_restart`. Its 10,000 us polling interval gives a
-configured reset-request bound of 110,000 us under scheduler operation. On
-reboot, GPIO4 is first held low and an RMT black frame is sent before CAN starts.
-The reboot duration and successful physical black transmission cannot be
-bounded if scheduling is disabled or the CPU, RMT peripheral, or LED remains
-faulty.
+`configMAX_PRIORITIES - 1`, above `can_rx`; it performs only timestamp checks
+and no LED/RMT work. The same supervisor checks a progress lease renewed at the
+top of every worker loop, so a stall before or after the driver call (including
+error logging) is also covered. Either a driver operation or worker lease that
+remains stalled for more than 100,000 us requests `esp_restart`. The 10,000 us
+polling interval gives a configured reset-request bound of 110,000 us under
+scheduler operation. The lease is armed only after startup black and successful
+worker creation, and remains disarmed on creation failure, preventing
+initialization from causing a false restart. On reboot, GPIO4 is first held low and an RMT
+black frame is sent before CAN starts. The reboot duration and successful
+physical black transmission cannot be bounded if scheduling is disabled or the
+CPU, RMT peripheral, or LED remains faulty.
 
 The isolated T-CAN485 bench project discovers only the shared `board` and
 `can_bus` components, so it neither resolves nor links `local_argb` or
@@ -72,8 +76,9 @@ Deterministic host tests cover startup black, every mapping, the exact
 250,000/250,001 us boundary, same-direction recovery, offline/error fail-off,
 brightness limits, duplicate coalescing, length-one overwrite behavior, and
 driver failure/black retry. Mixed turn/engine/ignored traffic, publication
-throttling/heartbeat boundaries, and the supervisor timeout/disarm behavior are
-also deterministic host tests. A structural validator enforces semantic
+throttling/heartbeat boundaries, driver timeout, and worker-lease
+expiry/heartbeat/disarm behavior are also deterministic host tests. A
+structural validator enforces semantic
 isolation and the fixed WeAct/RMT configuration. CI builds both ESP-IDF projects.
 
 No physical bench or vehicle test is claimed by this change. A total CPU/RMT

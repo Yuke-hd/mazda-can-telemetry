@@ -26,6 +26,7 @@ constexpr TickType_t kWorkerPollTicks =
     pdMS_TO_TICKS(kSupervisorPollUs / 1'000) == 0 ? 1 : pdMS_TO_TICKS(kSupervisorPollUs / 1'000);
 
 DriverWatchdog g_driver_watchdog{};
+WorkerLease g_worker_lease{};
 portMUX_TYPE g_watchdog_lock = portMUX_INITIALIZER_UNLOCKED;
 
 vehicle_core::MonotonicTimestamp now_us() noexcept {
@@ -42,6 +43,26 @@ void begin_driver_write() noexcept {
 void end_driver_write() noexcept {
   taskENTER_CRITICAL(&g_watchdog_lock);
   g_driver_watchdog.end();
+  taskEXIT_CRITICAL(&g_watchdog_lock);
+}
+
+void arm_worker_lease() noexcept {
+  const auto started_us = now_us();
+  taskENTER_CRITICAL(&g_watchdog_lock);
+  g_worker_lease.arm(started_us);
+  taskEXIT_CRITICAL(&g_watchdog_lock);
+}
+
+void heartbeat_worker() noexcept {
+  const auto progress_us = now_us();
+  taskENTER_CRITICAL(&g_watchdog_lock);
+  g_worker_lease.heartbeat(progress_us);
+  taskEXIT_CRITICAL(&g_watchdog_lock);
+}
+
+void disarm_worker_lease() noexcept {
+  taskENTER_CRITICAL(&g_watchdog_lock);
+  g_worker_lease.disarm();
   taskEXIT_CRITICAL(&g_watchdog_lock);
 }
 
@@ -75,6 +96,7 @@ bool g_started{false};
 
 void worker(void *) noexcept {
   for (;;) {
+    heartbeat_worker();
     SemanticSnapshot snapshot{};
     if (xQueueReceive(g_queue, &snapshot, kWorkerPollTicks) == pdTRUE) {
       if (!g_controller.apply(snapshot, now_us())) {
@@ -91,7 +113,8 @@ void supervisor(void *) noexcept {
     vTaskDelay(kWorkerPollTicks);
     const auto checked_us = now_us();
     taskENTER_CRITICAL(&g_watchdog_lock);
-    const bool restart_due = g_driver_watchdog.restart_due(checked_us);
+    const bool restart_due =
+        g_driver_watchdog.restart_due(checked_us) || g_worker_lease.restart_due(checked_us);
     taskEXIT_CRITICAL(&g_watchdog_lock);
     if (restart_due) {
       // led_strip 3.0.3 waits indefinitely for RMT completion. A reset is the
@@ -158,8 +181,17 @@ bool start() noexcept {
   }
 
   g_queue = xQueueCreateStatic(1, sizeof(SemanticSnapshot), g_queue_buffer, &g_queue_storage);
-  if (g_queue == nullptr || xTaskCreate(worker, "local_argb", kWorkerStackDepth, nullptr,
-                                        kWorkerPriority, &g_worker) != pdPASS) {
+  const BaseType_t worker_created = g_queue == nullptr
+                                        ? pdFAIL
+                                        : xTaskCreate(worker, "local_argb", kWorkerStackDepth,
+                                                      nullptr, kWorkerPriority, &g_worker);
+  if (worker_created == pdPASS) {
+    // Task creation and startup black are complete before monitoring begins,
+    // so initialization cannot be mistaken for a worker stall.
+    arm_worker_lease();
+  }
+  if (worker_created != pdPASS) {
+    disarm_worker_lease();
     (void)g_sink.write(kBlack);
     (void)led_strip_del(g_strip);
     g_strip = nullptr;

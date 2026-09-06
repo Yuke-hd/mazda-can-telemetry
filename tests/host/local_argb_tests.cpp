@@ -256,3 +256,24 @@ TEST_CASE("driver watchdog requests bounded restart and can be disarmed") {
   watchdog.begin(500);
   CHECK(watchdog.restart_due(499));
 }
+
+TEST_CASE("worker progress lease expires and disarms deterministically") {
+  local_argb::WorkerLease lease;
+  lease.heartbeat(500'000);
+  CHECK_FALSE(lease.restart_due(1'000'000));
+
+  lease.arm(50);
+  CHECK_FALSE(lease.restart_due(50 + local_argb::kWorkerStallRestartUs));
+  CHECK(lease.restart_due(51 + local_argb::kWorkerStallRestartUs));
+  CHECK(local_argb::kWorkerRestartRequestBoundUs == 110'000);
+
+  lease.heartbeat(100'000);
+  CHECK_FALSE(lease.restart_due(100'000 + local_argb::kWorkerStallRestartUs));
+  CHECK(lease.restart_due(100'001 + local_argb::kWorkerStallRestartUs));
+  lease.disarm();
+  lease.heartbeat(900'000);
+  CHECK_FALSE(lease.restart_due(1'000'000));
+
+  lease.arm(500);
+  CHECK(lease.restart_due(499));
+}

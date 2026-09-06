@@ -60,7 +60,11 @@ def main() -> int:
         "xTaskCreate(supervisor": "independent driver-hang supervisor",
         "kSupervisorPriority = configMAX_PRIORITIES - 1": "supervisor above can_rx",
         "g_driver_watchdog.restart_due": "bounded driver timeout",
-        "esp_restart()": "driver-hang reset recovery",
+        "g_worker_lease.restart_due": "bounded worker-progress timeout",
+        "heartbeat_worker()": "worker progress heartbeat",
+        "if (worker_created == pdPASS)": "post-creation lease arm",
+        "disarm_worker_lease()": "startup-failure lease disarm",
+        "esp_restart()": "supervised stall reset recovery",
     }
     for needle, label in requirements.items():
         if needle not in idf_source:
