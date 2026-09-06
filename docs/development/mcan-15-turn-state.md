@@ -2,9 +2,10 @@
 
 `vehicle_core::mazda_candidate::decode_turn_switch()` accepts only a valid,
 standard, non-RTR classic-CAN frame with ID `0x091` and DLC 8. It extracts the
-candidate `HAZARD`, `TURN_RIGHT_SWITCH`, and `TURN_LEFT_SWITCH` fields using
-byte/LSB numbering (byte 1 bits 2, 4, and 5 respectively), updates the three
-raw request signals, and normalizes them to `TurnState`:
+confirmed `HazardSwitch`, `RightIndicatorSwitch`, and `LeftIndicatorSwitch`
+fields using byte/LSB numbering (byte 1 bits 2, 4, and 5 respectively),
+updates the three request signals, decodes `FrontWiper` from byte 2 bits 5..4,
+and normalizes the switch state to `TurnState`:
 
 | HAZARD | LEFT | RIGHT | normalized state |
 | --- | --- | --- | --- |
@@ -30,11 +31,11 @@ mutable turn signal at the incoming timestamp. A stale value is therefore not
 actionable, and a recovered frame produces an edge from effective `Unknown`,
 including when it recovers to the same stored direction.
 
-`BLINK_INFO` (`0x09A`) remains diagnostic-only. Its phase/lamp candidates are
-not decoded into request or turn state. All definitions above are upstream
-leads from comma.ai/opendbc `mazda_2017.dbc` at commit
-`95f3d52f474b677c28fc8f10fef3f2f0386aff92`, and remain pending MCAN-19
-validation for the Australian target. Tests use synthetic frames and a
-simulated monotonic replay clock; no capture or vehicle-derived data is
-included. The decoder only receives frames and writes in-memory state; it has
-no CAN transmit or vehicle-control interface.
+`BLINK_INFO` (`0x09A`) is also decoded as confirmed status: the left and right
+indicator lamps use byte 2 bits 2 and 3, and `WiperLow` uses byte 4 bit 1. It
+does not alter request or normalized turn state. These definitions are
+capture-derived from the reviewed DBC supplied for #51; signal timing remains
+unspecified because the DBC has no cycle-time declaration. Tests use synthetic
+frames and a simulated monotonic replay clock; no capture or vehicle-derived
+data is included. The decoder only receives frames and writes in-memory state;
+it has no CAN transmit or vehicle-control interface.

@@ -1,6 +1,8 @@
-# MCAN-10 opendbc Mazda candidate signal evidence
+# MCAN-10 Mazda signal evidence
 
-Status: upstream candidates recorded; no locally verified Mazda definitions.
+Status: the #51 capture-derived DBC definitions below are confirmed for the
+listed signals; the upstream matrix remains an unverified source of unrelated
+candidate signals.
 
 ## Pin and provenance
 
@@ -32,6 +34,11 @@ tooling has no opendbc download or floating-branch input.
 
 ## Upstream candidate matrix
 
+The matrix below is retained as historical provenance for the existing
+opendbc-derived leads, including out-of-scope fields. The capture-derived
+definitions in the following section supersede overlapping candidates for the
+confirmed #51 signals only.
+
 The field syntax below preserves the DBC definition: `start|length@endian`
 followed by `(scale,offset)`, limits, and unit. `@0` is Motorola/big-endian
 and `@1` is Intel/little-endian. The source DBC contains no `GenMsgCycleTime`
@@ -59,14 +66,50 @@ ranges, not vehicle observations; a field's representable bit width may be
 broader or narrower than its declared range. Values must not be silently
 normalized before local evidence exists.
 
+## Capture-derived confirmed definitions
+
+The following definitions were reviewed from the capture-derived DBC supplied
+for #51. They are limited to the confirmed signals in that ticket. The DBC
+start-bit notation, byte order, scale, offset, range, and value table are
+recorded here so the allocation-free decoder can be checked without bundling a
+DBC parser or publishing the source file.
+
+| Message (hex ID) | Signal | DBC definition | Confirmed value table |
+| --- | --- | --- | --- |
+| `ENGINE_DATA` (`0x202`) | `EngineRPM` | `7\|16@0+ (0.25,0) [0\|8500] rpm` | physical rpm |
+| `TRANSMISSION` (`0x228`) | `Selector` | `2\|3@0+ (1,0) [0\|7]` | `0=Shifting`, `1=Park`, `2=Reverse`, `3=Neutral`, `4=Drive`, `5..7=Unknown` |
+| `TRANSMISSION` (`0x228`) | `ActualGear` | `36\|4@0+ (1,0) [0\|15]` | `0=P_or_N`, `1..6=1st..6th`, `7..13=Unknown`, `14=Reverse`, `15=Shifting` |
+| `DOORS` (`0x43E`) | `Liftgate_Open` | `32\|1@0+ (1,0) [0\|1]` | `0=Closed`, `1=Open` |
+| `DOORS` (`0x43E`) | `RearRightDoor_Open` | `34\|1@0+ (1,0) [0\|1]` | `0=Closed`, `1=Open` |
+| `DOORS` (`0x43E`) | `RearLeftDoor_Open` | `35\|1@0+ (1,0) [0\|1]` | `0=Closed`, `1=Open` |
+| `DOORS` (`0x43E`) | `FrontLeftDoor_Open_RHD` | `36\|1@0+ (1,0) [0\|1]` | `0=Closed`, `1=Open` |
+| `DOORS` (`0x43E`) | `FrontRightDoor_Open_RHD` | `37\|1@0+ (1,0) [0\|1]` | `0=Closed`, `1=Open` |
+| `DOORS` (`0x43E`) | `DoorsUnlocked` | `30\|1@0+ (1,0) [0\|1]` | `0=Locked`, `1=Unlocked` |
+| `BLINK_INFO` (`0x09A`) | `LeftIndicatorLamp` | `18\|1@1+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `BLINK_INFO` (`0x09A`) | `RightIndicatorLamp` | `19\|1@0+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `BLINK_INFO` (`0x09A`) | `WiperLow` | `33\|1@0+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `TURN_SWITCH` (`0x091`) | `HazardSwitch` | `10\|1@0+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `TURN_SWITCH` (`0x091`) | `RightIndicatorSwitch` | `12\|1@0+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `TURN_SWITCH` (`0x091`) | `LeftIndicatorSwitch` | `13\|1@0+ (1,0) [0\|1]` | `0=Off`, `1=On` |
+| `TURN_SWITCH` (`0x091`) | `FrontWiper` | `21\|2@0+ (1,0) [0\|3]` | `0=Off`, `1=On`, `2=High`, `3=Intermittent` |
+
+The legacy front-door reference label from the supplied DBC is represented as
+the confirmed right-hand-drive semantic signal `FrontLeftDoor_Open_RHD`. No
+confirmed signal in this section retains a reference suffix. The
+`Selector` and `ActualGear` fields remain independent semantic values even
+though they share the `TRANSMISSION` message.
+
 ## Local verification boundary
 
 | Definition class | Local evidence in this change | Status |
 | --- | --- | --- |
-| Mazda CAN IDs, field positions, scaling, units, values, periods, or bus assignment | None; no raw capture, VIN, location, absolute time, or vehicle-derived fixture is included | Not locally verified |
-| Australian-market 2019 CX-5 Akera compatibility | None | Unknown; do not claim compatibility |
+| Listed capture-derived IDs, field positions, scaling, units, values, and signal names | Reviewed capture-derived DBC; no raw capture, VIN, location, absolute time, or vehicle-derived fixture is included | Confirmed for the listed signals |
+| Signal periods and freshness periods | No cycle-time declaration in the supplied DBC | Unspecified; preserve existing turn/request freshness policy only |
+| Australian-market 2019 CX-5 Akera compatibility beyond the listed definitions | None | Unknown; do not claim broader compatibility |
+| Upstream candidate signals outside #51 | Existing opendbc matrix above | Unverified and unchanged |
 
-Future validation must use the receive-only staged procedure and a reviewed,
-privacy-safe fixture or isolated-bench evidence. Until then, these definitions
-remain leads only. No active probing, diagnostic polling, CAN transmission, or
-vehicle release artifact is in scope for MCAN-10.
+Future validation of timing, broader compatibility, and the unrelated
+candidate definitions must use the receive-only staged procedure and a
+reviewed, privacy-safe fixture or isolated-bench evidence. The listed signal
+mappings are confirmed; no active probing, diagnostic polling, CAN
+transmission, or vehicle release artifact is in scope for MCAN-10.

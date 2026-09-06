@@ -11,7 +11,7 @@ the repository root. The WeAct V1.1 vehicle firmware lives under
 `firmware/weact-can485-v1.1`. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
-Candidate `ENGINE_DATA` and `GEAR` decoding, replay vectors, provenance, and
+Confirmed Mazda signal decoding, replay vectors, provenance, and
 freshness boundaries are documented in
 [`docs/development/mcan-14-candidate-decoders.md`](docs/development/mcan-14-candidate-decoders.md).
 
