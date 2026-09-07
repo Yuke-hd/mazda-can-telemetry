@@ -4,7 +4,9 @@ include(FetchContent)
 FetchContent_Declare(
   doctest
   GIT_REPOSITORY https://github.com/doctest/doctest.git
-  GIT_TAG ae7a13539fb71f270b87eb2e874fbac80bc8dda2
+  # v2.5.0 raises doctest's CMake minimum to 3.14, which remains compatible
+  # with the project's 3.20 minimum and modern CMake 4.x.
+  GIT_TAG d44d4f6e66232d716af82f00a063759e9d0e50d6
 )
 FetchContent_MakeAvailable(doctest)
 

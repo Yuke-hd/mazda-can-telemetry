@@ -7,13 +7,15 @@ telemetry, or provide a CAN data-generation path.
 ## Pinned toolchains
 
 - ESP32 firmware: ESP-IDF `v5.5.4`, target `esp32`.
-- Host library and tests: C++17, CMake `3.20`, clang-format major version `14`,
-  doctest tag `v2.4.11` at commit
-  `ae7a13539fb71f270b87eb2e874fbac80bc8dda2` (MIT license).
+- Host library and tests: C++17, CMake `3.20` minimum (CMake `4.4` modern
+  compatibility leg), clang-format major version `14`, doctest tag `v2.5.0` at
+  commit `d44d4f6e66232d716af82f00a063759e9d0e50d6` (MIT license).
 
 The ESP-IDF manifest requires exactly `5.5.4`; it does not download an
 unrelated SDK at configure time. The host test dependency is fetched by CMake
-using the exact doctest commit above.
+using the exact doctest commit above. v2.5.0 is required because the previous
+v2.4.11 CMake metadata used a pre-3.5 minimum rejected by CMake 4; no unpinned
+dependency is used.
 
 Before running a build, check the active executable versions. The checker is
 non-interactive and reports all failures in the selected scope:

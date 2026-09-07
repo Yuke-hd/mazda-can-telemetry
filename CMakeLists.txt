@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
+# CMake 3.20 is the supported host minimum. The policy range keeps modern
+# CMake releases (including CMake 4.x) on the policies this project tested.
+cmake_minimum_required(VERSION 3.20...4.4)
 
 project(mazda_can_telemetry_host LANGUAGES CXX)
 

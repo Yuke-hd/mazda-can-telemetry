@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the tools required by the MCAN-3 build scaffold.
+"""Check the tools required by the supported host and firmware builds.
 
 This checker intentionally does not install anything.  It is safe to run in
 CI and before a build, and reports every missing or incompatible executable in
@@ -19,6 +19,14 @@ from typing import Callable, FrozenSet, List, Optional, Sequence, Tuple
 
 
 Version = Tuple[int, ...]
+
+
+# Keep this policy in one place so checker output, documentation, and CI use
+# the same supported host-CMake floor. CMake 4.4 is the modern compatibility
+# leg exercised by CI; newer versions remain valid when they preserve the
+# project's declared policy range.
+SUPPORTED_HOST_CMAKE_MINIMUM: Version = (3, 20)
+SUPPORTED_HOST_CMAKE_MODERN: Version = (4, 4)
 
 
 @dataclass(frozen=True)
@@ -90,7 +98,14 @@ def _present(output: str) -> Tuple[bool, str]:
 REQUIREMENTS = (
     Requirement("Git", "git", ("--version",), frozenset({"host", "firmware"}), _present, "https://git-scm.com/book/en/v2/Getting-Started-Installing-Git"),
     Requirement("Bash", "bash", ("--version",), frozenset({"host", "firmware"}), _present, "https://www.gnu.org/software/bash/"),
-    Requirement("CMake", "cmake", ("--version",), frozenset({"host"}), _at_least((3, 20)), "https://cmake.org/download/"),
+    Requirement(
+        "CMake",
+        "cmake",
+        ("--version",),
+        frozenset({"host"}),
+        _at_least(SUPPORTED_HOST_CMAKE_MINIMUM),
+        "https://cmake.org/download/",
+    ),
     Requirement("Ninja", "ninja", ("--version",), frozenset({"host"}), _present, "https://ninja-build.org/"),
     Requirement("C++ compiler", "c++", ("--version",), frozenset({"host"}), _present, "https://gcc.gnu.org/install/"),
     Requirement("clang-format", "clang-format-14", ("--version",), frozenset({"host"}), _major_exact(14), "https://clang.llvm.org/docs/ClangFormat.html"),
