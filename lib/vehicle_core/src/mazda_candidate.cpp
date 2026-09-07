@@ -32,7 +32,7 @@ SelectorPosition selector_from_raw(const std::uint8_t raw) noexcept {
 ActualGear actual_gear_from_raw(const std::uint8_t raw) noexcept {
   switch (raw) {
   case 0:
-    return ActualGear::Park;
+    return ActualGear::ParkOrNeutral;
   case 1:
     return ActualGear::First;
   case 2:
@@ -49,6 +49,21 @@ ActualGear actual_gear_from_raw(const std::uint8_t raw) noexcept {
     return ActualGear::Reverse;
   default:
     return ActualGear::Unknown;
+  }
+}
+
+FrontWiperPosition front_wiper_from_raw(const std::uint8_t raw) noexcept {
+  switch (raw) {
+  case 0:
+    return FrontWiperPosition::Off;
+  case 1:
+    return FrontWiperPosition::On;
+  case 2:
+    return FrontWiperPosition::High;
+  case 3:
+    return FrontWiperPosition::Intermittent;
+  default:
+    return FrontWiperPosition::Unknown;
   }
 }
 
@@ -74,8 +89,9 @@ DecodeStatus decode_engine_data(const RawCanFrame &frame, VehicleState &state) n
 
   const auto rpm_raw = big_endian_u16(frame.data, 0);
   const auto speed_raw = big_endian_u16(frame.data, 2);
-  // The candidate DBC declares RPM in [0, 8500]. SPEED has no invalid
-  // sentinel and its 16-bit representation is already non-negative.
+  // The confirmed DBC declares EngineRPM in [0, 8500]. SPEED remains the
+  // existing out-of-scope candidate; it has no invalid sentinel and its
+  // 16-bit representation is already non-negative.
   if (rpm_raw > 34000U)
     return DecodeStatus::Invalid;
 
@@ -117,6 +133,63 @@ DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept
   return DecodeStatus::Invalid;
 }
 
+DecodeStatus decode_doors(const RawCanFrame &frame, VehicleState &state) noexcept {
+  if (!candidate_frame(frame, kDoorsId))
+    return DecodeStatus::Ignored;
+  if (frame.dlc != kCandidateDlc)
+    return DecodeStatus::Invalid;
+
+  // These are DBC Motorola single-bit fields. For single-bit fields the DBC
+  // start bit maps directly to the byte/LSB mask used here.
+  const bool liftgate_open = (frame.data[4] & 0x01U) != 0;
+  const bool rear_right_door_open = (frame.data[4] & 0x04U) != 0;
+  const bool rear_left_door_open = (frame.data[4] & 0x08U) != 0;
+  const bool front_left_door_open_rhd = (frame.data[4] & 0x10U) != 0;
+  const bool front_right_door_open_rhd = (frame.data[4] & 0x20U) != 0;
+  const bool doors_unlocked = (frame.data[3] & 0x40U) != 0;
+
+  bool updated = false;
+  updated = state.liftgate_open.update(liftgate_open, frame.timestamp_us) || updated;
+  updated = state.rear_right_door_open.update(rear_right_door_open, frame.timestamp_us) || updated;
+  updated = state.rear_left_door_open.update(rear_left_door_open, frame.timestamp_us) || updated;
+  updated = state.front_left_door_open_rhd.update(front_left_door_open_rhd, frame.timestamp_us) ||
+            updated;
+  updated = state.front_right_door_open_rhd.update(front_right_door_open_rhd, frame.timestamp_us) ||
+            updated;
+  updated = state.doors_unlocked.update(doors_unlocked, frame.timestamp_us) || updated;
+  if (updated) {
+    if (frame.timestamp_us > state.timestamp_us)
+      state.timestamp_us = frame.timestamp_us;
+    return DecodeStatus::Updated;
+  }
+  return DecodeStatus::Invalid;
+}
+
+DecodeStatus decode_blink_info(const RawCanFrame &frame, VehicleState &state) noexcept {
+  if (!candidate_frame(frame, kBlinkInfoId))
+    return DecodeStatus::Ignored;
+  if (frame.dlc != kCandidateDlc)
+    return DecodeStatus::Invalid;
+
+  // LEFT_BLINK is Intel in the DBC (bit 18), while the other two confirmed
+  // fields use Motorola notation. Their single-bit payload masks are 0x04,
+  // 0x08, and 0x02 respectively.
+  const bool left_indicator_lamp = (frame.data[2] & 0x04U) != 0;
+  const bool right_indicator_lamp = (frame.data[2] & 0x08U) != 0;
+  const bool wiper_low = (frame.data[4] & 0x02U) != 0;
+
+  bool updated = false;
+  updated = state.left_indicator_lamp.update(left_indicator_lamp, frame.timestamp_us) || updated;
+  updated = state.right_indicator_lamp.update(right_indicator_lamp, frame.timestamp_us) || updated;
+  updated = state.wiper_low.update(wiper_low, frame.timestamp_us) || updated;
+  if (updated) {
+    if (frame.timestamp_us > state.timestamp_us)
+      state.timestamp_us = frame.timestamp_us;
+    return DecodeStatus::Updated;
+  }
+  return DecodeStatus::Invalid;
+}
+
 DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
                                 std::optional<TurnEdgeEvent> *edge) noexcept {
   if (edge != nullptr)
@@ -131,6 +204,8 @@ DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
   const bool hazard = (frame.data[1] & (1U << 2U)) != 0;
   const bool right = (frame.data[1] & (1U << 4U)) != 0;
   const bool left = (frame.data[1] & (1U << 5U)) != 0;
+  const auto front_wiper_raw = static_cast<std::uint8_t>((frame.data[2] >> 4U) & 0x03U);
+  const auto front_wiper = front_wiper_from_raw(front_wiper_raw);
   const auto turn = normalize_turn(hazard, left, right);
 
   const auto turn_edge = state.update_turn(turn, frame.timestamp_us);
@@ -140,6 +215,9 @@ DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
   updated = state.hazard_request.update(hazard, frame.timestamp_us) || updated;
   updated = state.left_turn_request.update(left, frame.timestamp_us) || updated;
   updated = state.right_turn_request.update(right, frame.timestamp_us) || updated;
+  updated = state.front_wiper.update(front_wiper, frame.timestamp_us) || updated;
+  if (updated && frame.timestamp_us > state.timestamp_us)
+    state.timestamp_us = frame.timestamp_us;
   return updated ? DecodeStatus::Updated : DecodeStatus::Invalid;
 }
 
@@ -153,6 +231,12 @@ DecodeStatus decode(const RawCanFrame &frame, VehicleState &state,
   const auto gear_status = decode_gear(frame, state);
   if (gear_status != DecodeStatus::Ignored)
     return gear_status;
+  const auto doors_status = decode_doors(frame, state);
+  if (doors_status != DecodeStatus::Ignored)
+    return doors_status;
+  const auto blink_status = decode_blink_info(frame, state);
+  if (blink_status != DecodeStatus::Ignored)
+    return blink_status;
   return decode_turn_switch(frame, state, edge);
 }
 

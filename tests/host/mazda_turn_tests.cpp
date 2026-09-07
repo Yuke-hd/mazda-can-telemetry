@@ -64,7 +64,7 @@ TEST_CASE("turn switch normalizes candidate bits with hazard and conflict preced
   CHECK(state.right_turn_request.value);
 }
 
-TEST_CASE("turn switch rejects malformed input and ignores diagnostic blink info") {
+TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info") {
   using namespace vehicle_core;
   using namespace vehicle_core::mazda_candidate;
 
@@ -97,11 +97,17 @@ TEST_CASE("turn switch rejects malformed input and ignores diagnostic blink info
 
   auto blink_info = initial;
   blink_info.identifier = kBlinkInfoId;
-  blink_info.data[1] = 0xff;
-  CHECK(decode(blink_info, state, &edge) == DecodeStatus::Ignored);
+  blink_info.timestamp_us = 200;
+  blink_info.data[1] = 0;
+  blink_info.data[2] = 0x0c;
+  blink_info.data[4] = 0x02;
+  CHECK(decode(blink_info, state, &edge) == DecodeStatus::Updated);
   CHECK_FALSE(edge.has_value());
   CHECK(state.turn_state.value == TurnState::Left);
   CHECK(state.left_turn_request.value);
+  CHECK(state.left_indicator_lamp.value);
+  CHECK(state.right_indicator_lamp.value);
+  CHECK(state.wiper_low.value);
 }
 
 TEST_CASE("duplicate turn states do not create duplicate semantic edges") {
@@ -195,16 +201,18 @@ TEST_CASE("duplicate frames through decoder clear edge output") {
   CHECK_FALSE(edge.has_value());
 }
 
-TEST_CASE("candidate definitions document provenance and diagnostic-only phase") {
+TEST_CASE("confirmed switch definitions document capture provenance") {
   using namespace vehicle_core::mazda_candidate;
   CHECK(kTurnSwitchDefinition.identifier == 0x091);
   CHECK(kTurnSwitchDefinition.expected_dlc == 8);
   CHECK(kTurnSwitchDefinition.freshness_timeout_us.value() == 250'000);
-  CHECK(kTurnSwitchDefinition.pending_validation);
+  CHECK_FALSE(kTurnSwitchDefinition.pending_validation);
   CHECK(kBlinkInfoDefinition.identifier == 0x09a);
   CHECK_FALSE(kBlinkInfoDefinition.freshness_timeout_us.has_value());
-  CHECK(kBlinkInfoDefinition.pending_validation);
+  CHECK_FALSE(kBlinkInfoDefinition.pending_validation);
   CHECK(kHazardDefinition.start_bit == 10);
   CHECK(kTurnRightSwitchDefinition.start_bit == 12);
   CHECK(kTurnLeftSwitchDefinition.start_bit == 13);
+  CHECK(kFrontWiperDefinition.start_bit == 20);
+  CHECK(kFrontWiperDefinition.value_table != nullptr);
 }

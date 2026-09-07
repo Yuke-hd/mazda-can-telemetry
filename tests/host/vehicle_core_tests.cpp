@@ -108,13 +108,20 @@ TEST_CASE("snapshot applies each signal's freshness policy independently") {
   vehicle_core::VehicleState state{};
   REQUIRE(state.speed_kph.update(20.0F, 100));
   REQUIRE(state.turn_state.update(vehicle_core::TurnState::Left, 100));
+  REQUIRE(state.front_wiper.update(vehicle_core::FrontWiperPosition::On, 100));
+  REQUIRE(state.liftgate_open.update(true, 100));
 
   vehicle_core::VehicleFreshnessPolicy policy{};
   policy.speed_kph_timeout_us = 500'000;
+  policy.front_wiper_timeout_us = 500'000;
   const auto snapshot = state.snapshot(350'001, policy);
   CHECK(snapshot.speed_kph.is_valid());
+  CHECK(snapshot.front_wiper.is_valid());
+  CHECK(snapshot.liftgate_open.is_stale());
   CHECK(snapshot.turn_state.is_stale());
   CHECK(state.speed_kph.is_valid());
+  CHECK(state.front_wiper.is_valid());
+  CHECK(state.liftgate_open.is_valid());
   CHECK(state.turn_state.is_valid());
 }
 

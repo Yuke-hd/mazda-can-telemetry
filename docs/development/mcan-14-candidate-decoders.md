@@ -1,55 +1,73 @@
-# MCAN-14 candidate decoders
+# MCAN-14 Mazda decoders
 
-Status: portable candidate implementation; pending MCAN-19 validation.
+Status: portable decoder implementation; the listed signal definitions are
+confirmed from the capture-derived DBC supplied for #51.
 
-This change adds host/firmware-independent decoders for the candidate
-`ENGINE_DATA` (`0x202`) and `GEAR` (`0x228`) classic-CAN messages. A decoder
-accepts a `vehicle_core::RawCanFrame` and writes only semantic fields in a
-`VehicleState`; it has no CAN driver, transport, polling, injection, board
-header, or global clock dependency. `raw_capture::ReplayHarness` can call the
-same functions used by a receive path, so replay tests do not have a second
-decoder implementation.
+The decoder accepts a `vehicle_core::RawCanFrame` and writes only semantic
+fields in a `VehicleState`; it has no CAN driver, transport, polling,
+injection, board header, or global clock dependency. `raw_capture::ReplayHarness`
+can call the same functions used by a receive path, so replay tests do not
+have a second decoder implementation.
 
-## Candidate fields
+## Confirmed fields and retained candidate
 
-| Message | Field | Bytes/bits | Scale + offset | Unit | Invalid / undefined values |
+DBC start bits use the DBC notation from the reviewed source. The decoder
+locations show the corresponding fixed payload byte and LSB masks.
+
+| Message | Field | DBC definition | Decoder location | Scale + offset | Unit / values |
 | --- | --- | --- | --- | --- | --- |
-| `0x202` | RPM | bytes 0..1, big-endian | `0.25 + 0` | rpm | raw `>34000` (`>8500 rpm`) |
-| `0x202` | SPEED | bytes 2..3, big-endian | `0.01 + 0` | km/h | no source sentinel; zero is valid |
-| `0x228` | selector | byte 0 low 3 bits | `1 + 0` | selector position | `0` means shifting/unknown; `5..7` undefined |
-| `0x228` | actual gear | byte 4 bits 4..1 | `1 + 0` | actual gear | valid raw domain `0..14` (with `7..13` undefined); `15` shifting/unknown |
+| `0x202` | `EngineRPM` | `7\|16@0+ (0.25,0) [0\|8500]` | `data[0..1]`, big-endian | `0.25 + 0` | rpm; raw `>34000` invalid |
+| `0x202` | `SPEED` | existing out-of-scope candidate | `data[2..3]`, big-endian | `0.01 + 0` | km/h; retained unchanged |
+| `0x228` | `Selector` | `2\|3@0+ (1,0) [0\|7]` | `data[0] & 0x07` | `1 + 0` | `1=P`, `2=R`, `3=N`, `4=D`; other values unknown |
+| `0x228` | `ActualGear` | `36\|4@0+ (1,0) [0\|15]` | `(data[4] >> 1) & 0x0f` | `1 + 0` | `0=P_or_N`, `1..6=1st..6th`, `14=R`; other values unknown |
+| `0x43e` | `Liftgate_Open` | `32\|1@0+ (1,0) [0\|1]` | `data[4] bit 0` | `1 + 0` | `0=Closed`, `1=Open` |
+| `0x43e` | `RearRightDoor_Open` | `34\|1@0+ (1,0) [0\|1]` | `data[4] bit 2` | `1 + 0` | `0=Closed`, `1=Open` |
+| `0x43e` | `RearLeftDoor_Open` | `35\|1@0+ (1,0) [0\|1]` | `data[4] bit 3` | `1 + 0` | `0=Closed`, `1=Open` |
+| `0x43e` | `FrontLeftDoor_Open_RHD` | `36\|1@0+ (1,0) [0\|1]` | `data[4] bit 4` | `1 + 0` | `0=Closed`, `1=Open` |
+| `0x43e` | `FrontRightDoor_Open_RHD` | `37\|1@0+ (1,0) [0\|1]` | `data[4] bit 5` | `1 + 0` | `0=Closed`, `1=Open` |
+| `0x43e` | `DoorsUnlocked` | `30\|1@0+ (1,0) [0\|1]` | `data[3] bit 6` | `1 + 0` | `0=Locked`, `1=Unlocked` |
+| `0x09a` | `LeftIndicatorLamp` | `18\|1@1+ (1,0) [0\|1]` | `data[2] bit 2` | `1 + 0` | `0=Off`, `1=On` |
+| `0x09a` | `RightIndicatorLamp` | `19\|1@0+ (1,0) [0\|1]` | `data[2] bit 3` | `1 + 0` | `0=Off`, `1=On` |
+| `0x09a` | `WiperLow` | `33\|1@0+ (1,0) [0\|1]` | `data[4] bit 1` | `1 + 0` | `0=Off`, `1=On` |
+| `0x091` | `HazardSwitch` | `10\|1@0+ (1,0) [0\|1]` | `data[1] bit 2` | `1 + 0` | `0=Off`, `1=On` |
+| `0x091` | `RightIndicatorSwitch` | `12\|1@0+ (1,0) [0\|1]` | `data[1] bit 4` | `1 + 0` | `0=Off`, `1=On` |
+| `0x091` | `LeftIndicatorSwitch` | `13\|1@0+ (1,0) [0\|1]` | `data[1] bit 5` | `1 + 0` | `0=Off`, `1=On` |
+| `0x091` | `FrontWiper` | `21\|2@0+ (1,0) [0\|3]` | `(data[2] >> 4) & 0x03` | `1 + 0` | `0=Off`, `1=On`, `2=High`, `3=Intermittent` |
 
 Selector and actual transmission gear are separate signals. Selector values
-are `1=P`, `2=R`, `3=N`, and `4=D`. Actual gear values are `0=P`, `14=R`, and
-`1..6` for first through sixth. Invalid values leave the corresponding signal
-untouched and cannot create a valid value. Frames must be standard, non-RTR,
-exactly eight bytes, and have the expected identifier.
+are `1=P`, `2=R`, `3=N`, and `4=D`. Actual gear raw zero is the DBC's `P_or_N`
+value and retains the existing `ActualGear::Park` representation through its
+`ParkOrNeutral` alias. Invalid enumeration values leave the corresponding
+signal untouched and cannot create a valid value. Boolean fields decode both
+states directly. Frames must be standard, non-RTR, exactly eight bytes, and
+have the expected identifier.
 
-The field leads are cross-checked against the pinned comma.ai/opendbc
-`mazda_2017.dbc` candidate evidence at commit
-`95f3d52f474b677c28fc8f10fef3f2f0386aff92`; see
-[`mcan-10-opendbc-signal-evidence.md`](mcan-10-opendbc-signal-evidence.md).
-The older `skyactiv.kcd` reference is not used as verification because it is
-malformed/outdated, as recorded in the issue context.
-The opendbc DBC has no cycle-time declaration. Consequently each definition
-exposes an unspecified expected period and freshness timeout. Callers must
-provide a per-signal `VehicleFreshnessPolicy` when evidence supports one;
-`Signal::refresh()` still marks a value stale when an unconfigured timeout has
-elapsed, and snapshots never mutate the source state.
+`TURN_SWITCH` continues to normalize the confirmed hazard/right/left switch
+bits into `TurnState` and retains the existing 250 ms turn/request freshness
+behavior. The supplied DBC has no cycle-time declaration, so the other
+confirmed signals expose unconfigured freshness by default; callers can set
+per-signal timeouts through `VehicleFreshnessPolicy`. `Signal::refresh()`
+still marks an unconfigured value stale when time advances, and snapshots
+never mutate the source state. The prior speed candidate and other
+out-of-scope definitions remain unchanged.
 
 ## Golden vectors and provenance
 
-The following vectors are synthetic, privacy-safe test data. The ENGINE_DATA
-vector is derived from the upstream field layout and scale; the GEAR vector is
-the issue's example cross-check. Neither is a vehicle capture or a claim of
-Australian-market compatibility.
+The following vectors are synthetic, privacy-safe test data. The confirmed
+vectors are derived from the reviewed DBC layout and scale; the retained speed
+candidate is included only to show that its existing behavior remains intact.
+None is a vehicle capture or a claim of Australian-market compatibility.
 
 | Message | Payload | Expected result | Provenance |
 | --- | --- | --- | --- |
-| `0x202` | `09 5B 00 00 00 00 00 00` | `598.75 rpm`, `0 km/h` | upstream field layout/scale, synthetic raw values |
-| `0x202` | `84 D0 FF FF 00 00 00 00` | `8500 rpm`, `655.35 km/h` | synthetic boundary vector |
-| `0x228` | `24 81 07 FF 04 F0 00 00` | selector `D`, actual `2nd` | MCAN-14 acceptance example, synthetic |
+| `0x202` | `09 5B 00 00 00 00 00 00` | `598.75 rpm`, retained `0 km/h` candidate | synthetic raw values |
+| `0x202` | `84 D0 FF FF 00 00 00 00` | `8500 rpm`, retained `655.35 km/h` candidate | synthetic boundary vector |
+| `0x228` | `24 81 07 FF 04 F0 00 00` | selector `D`, actual `2nd` | synthetic transmission vector |
+| `0x43E` | `00 00 00 40 3D 00 00 00` | all doors/liftgate open, unlocked | synthetic door vector |
+| `0x09A` | `00 00 0C 00 02 00 00 00` | both lamps on, low wiper on | synthetic lamp/wiper vector |
+| `0x091` | `00 00 30 00 00 00 00 00` | front wiper `Intermittent`, turn requests off | synthetic switch vector |
 
-Private captures, including `/Users/yuke/Documents/0309-running.csv` and GVRET
-CSV exports, were used only as out-of-repository analysis context. They are not
-read, copied, derived, or committed by this change.
+The reviewed source DBC is committed at
+[`docs/protocol/mazda_custom.dbc`](../protocol/mazda_custom.dbc). Raw captures
+remain private and outside the repository. Only the reviewed signal definitions
+and synthetic test vectors are represented in the decoder and tests.
