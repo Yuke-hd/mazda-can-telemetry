@@ -10,8 +10,7 @@ namespace test_support {
 // capture parser, file format, or production CAN ownership.
 class DirectFrameFeeder final {
 public:
-  template <typename Handler>
-  void feed(const vehicle_core::RawCanFrame &frame, Handler &&handler) {
+  template <typename Handler> void feed(const vehicle_core::RawCanFrame &frame, Handler &&handler) {
     handler(frame);
     ++delivered_;
   }

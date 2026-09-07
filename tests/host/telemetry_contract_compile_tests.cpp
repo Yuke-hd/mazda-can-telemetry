@@ -26,9 +26,8 @@ TEST_CASE("telemetry contracts are value-copy and callback ABI seams") {
   CHECK(*speed.value == doctest::Approx(12.5F));
 
   mazda::Notification<mazda::TurnState> notice{};
-  notice.current = mazda::Reading<mazda::TurnState>{mazda::TurnState::Left,
-                                                    mazda::Availability::Fresh,
-                                                    mazda::ValidationStatus::Confirmed};
+  notice.current = mazda::Reading<mazda::TurnState>{
+      mazda::TurnState::Left, mazda::Availability::Fresh, mazda::ValidationStatus::Confirmed};
   notice.initial = true;
   notice.became_unavailable = true;
   notice.recovered = true;
