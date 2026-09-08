@@ -77,9 +77,9 @@ void latch_terminal_fault() noexcept {
   }
   if ((alerts & TWAI_ALERT_BUS_OFF) != 0U) {
     // A strict listener should not influence the bus or normally enter bus-off.
-    // Record the unexpected controller state, latch the fault, and never
-    // attempt active recovery.
-    g_frames.record_controller_reset();
+    // Record the unexpected driver state separately from actual controller
+    // resets, latch the fault, and never attempt active recovery.
+    g_frames.record_bus_off();
     latch_terminal_fault();
     return false;
   }

@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "can_bus/can_bus.h"
+#include "can_bus/frame_ring.hpp"
 #include "can_bus/lifecycle.hpp"
 
 namespace {
@@ -41,6 +42,12 @@ public:
   }
 
   [[nodiscard]] bool status_failure(bool &consumer_wakeup) noexcept {
+    return receive_failure(consumer_wakeup);
+  }
+
+  [[nodiscard]] bool bus_off(can_bus::internal::FrameRing<4> &metrics,
+                             bool &consumer_wakeup) noexcept {
+    metrics.record_bus_off();
     return receive_failure(consumer_wakeup);
   }
 
@@ -230,4 +237,23 @@ TEST_CASE("status and start faults are terminal but cleanup remains retryable") 
     lifecycle.reconcile();
     CHECK(lifecycle.state() == can_bus::LifecycleState::kStopped);
   }
+}
+
+TEST_CASE("bus-off faults use a separate metric from controller resets") {
+  can_bus::internal::LifecycleController lifecycle;
+  can_bus::internal::FrameRing<4> metrics;
+  FaultInjectionAdapter adapter(lifecycle);
+  REQUIRE(lifecycle.begin_start());
+  adapter.install();
+  REQUIRE(adapter.start(true));
+  adapter.create_task();
+
+  bool consumer_wakeup = false;
+  CHECK(adapter.bus_off(metrics, consumer_wakeup));
+  CHECK(consumer_wakeup);
+  CHECK(lifecycle.state() == can_bus::LifecycleState::kFaulted);
+
+  const auto stats = metrics.snapshot(can_bus::StatisticsOperation::kSnapshotAndReset);
+  CHECK(stats.bus_off == 1);
+  CHECK(stats.controller_resets == 0);
 }
