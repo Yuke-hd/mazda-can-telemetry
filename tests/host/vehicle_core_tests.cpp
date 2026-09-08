@@ -45,6 +45,10 @@ TEST_CASE("raw frame validates classic CAN identifier and DLC bounds") {
   CHECK(frame.is_valid());
   frame.dlc = 9;
   CHECK(frame.is_valid() == false);
+
+  frame.dlc = 8;
+  frame.identifier_format = static_cast<vehicle_core::CanIdentifierFormat>(0xff);
+  CHECK(frame.is_valid() == false);
 }
 
 TEST_CASE("signal status distinguishes valid zero from unknown and stale") {

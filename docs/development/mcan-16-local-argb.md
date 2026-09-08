@@ -66,8 +66,8 @@ The isolated T-CAN485 bench project discovers only the shared `board` and
 
 `DecodeStatus::Ignored` is normal unrelated traffic. It establishes initial CAN
 online health without changing turn state and does not erase an existing
-decoder error. `DecodeStatus::Invalid` sets decoder-error health and therefore
-black. Engine or gear `Updated` traffic also cannot erase that error: only a
+decoder error. `DecodeStatus::Malformed` sets decoder-error health and therefore
+black. Engine or gear `Decoded` traffic also cannot erase that error: only a
 newer valid turn update, including the same direction, recovers it.
 
 ## Evidence and physical limitation

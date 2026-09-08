@@ -6,14 +6,14 @@ void process_received_frame(Context &context, const vehicle_core::RawCanFrame &f
   const auto turn_update_before = context.vehicle_state.turn_state.last_update_us;
   const auto decode_status = mazda::candidate::decode(frame, context.vehicle_state);
   const bool valid_turn_update =
-      decode_status == mazda::candidate::DecodeStatus::Updated &&
+      decode_status == mazda::candidate::DecodeStatus::Decoded &&
       context.vehicle_state.turn_state.status == vehicle_core::SignalStatus::Valid &&
       context.vehicle_state.turn_state.last_update_us > turn_update_before &&
       (context.health != local_argb::SemanticHealth::DecoderError ||
        context.vehicle_state.turn_state.last_update_us > context.decoder_error_us);
 
   switch (decode_status) {
-  case mazda::candidate::DecodeStatus::Updated:
+  case mazda::candidate::DecodeStatus::Decoded:
     if (valid_turn_update || context.health == local_argb::SemanticHealth::CanOffline) {
       context.health = local_argb::SemanticHealth::Online;
     }
@@ -23,7 +23,7 @@ void process_received_frame(Context &context, const vehicle_core::RawCanFrame &f
       context.health = local_argb::SemanticHealth::Online;
     }
     break;
-  case mazda::candidate::DecodeStatus::Invalid:
+  case mazda::candidate::DecodeStatus::Malformed:
     context.health = local_argb::SemanticHealth::DecoderError;
     if (frame.timestamp_us > context.decoder_error_us) {
       context.decoder_error_us = frame.timestamp_us;

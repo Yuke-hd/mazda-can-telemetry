@@ -18,8 +18,8 @@ locations show the corresponding fixed payload byte and LSB masks.
 | --- | --- | --- | --- | --- | --- |
 | `0x202` | `EngineRPM` | `7\|16@0+ (0.25,0) [0\|8500]` | `data[0..1]`, big-endian | `0.25 + 0` | rpm; raw `>34000` invalid |
 | `0x202` | `SPEED` | existing out-of-scope candidate | `data[2..3]`, big-endian | `0.01 + 0` | km/h; retained unchanged |
-| `0x228` | `Selector` | `2\|3@0+ (1,0) [0\|7]` | `data[0] & 0x07` | `1 + 0` | `1=P`, `2=R`, `3=N`, `4=D`; other values unknown |
-| `0x228` | `ActualGear` | `36\|4@0+ (1,0) [0\|15]` | `(data[4] >> 1) & 0x0f` | `1 + 0` | `0=P_or_N`, `1..6=1st..6th`, `14=R`; other values unknown |
+| `0x228` | `Selector` | `2\|3@0+ (1,0) [0\|7]` | `data[0] & 0x07` | `1 + 0` | `0=Shifting`, `1=P`, `2=R`, `3=N`, `4=D`; `5..7` unknown |
+| `0x228` | `ActualGear` | `36\|4@0+ (1,0) [0\|15]` | `(data[4] >> 1) & 0x0f` | `1 + 0` | `0=P_or_N`, `1..6=1st..6th`, `14=R`, `15=Shifting`; `7..13` unknown |
 | `0x43e` | `Liftgate_Open` | `32\|1@0+ (1,0) [0\|1]` | `data[4] bit 0` | `1 + 0` | `0=Closed`, `1=Open` |
 | `0x43e` | `RearRightDoor_Open` | `34\|1@0+ (1,0) [0\|1]` | `data[4] bit 2` | `1 + 0` | `0=Closed`, `1=Open` |
 | `0x43e` | `RearLeftDoor_Open` | `35\|1@0+ (1,0) [0\|1]` | `data[4] bit 3` | `1 + 0` | `0=Closed`, `1=Open` |
@@ -34,13 +34,21 @@ locations show the corresponding fixed payload byte and LSB masks.
 | `0x091` | `LeftIndicatorSwitch` | `13\|1@0+ (1,0) [0\|1]` | `data[1] bit 5` | `1 + 0` | `0=Off`, `1=On` |
 | `0x091` | `FrontWiper` | `21\|2@0+ (1,0) [0\|3]` | `(data[2] >> 4) & 0x03` | `1 + 0` | `0=Off`, `1=On`, `2=High`, `3=Intermittent` |
 
-Selector and actual transmission gear are separate signals. Selector values
-are `1=P`, `2=R`, `3=N`, and `4=D`. Actual gear raw zero is the DBC's `P_or_N`
-value and retains the existing `ActualGear::Park` representation through its
-`ParkOrNeutral` alias. Invalid enumeration values leave the corresponding
-signal untouched and cannot create a valid value. Boolean fields decode both
-states directly. Frames must be standard, non-RTR, exactly eight bytes, and
-have the expected identifier.
+Selector and actual transmission gear are separate signals. Selector raw zero
+is the source-defined `Shifting` state; raw values `5..7` are represented as
+an explicit unknown semantic value. Actual gear raw zero is the DBC's `P_or_N`
+value and is represented distinctly as `ActualGear::ParkOrNeutral`; raw 15 is
+`ActualGear::Shifting`, while raw values `7..13` publish an unknown semantic
+value. A well-formed undefined enumeration is `Decoded`, but it cannot
+preserve a previous actionable value; availability processing maps the unknown
+semantic value to unavailable. Boolean fields decode both states directly.
+Frames must be standard, non-RTR, exactly eight bytes, and have the expected
+identifier. Decoder outcomes are `Ignored`, `Decoded`, or `Malformed`; owned
+malformed frames do not update any signal.
+
+The existing SPEED candidate uses an unsigned 16-bit encoding with scale 0.01,
+so `655.35 km/h` is its representable maximum. That encoding boundary is not a
+validated vehicle physical limit.
 
 `mazda::candidate::decode_turn_switch()` continues to normalize the confirmed hazard/right/left switch
 bits into `TurnState` and retains the existing 250 ms turn/request freshness
