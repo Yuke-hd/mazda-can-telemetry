@@ -1,12 +1,46 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <optional>
 
+#include "mazda/availability.hpp"
 #include "mazda/freshness.hpp"
 #include "mazda/types.hpp"
+#include "vehicle_core/decoder_contracts.hpp"
+#include "vehicle_core/frame.hpp"
 #include "vehicle_core/signal.hpp"
 
 namespace mazda {
+
+// A fixed-size, value-copy record for one decoder-owned message. It is kept
+// beside VehicleState so decoding can reject older/conflicting observations
+// without allocating or coupling the portable core to Mazda identifiers.
+struct MessageHealthState {
+  std::uint32_t identifier{0};
+  bool has_frame{false};
+  vehicle_core::MonotonicTimestamp last_frame_us{0};
+  bool has_accepted{false};
+  vehicle_core::MonotonicTimestamp last_accepted_us{0};
+  vehicle_core::MessageHealth health{vehicle_core::MessageHealth::Unknown};
+  std::optional<vehicle_core::MonotonicTimestamp> fault_timestamp_us{};
+  std::uint8_t bus_id{0};
+  std::uint8_t dlc{0};
+  vehicle_core::CanIdentifierFormat identifier_format{vehicle_core::CanIdentifierFormat::Standard};
+  bool remote_request{false};
+  std::array<std::uint8_t, vehicle_core::kCanClassicPayloadBytes> data{};
+};
+
+enum class MessageObservationResult : std::uint8_t {
+  Ignored,
+  Accepted,
+  Idempotent,
+  RejectedOlder,
+  RejectedConflict,
+  CapacityExceeded,
+};
+
+inline constexpr std::size_t kTrackedMessageCapacity = 5;
 
 struct VehicleState {
   vehicle_core::MonotonicTimestamp timestamp_us{0};
@@ -33,6 +67,10 @@ struct VehicleState {
   vehicle_core::Signal<bool> wiper_low{vehicle_core::SignalUnit::Boolean};
   vehicle_core::Signal<FrontWiperPosition> front_wiper{};
 
+  // One fixed record per currently decoded Mazda message. This is copied by
+  // snapshots and never owns transport or task resources.
+  std::array<MessageHealthState, kTrackedMessageCapacity> message_health{};
+
   // Apply a semantic turn state and return an edge only when the state
   // changed. The first known state has Unknown as its previous state.
   std::optional<TurnEdgeEvent> update_turn(TurnState state,
@@ -49,6 +87,33 @@ struct VehicleState {
 
   void refresh(vehicle_core::MonotonicTimestamp now_us) noexcept;
   void apply_freshness_policy(const VehicleFreshnessPolicy &policy) noexcept;
+
+  // Record decoder validity and apply timestamp-watermark rules. Ignored
+  // frames are not passed here. A malformed frame may latch a fault at the
+  // current watermark; only a strictly newer Decoded frame can clear it.
+  [[nodiscard]] MessageObservationResult
+  observe_message(const vehicle_core::RawCanFrame &frame,
+                  vehicle_core::DecodeValidity validity) noexcept;
+
+  [[nodiscard]] const MessageHealthState *
+  message_health_for(std::uint32_t identifier) const noexcept;
+
+  [[nodiscard]] vehicle_core::HealthObservation health_observation(
+      std::uint32_t identifier,
+      vehicle_core::TransportHealth transport = vehicle_core::TransportHealth::Live) const noexcept;
+
+  template <typename T>
+  [[nodiscard]] Availability status_at(
+      const vehicle_core::Signal<T> &signal, std::uint32_t identifier,
+      vehicle_core::MonotonicTimestamp now_us,
+      vehicle_core::TransportHealth transport = vehicle_core::TransportHealth::Live) const noexcept;
+
+  template <typename T>
+  [[nodiscard]] Reading<T> reading_at(
+      const vehicle_core::Signal<T> &signal, std::uint32_t identifier,
+      vehicle_core::MonotonicTimestamp now_us,
+      ValidationStatus validation = ValidationStatus::Reference,
+      vehicle_core::TransportHealth transport = vehicle_core::TransportHealth::Live) const noexcept;
 };
 
 class SnapshotProvider {
@@ -73,5 +138,32 @@ private:
   VehicleFreshnessPolicy policy_;
   VehicleState state_{};
 };
+
+} // namespace mazda
+
+namespace mazda {
+
+template <typename T>
+Availability VehicleState::status_at(const vehicle_core::Signal<T> &signal,
+                                     const std::uint32_t identifier,
+                                     const vehicle_core::MonotonicTimestamp now_us,
+                                     const vehicle_core::TransportHealth transport) const noexcept {
+  const auto *message = message_health_for(identifier);
+  const auto message_status =
+      message == nullptr ? vehicle_core::MessageHealth::Healthy : message->health;
+  return mazda::status_at(signal, now_us, message_status, transport);
+}
+
+template <typename T>
+Reading<T> VehicleState::reading_at(const vehicle_core::Signal<T> &signal,
+                                    const std::uint32_t identifier,
+                                    const vehicle_core::MonotonicTimestamp now_us,
+                                    const ValidationStatus validation,
+                                    const vehicle_core::TransportHealth transport) const noexcept {
+  const auto *message = message_health_for(identifier);
+  const auto message_status =
+      message == nullptr ? vehicle_core::MessageHealth::Healthy : message->health;
+  return mazda::snapshot(signal, now_us, validation, message_status, transport);
+}
 
 } // namespace mazda

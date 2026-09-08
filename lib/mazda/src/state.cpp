@@ -1,8 +1,45 @@
 #include "mazda/state.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace mazda {
+namespace {
+
+bool same_frame(const vehicle_core::RawCanFrame &left, const MessageHealthState &right) noexcept {
+  return right.has_frame && left.identifier == right.identifier && left.bus_id == right.bus_id &&
+         left.dlc == right.dlc && left.identifier_format == right.identifier_format &&
+         left.remote_request == right.remote_request && left.data == right.data;
+}
+
+void copy_frame(const vehicle_core::RawCanFrame &frame, MessageHealthState &record) noexcept {
+  record.identifier = frame.identifier;
+  record.has_frame = true;
+  record.last_frame_us = frame.timestamp_us;
+  record.bus_id = frame.bus_id;
+  record.dlc = frame.dlc;
+  record.identifier_format = frame.identifier_format;
+  record.remote_request = frame.remote_request;
+  record.data = frame.data;
+}
+
+MessageHealthState *find_or_allocate_record(VehicleState &state,
+                                            const std::uint32_t identifier) noexcept {
+  for (auto &record : state.message_health) {
+    if (record.has_frame && record.identifier == identifier) {
+      return &record;
+    }
+  }
+  for (auto &record : state.message_health) {
+    if (!record.has_frame) {
+      record.identifier = identifier;
+      return &record;
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
 
 std::optional<TurnEdgeEvent>
 VehicleState::update_turn(const TurnState state,
@@ -62,6 +99,91 @@ void VehicleState::apply_freshness_policy(const VehicleFreshnessPolicy &policy) 
   hazard_request.set_freshness_timeout(policy.hazard_request_timeout_us);
   left_turn_request.set_freshness_timeout(policy.left_turn_request_timeout_us);
   right_turn_request.set_freshness_timeout(policy.right_turn_request_timeout_us);
+}
+
+MessageObservationResult
+VehicleState::observe_message(const vehicle_core::RawCanFrame &frame,
+                              const vehicle_core::DecodeValidity validity) noexcept {
+  if (validity == vehicle_core::DecodeValidity::Ignored) {
+    return MessageObservationResult::Ignored;
+  }
+
+  auto *record = find_or_allocate_record(*this, frame.identifier);
+  if (record == nullptr) {
+    return MessageObservationResult::CapacityExceeded;
+  }
+
+  if (validity == vehicle_core::DecodeValidity::Malformed) {
+    if (!record->has_frame || frame.timestamp_us > record->last_frame_us) {
+      copy_frame(frame, *record);
+      record->health = vehicle_core::MessageHealth::Faulted;
+      record->fault_timestamp_us = frame.timestamp_us;
+      return MessageObservationResult::Accepted;
+    }
+    if (frame.timestamp_us < record->last_frame_us) {
+      return MessageObservationResult::RejectedOlder;
+    }
+    // A malformed frame at the current watermark is conservatively faulting,
+    // even if a healthy frame with the same timestamp was seen first. Once
+    // faulted, equal-time malformed duplicates are idempotent.
+    if (record->health != vehicle_core::MessageHealth::Faulted) {
+      record->health = vehicle_core::MessageHealth::Faulted;
+      record->fault_timestamp_us = frame.timestamp_us;
+      return MessageObservationResult::Accepted;
+    }
+    return MessageObservationResult::Idempotent;
+  }
+
+  if (!record->has_frame || frame.timestamp_us > record->last_frame_us) {
+    copy_frame(frame, *record);
+    record->health = vehicle_core::MessageHealth::Healthy;
+    record->has_accepted = true;
+    record->last_accepted_us = frame.timestamp_us;
+    record->fault_timestamp_us.reset();
+    return MessageObservationResult::Accepted;
+  }
+  if (frame.timestamp_us < record->last_frame_us) {
+    return MessageObservationResult::RejectedOlder;
+  }
+  if (record->health == vehicle_core::MessageHealth::Faulted) {
+    // Recovery is strictly newer than the fault watermark. An equal-time
+    // healthy frame is not allowed to erase evidence of a malformed frame.
+    return MessageObservationResult::RejectedConflict;
+  }
+  if (same_frame(frame, *record)) {
+    return MessageObservationResult::Idempotent;
+  }
+  // Equal-time healthy frames with different payload/metadata are ambiguous;
+  // retain the first observation rather than allowing order to decide state.
+  return MessageObservationResult::RejectedConflict;
+}
+
+const MessageHealthState *
+VehicleState::message_health_for(const std::uint32_t identifier) const noexcept {
+  for (const auto &record : message_health) {
+    if (record.has_frame && record.identifier == identifier) {
+      return &record;
+    }
+  }
+  return nullptr;
+}
+
+vehicle_core::HealthObservation
+VehicleState::health_observation(const std::uint32_t identifier,
+                                 const vehicle_core::TransportHealth transport) const noexcept {
+  vehicle_core::HealthObservation result{};
+  result.transport = transport;
+  const auto *record = message_health_for(identifier);
+  if (record == nullptr) {
+    return result;
+  }
+  result.message = record->health;
+  result.has_last_frame = record->has_frame;
+  result.last_frame_us = record->last_frame_us;
+  result.has_last_accepted = record->has_accepted;
+  result.last_accepted_us = record->last_accepted_us;
+  result.fault_timestamp_us = record->fault_timestamp_us;
+  return result;
 }
 
 VehicleState VehicleState::snapshot(const vehicle_core::MonotonicTimestamp now) const noexcept {
