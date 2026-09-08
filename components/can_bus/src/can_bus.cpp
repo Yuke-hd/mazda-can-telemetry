@@ -4,11 +4,10 @@
 #include <atomic>
 #include <cstdint>
 
-#include "board/board_config.h"
 #include "can_bus/configuration.hpp"
+#include "can_bus/driver_binding.hpp"
 #include "can_bus/frame_ring.hpp"
 #include "can_bus/lifecycle.hpp"
-#include "can_bus/mode.hpp"
 #include "driver/twai.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -178,15 +177,10 @@ Result start(const Configuration &configuration) noexcept {
   while (xSemaphoreTake(g_task_stopped, 0) == pdTRUE) {
   }
 
-  twai_general_config_t general =
-      TWAI_GENERAL_CONFIG_DEFAULT(static_cast<gpio_num_t>(board::kWeActCan485V11.can.tx),
-                                  static_cast<gpio_num_t>(board::kWeActCan485V11.can.rx),
-#if !defined(TCAN485_BENCH_ACK_ONLY) || !defined(TCAN485_BENCH_TARGET)
-                                  TWAI_MODE_LISTEN_ONLY);
-#else
-                                  internal::driver_mode());
-#endif
-  general.tx_queue_len = 0;
+  twai_general_config_t general{};
+  // Mode, CAN pins, and target-specific safety policy are supplied by the
+  // application-facing binding component selected by the firmware project.
+  internal::configure_driver(general);
   general.rx_queue_len = kQueueCapacity;
   general.alerts_enabled = TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_QUEUE_FULL |
                            TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF;
