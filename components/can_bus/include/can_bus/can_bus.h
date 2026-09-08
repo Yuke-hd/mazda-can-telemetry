@@ -34,6 +34,7 @@ struct Statistics {
   std::uint64_t bus_errors{0};
   std::uint64_t driver_rx_missed{0};
   std::uint64_t controller_resets{0};
+  std::uint64_t bus_off{0};
   std::uint32_t queue_depth{0};
   std::uint32_t queue_high_watermark{0};
   std::uint32_t queue_capacity{kQueueCapacity};

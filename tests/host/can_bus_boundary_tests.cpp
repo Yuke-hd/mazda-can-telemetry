@@ -151,12 +151,14 @@ TEST_CASE("statistics reset preserves queue and starts watermark at current dept
   ring.record_bus_error(3);
   ring.record_driver_rx_missed(4);
   ring.record_controller_reset();
+  ring.record_bus_off(5);
 
   const auto before = ring.snapshot(can_bus::StatisticsOperation::kSnapshotAndReset);
   CHECK(before.frames_received == 2);
   CHECK(before.bus_errors == 3);
   CHECK(before.driver_rx_missed == 4);
   CHECK(before.controller_resets == 1);
+  CHECK(before.bus_off == 5);
   CHECK(before.queue_depth == 2);
 
   const auto reset = ring.snapshot(can_bus::StatisticsOperation::kSnapshot);
@@ -167,6 +169,7 @@ TEST_CASE("statistics reset preserves queue and starts watermark at current dept
   CHECK(reset.bus_errors == 0);
   CHECK(reset.driver_rx_missed == 0);
   CHECK(reset.controller_resets == 0);
+  CHECK(reset.bus_off == 0);
   CHECK(reset.queue_depth == 2);
   CHECK(reset.queue_high_watermark == 2);
 
