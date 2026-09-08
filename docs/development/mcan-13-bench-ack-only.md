@@ -6,7 +6,8 @@
 LILYGO/TTGO T-CAN485 board on an isolated, protected classic-CAN bench. It is
 not WeAct CAN485 V1.1 firmware, is not a vehicle artifact, and must never be
 connected to a vehicle. The project name, component description, startup
-warning, and build guard all carry the `BENCH_ACK_ONLY` label.
+warning, and application-facing `bench_can_ack` component all carry the
+`BENCH_ACK_ONLY` label.
 
 The target uses TWAI normal mode so a compliant classic-CAN frame can be
 acknowledged by the controller. It accepts frames through the existing
@@ -26,11 +27,12 @@ permanently ready receive queue cannot starve the ESP-IDF idle task/watchdog;
 `taskYIELD` alone is insufficient. Any non-timeout receive failure is reported
 and the CAN component is stopped before the application exits.
 
-The private mode selector requires both `TCAN485_BENCH_ACK_ONLY` and
-`TCAN485_BENCH_TARGET`. Any missing or ambiguous guard selects
-`TWAI_MODE_LISTEN_ONLY`, so a configuration mistake fails closed. The vehicle
-project explicitly forces the guard off and is built as
-`weact_can485_v11_vehicle_listen_only`.
+The `bench_can_ack` component owns the bench's compile-time
+`TWAI_MODE_NORMAL` and T-CAN485 CAN-pin binding. The shared `can_bus` component
+contains only the receive engine and has no mode selector. The vehicle project
+enumerates `vehicle_can_rx` instead, so the bench binding is absent from the
+vehicle component graph; conversely, the bench project enumerates only
+`bench_can_ack`. Neither application exposes a data-frame transmit operation.
 
 ## Build and artifact checks
 
@@ -47,9 +49,9 @@ idf.py build
 ```
 
 The validation script is a release gate. It checks the project names and
-labels, the vehicle listen-only token and zero TX queue, the bench warning and
-normal-mode guard, and the absence of transmit calls. Do not rename or package
-the bench output as vehicle firmware.
+labels, the vehicle listen-only binding and zero TX queue, the bench warning
+and normal-mode binding, component-graph separation, and the absence of
+transmit calls. Do not rename or package the bench output as vehicle firmware.
 
 ## Physical isolation and test alternatives
 

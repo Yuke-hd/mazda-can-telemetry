@@ -36,6 +36,9 @@ def main() -> int:
     vehicle_cmake = (vehicle_dir / "CMakeLists.txt").read_text(encoding="utf-8")
     vehicle_main = (vehicle_dir / "main/main.cpp").read_text(encoding="utf-8")
     vehicle_component = (vehicle_dir / "main/idf_component.yml").read_text(encoding="utf-8")
+    vehicle_binding = (
+        root / "components/vehicle_can_rx/src/driver_binding.cpp"
+    ).read_text(encoding="utf-8")
     board_header = (root / "components/board/include/board/board_config.h").read_text(
         encoding="utf-8"
     )
@@ -44,7 +47,6 @@ def main() -> int:
         encoding="utf-8"
     )
     can_source = (root / "components/can_bus/src/can_bus.cpp").read_text(encoding="utf-8")
-    mode_source = (root / "components/can_bus/src/driver_mode.cpp").read_text(encoding="utf-8")
     can_cmake = (root / "components/can_bus/CMakeLists.txt").read_text(encoding="utf-8")
 
     require(
@@ -53,7 +55,13 @@ def main() -> int:
         "vehicle project name",
         failures,
     )
-    require(vehicle_cmake, "TCAN485_BENCH_ACK_ONLY OFF", "vehicle build guard", failures)
+    require(
+        vehicle_cmake,
+        "components/vehicle_can_rx",
+        "vehicle binding component selection",
+        failures,
+    )
+    forbid(vehicle_cmake, "components/bench_can_ack", "vehicle binding component selection", failures)
     require(vehicle_main, "WeAct CAN485 DevBoard V1.1", "vehicle board identity", failures)
     require(vehicle_main, "STRICT LISTEN-ONLY", "vehicle startup warning", failures)
     require(
@@ -77,19 +85,24 @@ def main() -> int:
     for needle, label in board_requirements.items():
         require(board_header, needle, label, failures)
     for forbidden in ("kTcan485", "speed_mode", "boost_enable", "set_can_transceiver_power"):
-        forbid(board_header + board_source + can_source, forbidden, "vehicle/shared source", failures)
+        forbid(
+            board_header + board_source + can_source + vehicle_binding,
+            forbidden,
+            "vehicle/shared source",
+            failures,
+        )
     require(board_source, "onboard_rgb.data, 0", "GPIO4 data-line-low startup", failures)
     require(board_source, "rs485.driver_enable, 0", "RS485 disabled startup", failures)
     require(board_source, "can.tx, 1", "CAN TX recessive startup", failures)
 
-    require(can_source, "board::kWeActCan485V11.can.tx", "vehicle CAN TX binding", failures)
-    require(can_source, "board::kWeActCan485V11.can.rx", "vehicle CAN RX binding", failures)
-    require(can_source, "TWAI_MODE_LISTEN_ONLY", "vehicle CAN mode", failures)
-    if not re.search(r"general\.tx_queue_len\s*=\s*0\s*;", can_source):
+    require(vehicle_binding, "board::kWeActCan485V11.can.tx", "vehicle CAN TX binding", failures)
+    require(vehicle_binding, "board::kWeActCan485V11.can.rx", "vehicle CAN RX binding", failures)
+    require(vehicle_binding, "TWAI_MODE_LISTEN_ONLY", "vehicle CAN mode", failures)
+    if not re.search(r"configuration\.tx_queue_len\s*=\s*0\s*;", vehicle_binding):
         failures.append("CAN TX queue is not explicitly disabled")
     for source_name, source in (
         ("CAN public header", can_header),
-        ("CAN implementation", can_source),
+        ("CAN implementation and vehicle binding", can_source + vehicle_binding),
         ("vehicle main", vehicle_main),
     ):
         for forbidden in ("twai_transmit", "twai_transmit_v2", "TWAI_MODE_NORMAL", "TWAI_MODE_NO_ACK"):
@@ -106,23 +119,29 @@ def main() -> int:
     bench_cmake = (bench_dir / "CMakeLists.txt").read_text(encoding="utf-8")
     bench_main = (bench_dir / "main/main.cpp").read_text(encoding="utf-8")
     bench_component = (bench_dir / "main/idf_component.yml").read_text(encoding="utf-8")
+    bench_binding = (root / "components/bench_can_ack/src/driver_binding.cpp").read_text(
+        encoding="utf-8"
+    )
     require(bench_cmake, "project(tcan485_bench_ack_only)", "bench project name", failures)
-    require(bench_cmake, "TCAN485_BENCH_ACK_ONLY ON", "bench build guard", failures)
     require(
-        can_cmake,
-        'tcan485_app_name STREQUAL "tcan485_bench_ack_only"',
-        "bench app-name guard",
+        bench_cmake,
+        "components/bench_can_ack",
+        "bench binding component selection",
         failures,
     )
+    forbid(bench_cmake, "components/vehicle_can_rx", "bench binding component selection", failures)
     require(bench_main, "BENCH_ACK_ONLY", "bench startup warning", failures)
     require(bench_main, "never connect to a vehicle", "bench isolation warning", failures)
     require(bench_component, "BENCH_ACK_ONLY", "bench artifact label", failures)
-    require(mode_source, "TCAN485_BENCH_ACK_ONLY", "mode guard", failures)
-    require(mode_source, "TCAN485_BENCH_TARGET", "bench target guard", failures)
-    require(mode_source, "TWAI_MODE_NORMAL", "bench normal mode", failures)
-    require(mode_source, "TWAI_MODE_LISTEN_ONLY", "mode fail-closed branch", failures)
-    if "twai_transmit" in mode_source or "twai_transmit_v2" in mode_source:
-        failures.append("mode selector contains a data-frame transmit call")
+    require(bench_binding, "TWAI_MODE_NORMAL", "bench normal mode", failures)
+    if "TWAI_MODE_LISTEN_ONLY" in bench_binding:
+        failures.append("bench binding contains vehicle listen-only mode")
+    if not re.search(r"configuration\.tx_queue_len\s*=\s*0\s*;", bench_binding):
+        failures.append("bench hardware TX queue is not explicitly disabled")
+    if "twai_transmit" in bench_binding or "twai_transmit_v2" in bench_binding:
+        failures.append("bench binding contains a data-frame transmit call")
+    if "TCAN485_BENCH_ACK_ONLY" in can_cmake or "TCAN485_BENCH_TARGET" in can_cmake:
+        failures.append("shared can_bus CMake still exposes a project-wide bench mode guard")
 
     if failures:
         for failure in failures:
