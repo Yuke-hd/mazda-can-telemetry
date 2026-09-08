@@ -1,5 +1,6 @@
 #include "tcan485_bench_board.hpp"
 
+#include "bench_can_ack/bench_can_ack.h"
 #include "driver/gpio.h"
 
 #include <cstdint>
@@ -7,8 +8,8 @@
 namespace tcan485_bench_board {
 namespace {
 
-constexpr std::int8_t kCanTx = 27;
-constexpr std::int8_t kCanRx = 26;
+constexpr std::int8_t kCanTx = bench_can_ack::kCanPins.tx;
+constexpr std::int8_t kCanRx = bench_can_ack::kCanPins.rx;
 constexpr std::int8_t kCanSpeedMode = 23;
 constexpr std::int8_t kSharedBoostEnable = 16;
 constexpr std::int8_t kOnboardLedData = 4;

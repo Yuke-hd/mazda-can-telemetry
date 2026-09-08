@@ -2,8 +2,10 @@
 #include <doctest/doctest.h>
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <limits>
+#include <thread>
 #include <type_traits>
 
 #include "can_bus/can_bus.h"
@@ -149,12 +151,14 @@ TEST_CASE("statistics reset preserves queue and starts watermark at current dept
   ring.record_bus_error(3);
   ring.record_driver_rx_missed(4);
   ring.record_controller_reset();
+  ring.record_bus_off(5);
 
   const auto before = ring.snapshot(can_bus::StatisticsOperation::kSnapshotAndReset);
   CHECK(before.frames_received == 2);
   CHECK(before.bus_errors == 3);
   CHECK(before.driver_rx_missed == 4);
   CHECK(before.controller_resets == 1);
+  CHECK(before.bus_off_events == 5);
   CHECK(before.queue_depth == 2);
 
   const auto reset = ring.snapshot(can_bus::StatisticsOperation::kSnapshot);
@@ -165,6 +169,7 @@ TEST_CASE("statistics reset preserves queue and starts watermark at current dept
   CHECK(reset.bus_errors == 0);
   CHECK(reset.driver_rx_missed == 0);
   CHECK(reset.controller_resets == 0);
+  CHECK(reset.bus_off_events == 0);
   CHECK(reset.queue_depth == 2);
   CHECK(reset.queue_high_watermark == 2);
 
@@ -188,6 +193,114 @@ TEST_CASE("statistics reset keeps the next watermark at the live queue depth") {
   CHECK(before.queue_depth == 1);
   CHECK(before.queue_high_watermark == 3);
   CHECK(ring.snapshot(can_bus::StatisticsOperation::kSnapshot).queue_high_watermark == 1);
+}
+
+TEST_CASE("statistics retries a forced consumer interleaving before subtracting indexes") {
+  struct ForcedInterleaving {
+    std::array<can_bus::internal::RingIndex, 6> indexes{
+        can_bus::internal::RingIndex::kTail, can_bus::internal::RingIndex::kHead,
+        can_bus::internal::RingIndex::kTail, can_bus::internal::RingIndex::kTail,
+        can_bus::internal::RingIndex::kHead, can_bus::internal::RingIndex::kTail};
+    std::array<std::size_t, 6> values{3, 3, 4, 4, 6, 4};
+    std::size_t calls{0};
+    bool order_is_coherent{true};
+
+    std::size_t operator()(const can_bus::internal::RingIndex index) noexcept {
+      if (calls >= indexes.size() || indexes[calls] != index) {
+        order_is_coherent = false;
+        return 0;
+      }
+      return values[calls++];
+    }
+  } interleaving;
+
+  const auto depth = can_bus::internal::coherent_depth<4>(interleaving);
+  CHECK(interleaving.order_is_coherent);
+  CHECK(interleaving.calls == 6);
+  CHECK(depth == 2);
+}
+
+TEST_CASE("statistics retries an out-of-capacity index distance") {
+  struct OutOfCapacitySample {
+    std::array<std::size_t, 6> values{0, 9, 0, 2, 4, 2};
+    std::size_t calls{0};
+
+    std::size_t operator()(const can_bus::internal::RingIndex) noexcept { return values[calls++]; }
+  } sample;
+
+  CHECK(can_bus::internal::coherent_depth<4>(sample) == 2);
+  CHECK(sample.calls == 6);
+}
+
+TEST_CASE("concurrent producer consumer and reset snapshots keep metrics bounded") {
+  constexpr std::size_t kCapacity = 4;
+  constexpr std::uint32_t kFramesToProduce = 200'000;
+  can_bus::internal::FrameRing<kCapacity> ring;
+  std::atomic<bool> start{false};
+  std::atomic<bool> producer_done{false};
+  std::atomic<bool> failed{false};
+
+  auto check_snapshot = [&](const can_bus::Statistics &stats) {
+    if (stats.queue_capacity != kCapacity || stats.queue_depth > kCapacity ||
+        stats.queue_high_watermark > kCapacity) {
+      failed.store(true, std::memory_order_relaxed);
+    }
+  };
+
+  std::thread producer([&] {
+    while (!start.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    for (std::uint32_t id = 0; id < kFramesToProduce; ++id) {
+      (void)ring.push(make_frame(id, id));
+    }
+    producer_done.store(true, std::memory_order_release);
+  });
+
+  std::thread consumer([&] {
+    while (!start.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    vehicle_core::RawCanFrame frame{};
+    for (;;) {
+      if (ring.pop(frame)) {
+        continue;
+      }
+      if (producer_done.load(std::memory_order_acquire)) {
+        break;
+      }
+      std::this_thread::yield();
+    }
+  });
+
+  std::thread observer([&] {
+    while (!start.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    constexpr std::size_t kMinimumObservationsAfterProducer = 20'000;
+    std::size_t observations_after_producer = 0;
+    while (!producer_done.load(std::memory_order_acquire) ||
+           observations_after_producer < kMinimumObservationsAfterProducer) {
+      const auto operation = observations_after_producer % 11 == 0
+                                 ? can_bus::StatisticsOperation::kSnapshotAndReset
+                                 : can_bus::StatisticsOperation::kSnapshot;
+      check_snapshot(ring.snapshot(operation));
+      if (producer_done.load(std::memory_order_acquire)) {
+        ++observations_after_producer;
+      }
+    }
+  });
+
+  start.store(true, std::memory_order_release);
+  producer.join();
+  consumer.join();
+  observer.join();
+
+  vehicle_core::RawCanFrame frame{};
+  while (ring.pop(frame)) {
+  }
+  check_snapshot(ring.snapshot(can_bus::StatisticsOperation::kSnapshot));
+  CHECK_FALSE(failed.load(std::memory_order_relaxed));
 }
 
 TEST_CASE("acquisition boundary has fixed storage and value semantics") {

@@ -42,6 +42,12 @@ add_executable(mazda_state_tests mazda_state_tests.cpp)
 target_link_libraries(mazda_state_tests PRIVATE mazda telemetry_test_support doctest::doctest)
 target_compile_features(mazda_state_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_state_tests)
+
+add_executable(mazda_availability_tests mazda_availability_tests.cpp)
+target_link_libraries(mazda_availability_tests PRIVATE mazda telemetry_test_support doctest::doctest)
+target_compile_features(mazda_availability_tests PRIVATE cxx_std_17)
+doctest_discover_tests(mazda_availability_tests)
+
 add_executable(board_config_tests board_config_tests.cpp)
 target_include_directories(board_config_tests PRIVATE ${CMAKE_SOURCE_DIR}/components/board/include)
 target_compile_features(board_config_tests PRIVATE cxx_std_17)
@@ -58,6 +64,18 @@ target_include_directories(
 target_link_libraries(can_bus_boundary_tests PRIVATE doctest::doctest)
 target_compile_features(can_bus_boundary_tests PRIVATE cxx_std_17)
 doctest_discover_tests(can_bus_boundary_tests)
+
+add_executable(can_bus_lifecycle_tests can_bus_lifecycle_tests.cpp)
+target_include_directories(
+  can_bus_lifecycle_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/components/can_bus/include
+    ${CMAKE_SOURCE_DIR}/components/can_bus/private_include
+    ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
+)
+target_compile_features(can_bus_lifecycle_tests PRIVATE cxx_std_17)
+target_link_libraries(can_bus_lifecycle_tests PRIVATE doctest::doctest)
+doctest_discover_tests(can_bus_lifecycle_tests)
 
 add_executable(
   local_argb_tests

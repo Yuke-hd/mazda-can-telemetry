@@ -3,13 +3,13 @@
 ## Safety boundary
 
 The `weact_can485_v11_vehicle_listen_only` target installs the ESP-IDF v5.5.4 TWAI
-driver with `TWAI_MODE_LISTEN_ONLY`. The mode is a compile-time statement in
-the private implementation, not a public configuration value. The driver TX
-queue is explicitly set to zero. The CA-IS2062A transceiver is always powered;
-invalid bitrates fail before the driver is installed. There is no normal-mode or no-ACK
-fallback in the vehicle target. The separately named
-`tcan485-bench-ack-only` project is the only guarded exception and is governed
-by [MCAN-13's isolation record](mcan-13-bench-ack-only.md).
+driver with `TWAI_MODE_LISTEN_ONLY`. The mode and WeAct CAN pins are supplied by
+the separately built `vehicle_can_rx` binding, not by a shared mode selector or
+a public configuration value. The driver TX queue is explicitly set to zero.
+The CA-IS2062A transceiver is always powered; invalid bitrates fail before the
+driver is installed. There is no normal-mode or no-ACK fallback in the vehicle
+target. The separately named `tcan485-bench-ack-only` project selects its own
+`bench_can_ack` binding and is governed by [MCAN-13's isolation record](mcan-13-bench-ack-only.md).
 
 The public `can_bus` header exposes exactly four operations:
 
@@ -59,24 +59,27 @@ distinction prevents a slow consumer from hiding a driver-level loss.
 `statistics(kSnapshot)` returns cumulative values since start or the last
 reset. `statistics(kSnapshotAndReset)` returns the pre-reset interval and then
 zeros receive, queued, delivered, dropped, overflow, bus-error, driver-missed,
-and controller-reset counters. It does not remove queued frames. Queue depth
-remains live, and the next interval's high watermark begins at the depth that
-existed at reset. The producer publishes queue depth before its watermark, and
-reset reconciles one fresh depth observation after clearing the interval
-counter. If reset wins the watermark exchange, it can observe the producer's
-published depth; if the producer publishes after reconciliation, it raises the
-watermark afterward. Consequently, a concurrent producer cannot make the new
-watermark claim that an already occupied queue started empty.
+controller-reset, and bus-off counters. It does not remove queued frames.
+Queue depth remains live, and the next interval's high watermark begins at the
+depth that existed at reset. The producer publishes queue depth before its
+watermark, and reset reconciles one fresh depth observation after clearing the
+interval counter. If reset wins the watermark exchange, it can observe the
+producer's published depth; if the producer publishes after reconciliation, it
+raises the watermark afterward. Consequently, a concurrent producer cannot make
+the new watermark claim that an already occupied queue started empty.
 
 `controller_resets` is one on an acquisition interval that follows a prior
-successful start, and zero on the first interval. An unexpected bus-off alert is
-also counted because it represents an abnormal controller lifecycle in strict
-listen-only operation; the component does not initiate active bus recovery.
+successful start, and zero on the first interval. The S1-H counter/API contract
+provides `bus_off_events` for unexpected bus-off events; S1-B owns mapping
+`TWAI_ALERT_BUS_OFF` to `record_bus_off()`. A bus-off event represents an
+abnormal driver state in strict listen-only operation, but it is not itself a
+controller reset. The component does not initiate active bus recovery.
 `bus_errors` is the delta of the driver's cumulative `bus_error_count` status
 counter. Driver loss and error counters are sampled by the receive task before
 each alert poll, so they represent driver-reported counts rather than
-coalesced alert occurrences. An unexpected bus-off remains an independent
-`controller_resets` event; the component never initiates active recovery.
+coalesced alert occurrences. Once S1-B supplies the alert mapping,
+`bus_off_events` is the interval count of unexpected `TWAI_ALERT_BUS_OFF`
+alerts; the component never initiates active recovery.
 
 ## References
 
@@ -90,13 +93,14 @@ ESP-IDF v5.5.4 documentation:
 ## Validation status
 
 Host tests exercise bitrate rejection, full frame fidelity, FIFO order,
-drop-newest behavior, overflow and watermark accounting, statistics reset, and
-1,000 producer calls with an absent consumer. The structural check verifies
-the public operation set, strict listen-only token, disabled TX queue, absence
-of alternate modes in the vehicle CAN implementation, and absence of TWAI
-transmit calls. The WeAct artifact check additionally verifies that normal
-mode is confined to the separately named bench project and that its labels
-cannot be mistaken for vehicle firmware.
+drop-newest behavior, overflow and watermark accounting, independent
+controller-reset and bus-off event counters, statistics reset, and 1,000
+producer calls with an absent consumer. The structural check verifies the
+public operation set, strict listen-only token and disabled TX queue in the
+vehicle binding, absence of alternate modes from the vehicle component graph,
+and absence of TWAI transmit calls. The WeAct artifact check additionally
+verifies that normal mode is confined to the separately named bench binding and
+that its labels cannot be mistaken for vehicle firmware.
 
 Integrated isolated-bench validation is intentionally out of scope for MCAN-7.
 MCAN-33 owns the future physical receiver, wiring, PCB-revision, and no-ACK

@@ -100,6 +100,7 @@ struct AcquisitionMetrics {
   std::uint64_t driver_errors{0};
   std::uint64_t missed_frames{0};
   std::uint64_t controller_resets{0};
+  std::uint64_t bus_off_events{0};
 };
 
 struct Diagnostics {
