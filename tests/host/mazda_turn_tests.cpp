@@ -27,7 +27,7 @@ TEST_CASE("turn switch normalizes candidate bits with hazard and conflict preced
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
   CHECK(decode_turn_switch(turn_frame(0, false, false, false), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Unknown);
   CHECK(edge->current == TurnState::Off);
@@ -35,25 +35,25 @@ TEST_CASE("turn switch normalizes candidate bits with hazard and conflict preced
   CHECK(state.effective_turn_state() == TurnState::Off);
 
   CHECK(decode_turn_switch(turn_frame(1, false, true, false), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Off);
   CHECK(edge->current == TurnState::Left);
   CHECK(state.turn_state.value == TurnState::Left);
   CHECK(decode_turn_switch(turn_frame(2, false, false, true), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Left);
   CHECK(edge->current == TurnState::Right);
   CHECK(state.turn_state.value == TurnState::Right);
   CHECK(decode_turn_switch(turn_frame(3, false, true, true), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Right);
   CHECK(edge->current == TurnState::Unknown);
   CHECK(state.turn_state.value == TurnState::Unknown);
   CHECK(state.effective_turn_state() == TurnState::Unknown);
-  CHECK(decode_turn_switch(turn_frame(4, true, true, true), state, &edge) == DecodeStatus::Updated);
+  CHECK(decode_turn_switch(turn_frame(4, true, true, true), state, &edge) == DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Unknown);
   CHECK(edge->current == TurnState::Hazard);
@@ -70,12 +70,12 @@ TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info")
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
   const auto initial = turn_frame(100, false, true, false);
-  REQUIRE(decode_turn_switch(initial, state, &edge) == DecodeStatus::Updated);
+  REQUIRE(decode_turn_switch(initial, state, &edge) == DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
 
   auto short_frame = initial;
   short_frame.dlc = 7;
-  CHECK(decode_turn_switch(short_frame, state, &edge) == DecodeStatus::Invalid);
+  CHECK(decode_turn_switch(short_frame, state, &edge) == DecodeStatus::Malformed);
   CHECK_FALSE(edge.has_value());
   CHECK(state.turn_state.value == TurnState::Left);
 
@@ -91,7 +91,7 @@ TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info")
 
   auto invalid_identifier = initial;
   invalid_identifier.identifier = 0x800;
-  CHECK(decode_turn_switch(invalid_identifier, state, &edge) == DecodeStatus::Ignored);
+  CHECK(decode_turn_switch(invalid_identifier, state, &edge) == DecodeStatus::Malformed);
   CHECK_FALSE(edge.has_value());
 
   auto blink_info = initial;
@@ -100,7 +100,7 @@ TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info")
   blink_info.data[1] = 0;
   blink_info.data[2] = 0x0c;
   blink_info.data[4] = 0x02;
-  CHECK(decode(blink_info, state, &edge) == DecodeStatus::Updated);
+  CHECK(decode(blink_info, state, &edge) == DecodeStatus::Decoded);
   CHECK_FALSE(edge.has_value());
   CHECK(state.turn_state.value == TurnState::Left);
   CHECK(state.left_turn_request.value);
@@ -135,7 +135,7 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
   CHECK(store.snapshot().effective_turn_state() == TurnState::Unknown);
   feeder.feed(turn_frame(1'000, false, true, false), [&](const vehicle_core::RawCanFrame &value) {
     clock.set(value.timestamp_us);
-    CHECK(decode_turn_switch(value, store.mutable_state()) == DecodeStatus::Updated);
+    CHECK(decode_turn_switch(value, store.mutable_state()) == DecodeStatus::Decoded);
   });
   CHECK(feeder.delivered() == 1);
   CHECK(store.snapshot().turn_state.is_valid());
@@ -149,7 +149,7 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
 
   feeder.feed(turn_frame(301'000, false, false, true), [&](const vehicle_core::RawCanFrame &value) {
     clock.set(value.timestamp_us);
-    CHECK(decode(value, store.mutable_state()) == DecodeStatus::Updated);
+    CHECK(decode(value, store.mutable_state()) == DecodeStatus::Decoded);
   });
   CHECK(feeder.delivered() == 2);
   const auto recovered = store.snapshot();
@@ -165,7 +165,7 @@ TEST_CASE("decoder emits recovery edges after freshness loss, including same dir
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
   REQUIRE(decode_turn_switch(turn_frame(1'000, false, true, false), state, &edge) ==
-          DecodeStatus::Updated);
+          DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Unknown);
   CHECK(edge->current == TurnState::Left);
@@ -173,7 +173,7 @@ TEST_CASE("decoder emits recovery edges after freshness loss, including same dir
   state.refresh(251'001);
   CHECK(state.turn_state.is_stale());
   CHECK(decode_turn_switch(turn_frame(251'002, false, true, false), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Unknown);
   CHECK(edge->current == TurnState::Left);
@@ -181,7 +181,7 @@ TEST_CASE("decoder emits recovery edges after freshness loss, including same dir
   state.refresh(501'003);
   CHECK(state.turn_state.is_stale());
   CHECK(decode_turn_switch(turn_frame(501'004, false, false, true), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(edge->previous == TurnState::Unknown);
   CHECK(edge->current == TurnState::Right);
@@ -194,10 +194,10 @@ TEST_CASE("duplicate frames through decoder clear edge output") {
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
   REQUIRE(decode_turn_switch(turn_frame(10, false, true, false), state, &edge) ==
-          DecodeStatus::Updated);
+          DecodeStatus::Decoded);
   REQUIRE(edge.has_value());
   CHECK(decode_turn_switch(turn_frame(11, false, true, false), state, &edge) ==
-        DecodeStatus::Updated);
+        DecodeStatus::Decoded);
   CHECK_FALSE(edge.has_value());
 }
 

@@ -6,10 +6,20 @@
 
 namespace mazda {
 
-enum class SelectorPosition : std::uint8_t { Unknown, Park, Reverse, Neutral, Drive };
+enum class SelectorPosition : std::uint8_t {
+  Unknown,
+  Shifting,
+  Park,
+  Reverse,
+  Neutral,
+  Drive,
+};
 
 enum class ActualGear : std::uint8_t {
   Unknown,
+  // Raw zero is the source DBC's combined P_or_N state. Keep Park as a
+  // distinct compatibility value; no current source value decodes to it.
+  ParkOrNeutral,
   Park,
   Neutral,
   Reverse,
@@ -19,9 +29,8 @@ enum class ActualGear : std::uint8_t {
   Fourth,
   Fifth,
   Sixth,
-  // The DBC's raw zero value is labelled P_or_N. Keep the existing Park
-  // representation source-compatible while exposing the source label.
-  ParkOrNeutral = Park,
+  // Raw 15 is explicitly labelled Shifting by the source DBC.
+  Shifting,
 };
 
 enum class FrontWiperPosition : std::uint8_t { Unknown, Off, On, High, Intermittent };

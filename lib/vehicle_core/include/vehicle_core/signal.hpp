@@ -50,7 +50,7 @@ template <typename T> struct Signal {
 };
 
 template <typename T> bool Signal<T>::update(T new_value, MonotonicTimestamp timestamp) noexcept {
-  if (status != SignalStatus::Unknown && timestamp < last_update_us) {
+  if (timestamp < last_update_us) {
     return false;
   }
   value = new_value;

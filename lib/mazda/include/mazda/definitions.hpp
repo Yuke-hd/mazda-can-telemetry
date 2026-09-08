@@ -118,8 +118,9 @@ inline constexpr CandidateSignalDefinition kEngineSpeedDefinition{
     0.0F,
     vehicle_core::SignalUnit::KilometresPerHour,
     0.0F,
-    32767.0F,
-    "none declared by source; representable values are bounded by 16 bits"};
+    655.35F,
+    "none declared by source; 655.35 is the representable 16-bit encoding maximum, not a "
+    "validated vehicle limit"};
 inline constexpr CandidateSignalDefinition kSelectorDefinition{
     "Selector",
     kGearId,

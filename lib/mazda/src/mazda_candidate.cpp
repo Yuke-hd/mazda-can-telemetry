@@ -3,10 +3,49 @@
 namespace mazda::candidate {
 namespace {
 
-bool candidate_frame(const vehicle_core::RawCanFrame &frame,
-                     const std::uint32_t identifier) noexcept {
-  return frame.is_valid() && !frame.is_extended() && !frame.remote_request &&
-         frame.identifier == identifier;
+void initialize_observation(const vehicle_core::RawCanFrame &frame,
+                            vehicle_core::DecoderObservation *observation) noexcept {
+  if (observation == nullptr)
+    return;
+  observation->validity = vehicle_core::DecodeValidity::Ignored;
+  observation->timestamp_us = frame.timestamp_us;
+  observation->identifier = frame.identifier;
+  observation->bus_id = frame.bus_id;
+  observation->dlc = frame.dlc;
+}
+
+DecodeStatus finish_observation(const DecodeStatus status,
+                                vehicle_core::DecoderObservation *observation) noexcept {
+  if (observation != nullptr)
+    observation->validity = status;
+  return status;
+}
+
+DecodeStatus classify_frame(const vehicle_core::RawCanFrame &frame, const std::uint32_t identifier,
+                            vehicle_core::DecoderObservation *observation) noexcept {
+  initialize_observation(frame, observation);
+  if (!frame.is_valid())
+    return finish_observation(DecodeStatus::Malformed, observation);
+  if (frame.identifier != identifier ||
+      frame.identifier_format != vehicle_core::CanIdentifierFormat::Standard ||
+      frame.remote_request) {
+    return DecodeStatus::Ignored;
+  }
+  if (frame.dlc != kCandidateDlc)
+    return finish_observation(DecodeStatus::Malformed, observation);
+  return DecodeStatus::Decoded;
+}
+
+template <typename T>
+bool invalidate_signal(vehicle_core::Signal<T> &signal,
+                       const vehicle_core::MonotonicTimestamp timestamp) noexcept {
+  // Keep the last accepted value for later stale/unavailable readings, but
+  // make it non-actionable immediately. The accepted-value timestamp remains
+  // the watermark; the decoder observation carries the undefined frame time.
+  if (timestamp < signal.last_update_us)
+    return false;
+  signal.status = vehicle_core::SignalStatus::Unknown;
+  return true;
 }
 
 std::uint16_t
@@ -18,6 +57,8 @@ big_endian_u16(const std::array<std::uint8_t, vehicle_core::kCanClassicPayloadBy
 
 SelectorPosition selector_from_raw(const std::uint8_t raw) noexcept {
   switch (raw) {
+  case 0:
+    return SelectorPosition::Shifting;
   case 1:
     return SelectorPosition::Park;
   case 2:
@@ -49,6 +90,8 @@ ActualGear actual_gear_from_raw(const std::uint8_t raw) noexcept {
     return ActualGear::Sixth;
   case 14:
     return ActualGear::Reverse;
+  case 15:
+    return ActualGear::Shifting;
   default:
     return ActualGear::Unknown;
   }
@@ -83,12 +126,11 @@ TurnState normalize_turn(const bool hazard, const bool left, const bool right) n
 
 } // namespace
 
-DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame,
-                                VehicleState &state) noexcept {
-  if (!candidate_frame(frame, kEngineDataId))
-    return DecodeStatus::Ignored;
-  if (frame.dlc != kCandidateDlc)
-    return DecodeStatus::Invalid;
+DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame, VehicleState &state,
+                                vehicle_core::DecoderObservation *observation) noexcept {
+  const auto classification = classify_frame(frame, kEngineDataId, observation);
+  if (classification != DecodeStatus::Decoded)
+    return classification;
 
   const auto rpm_raw = big_endian_u16(frame.data, 0);
   const auto speed_raw = big_endian_u16(frame.data, 2);
@@ -96,7 +138,7 @@ DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame,
   // existing out-of-scope candidate; it has no invalid sentinel and its
   // 16-bit representation is already non-negative.
   if (rpm_raw > 34000U)
-    return DecodeStatus::Invalid;
+    return finish_observation(DecodeStatus::Malformed, observation);
 
   const bool rpm_updated =
       state.engine_rpm.update(static_cast<float>(rpm_raw) * 0.25F, frame.timestamp_us);
@@ -105,42 +147,41 @@ DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame,
   if (rpm_updated || speed_updated) {
     if (frame.timestamp_us > state.timestamp_us)
       state.timestamp_us = frame.timestamp_us;
-    return DecodeStatus::Updated;
   }
-  return DecodeStatus::Invalid;
+  return finish_observation(DecodeStatus::Decoded, observation);
 }
 
-DecodeStatus decode_gear(const vehicle_core::RawCanFrame &frame, VehicleState &state) noexcept {
-  if (!candidate_frame(frame, kGearId))
-    return DecodeStatus::Ignored;
-  if (frame.dlc != kCandidateDlc)
-    return DecodeStatus::Invalid;
+DecodeStatus decode_gear(const vehicle_core::RawCanFrame &frame, VehicleState &state,
+                         vehicle_core::DecoderObservation *observation) noexcept {
+  const auto classification = classify_frame(frame, kGearId, observation);
+  if (classification != DecodeStatus::Decoded)
+    return classification;
 
   const auto selector_raw = static_cast<std::uint8_t>(frame.data[0] & 0x07U);
   const auto actual_raw = static_cast<std::uint8_t>((frame.data[4] >> 1U) & 0x0fU);
   const auto selector = selector_from_raw(selector_raw);
   const auto actual_gear = actual_gear_from_raw(actual_raw);
-  const bool selector_valid = selector != SelectorPosition::Unknown;
-  const bool actual_gear_valid = actual_gear != ActualGear::Unknown;
-
-  bool updated = false;
-  if (selector_valid)
-    updated = state.selector_position.update(selector, frame.timestamp_us) || updated;
-  if (actual_gear_valid)
-    updated = state.actual_gear.update(actual_gear, frame.timestamp_us) || updated;
-  if (updated) {
+  // Undefined values are well-formed source encodings. Invalidate only the
+  // affected signal while retaining its last accepted value for later stale /
+  // unavailable readings; S1-G maps the non-actionable status to availability.
+  const bool selector_updated = selector == SelectorPosition::Unknown
+                                    ? invalidate_signal(state.selector_position, frame.timestamp_us)
+                                    : state.selector_position.update(selector, frame.timestamp_us);
+  const bool actual_gear_updated = actual_gear == ActualGear::Unknown
+                                       ? invalidate_signal(state.actual_gear, frame.timestamp_us)
+                                       : state.actual_gear.update(actual_gear, frame.timestamp_us);
+  if (selector_updated || actual_gear_updated) {
     if (frame.timestamp_us > state.timestamp_us)
       state.timestamp_us = frame.timestamp_us;
-    return DecodeStatus::Updated;
   }
-  return DecodeStatus::Invalid;
+  return finish_observation(DecodeStatus::Decoded, observation);
 }
 
-DecodeStatus decode_doors(const vehicle_core::RawCanFrame &frame, VehicleState &state) noexcept {
-  if (!candidate_frame(frame, kDoorsId))
-    return DecodeStatus::Ignored;
-  if (frame.dlc != kCandidateDlc)
-    return DecodeStatus::Invalid;
+DecodeStatus decode_doors(const vehicle_core::RawCanFrame &frame, VehicleState &state,
+                          vehicle_core::DecoderObservation *observation) noexcept {
+  const auto classification = classify_frame(frame, kDoorsId, observation);
+  if (classification != DecodeStatus::Decoded)
+    return classification;
 
   // These are DBC Motorola single-bit fields. For single-bit fields the DBC
   // start bit maps directly to the byte/LSB mask used here.
@@ -160,20 +201,16 @@ DecodeStatus decode_doors(const vehicle_core::RawCanFrame &frame, VehicleState &
   updated = state.front_right_door_open_rhd.update(front_right_door_open_rhd, frame.timestamp_us) ||
             updated;
   updated = state.doors_unlocked.update(doors_unlocked, frame.timestamp_us) || updated;
-  if (updated) {
-    if (frame.timestamp_us > state.timestamp_us)
-      state.timestamp_us = frame.timestamp_us;
-    return DecodeStatus::Updated;
-  }
-  return DecodeStatus::Invalid;
+  if (updated && frame.timestamp_us > state.timestamp_us)
+    state.timestamp_us = frame.timestamp_us;
+  return finish_observation(DecodeStatus::Decoded, observation);
 }
 
-DecodeStatus decode_blink_info(const vehicle_core::RawCanFrame &frame,
-                               VehicleState &state) noexcept {
-  if (!candidate_frame(frame, kBlinkInfoId))
-    return DecodeStatus::Ignored;
-  if (frame.dlc != kCandidateDlc)
-    return DecodeStatus::Invalid;
+DecodeStatus decode_blink_info(const vehicle_core::RawCanFrame &frame, VehicleState &state,
+                               vehicle_core::DecoderObservation *observation) noexcept {
+  const auto classification = classify_frame(frame, kBlinkInfoId, observation);
+  if (classification != DecodeStatus::Decoded)
+    return classification;
 
   // LEFT_BLINK is Intel in the DBC (bit 18), while the other two confirmed
   // fields use Motorola notation. Their single-bit payload masks are 0x04,
@@ -186,22 +223,19 @@ DecodeStatus decode_blink_info(const vehicle_core::RawCanFrame &frame,
   updated = state.left_indicator_lamp.update(left_indicator_lamp, frame.timestamp_us) || updated;
   updated = state.right_indicator_lamp.update(right_indicator_lamp, frame.timestamp_us) || updated;
   updated = state.wiper_low.update(wiper_low, frame.timestamp_us) || updated;
-  if (updated) {
-    if (frame.timestamp_us > state.timestamp_us)
-      state.timestamp_us = frame.timestamp_us;
-    return DecodeStatus::Updated;
-  }
-  return DecodeStatus::Invalid;
+  if (updated && frame.timestamp_us > state.timestamp_us)
+    state.timestamp_us = frame.timestamp_us;
+  return finish_observation(DecodeStatus::Decoded, observation);
 }
 
 DecodeStatus decode_turn_switch(const vehicle_core::RawCanFrame &frame, VehicleState &state,
-                                std::optional<TurnEdgeEvent> *edge) noexcept {
+                                std::optional<TurnEdgeEvent> *edge,
+                                vehicle_core::DecoderObservation *observation) noexcept {
   if (edge != nullptr)
     edge->reset();
-  if (!candidate_frame(frame, kTurnSwitchId))
-    return DecodeStatus::Ignored;
-  if (frame.dlc != kCandidateDlc)
-    return DecodeStatus::Invalid;
+  const auto classification = classify_frame(frame, kTurnSwitchId, observation);
+  if (classification != DecodeStatus::Decoded)
+    return classification;
 
   // DBC fields 10, 12, and 13 map to byte 1 bits 2, 4, and 5 when using
   // byte/LSB numbering. Hazard has precedence over either direction.
@@ -222,26 +256,27 @@ DecodeStatus decode_turn_switch(const vehicle_core::RawCanFrame &frame, VehicleS
   updated = state.front_wiper.update(front_wiper, frame.timestamp_us) || updated;
   if (updated && frame.timestamp_us > state.timestamp_us)
     state.timestamp_us = frame.timestamp_us;
-  return updated ? DecodeStatus::Updated : DecodeStatus::Invalid;
+  return finish_observation(DecodeStatus::Decoded, observation);
 }
 
 DecodeStatus decode(const vehicle_core::RawCanFrame &frame, VehicleState &state,
-                    std::optional<TurnEdgeEvent> *edge) noexcept {
+                    std::optional<TurnEdgeEvent> *edge,
+                    vehicle_core::DecoderObservation *observation) noexcept {
   if (edge != nullptr)
     edge->reset();
-  const auto engine_status = decode_engine_data(frame, state);
+  const auto engine_status = decode_engine_data(frame, state, observation);
   if (engine_status != DecodeStatus::Ignored)
     return engine_status;
-  const auto gear_status = decode_gear(frame, state);
+  const auto gear_status = decode_gear(frame, state, observation);
   if (gear_status != DecodeStatus::Ignored)
     return gear_status;
-  const auto doors_status = decode_doors(frame, state);
+  const auto doors_status = decode_doors(frame, state, observation);
   if (doors_status != DecodeStatus::Ignored)
     return doors_status;
-  const auto blink_status = decode_blink_info(frame, state);
+  const auto blink_status = decode_blink_info(frame, state, observation);
   if (blink_status != DecodeStatus::Ignored)
     return blink_status;
-  return decode_turn_switch(frame, state, edge);
+  return decode_turn_switch(frame, state, edge, observation);
 }
 
 } // namespace mazda::candidate
