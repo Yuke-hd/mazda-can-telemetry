@@ -254,6 +254,6 @@ TEST_CASE("bus-off faults use a separate metric from controller resets") {
   CHECK(lifecycle.state() == can_bus::LifecycleState::kFaulted);
 
   const auto stats = metrics.snapshot(can_bus::StatisticsOperation::kSnapshotAndReset);
-  CHECK(stats.bus_off == 1);
+  CHECK(stats.bus_off_events == 1);
   CHECK(stats.controller_resets == 0);
 }
