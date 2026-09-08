@@ -5,9 +5,11 @@
 #include <array>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 
-#include "raw_capture/replay.hpp"
+#include "../support/direct_frame_feeder.hpp"
+#include "../support/fake_clock.hpp"
 #include "vehicle_core/vehicle_core.hpp"
 
 namespace {
@@ -301,27 +303,34 @@ TEST_CASE("TURN_SWITCH decodes all front-wiper enumeration values") {
 }
 
 TEST_CASE("invalid and missing updates become stale on the same replay clock") {
-  const std::string capture =
-      "MCAN-CAPTURE 1\n"
-      "SESSION firmware=test board=host bitrate_bps=500000 clock=monotonic clock_unit=us "
-      "byte_order=big-endian clock_hz=1000000 dropped_frames=0 dropped_records=0\n"
-      "FRAME t_us=1000 bus=0 id=0x202 format=std rtr=0 dlc=8 data=095b000000000000\n"
-      "FRAME t_us=1100 bus=0 id=0x228 format=std rtr=0 dlc=8 data=248107ff04f00000\n"
-      "FRAME t_us=1150 bus=0 id=0x202 format=std rtr=0 dlc=7 data=84d10000000000\n";
-  const auto parsed = raw_capture::CaptureReader{}.read(capture);
-  REQUIRE(parsed.ok);
-  raw_capture::SimulatedMonotonicClock clock;
-  raw_capture::ReplayHarness replay{clock};
+  using namespace vehicle_core::mazda_candidate;
+  test_support::FakeClock clock;
+  test_support::DirectFrameFeeder feeder;
   vehicle_core::VehicleFreshnessPolicy policy{};
   policy.speed_kph_timeout_us = 100;
   policy.engine_rpm_timeout_us = 100;
   policy.selector_position_timeout_us = 100;
   policy.actual_gear_timeout_us = 100;
   vehicle_core::VehicleStateStore store{clock, policy};
-  replay.replay(parsed.records, [&](const vehicle_core::RawCanFrame &value,
-                                    raw_capture::SimulatedMonotonicClock &) {
-    (void)vehicle_core::mazda_candidate::decode(value, store.mutable_state());
-  });
+  feeder.feed(frame(kEngineDataId, 1000, {0x09, 0x5b, 0, 0, 0, 0, 0, 0}),
+              [&](const vehicle_core::RawCanFrame &value) {
+                clock.set(value.timestamp_us);
+                (void)vehicle_core::mazda_candidate::decode(value, store.mutable_state());
+              });
+  feeder.feed(frame(kGearId, 1100, {0x24, 0x81, 0x07, 0xff, 0x04, 0xf0, 0, 0}),
+              [&](const vehicle_core::RawCanFrame &value) {
+                clock.set(value.timestamp_us);
+                (void)vehicle_core::mazda_candidate::decode(value, store.mutable_state());
+              });
+  // A wrong-DLC frame is delivered directly and cannot replace accepted data.
+  feeder.feed(frame(kEngineDataId, 1150, {0x84, 0xd1, 0, 0, 0, 0, 0}, 7),
+              [&](const vehicle_core::RawCanFrame &value) {
+                clock.set(value.timestamp_us);
+                (void)vehicle_core::mazda_candidate::decode(value, store.mutable_state());
+              });
+  // Match ReplayHarness::replay's final advance: the test clock reaches the
+  // end of the synthetic stream after all frames have been delivered.
+  clock.set(std::numeric_limits<vehicle_core::MonotonicTimestamp>::max());
   REQUIRE(store.state().engine_rpm.is_valid());
   REQUIRE(store.state().actual_gear.is_valid());
   const auto stale = store.snapshot();

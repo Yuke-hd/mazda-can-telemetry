@@ -1,9 +1,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include <vector>
-
-#include "raw_capture/replay.hpp"
+#include "../support/direct_frame_feeder.hpp"
+#include "../support/fake_clock.hpp"
 #include "vehicle_core/vehicle_core.hpp"
 
 namespace {
@@ -130,28 +129,29 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
   using namespace vehicle_core;
   using namespace vehicle_core::mazda_candidate;
 
-  raw_capture::SimulatedMonotonicClock clock;
-  raw_capture::ReplayHarness replay{clock};
+  test_support::FakeClock clock;
+  test_support::DirectFrameFeeder feeder;
   VehicleStateStore store{clock};
   CHECK(store.snapshot().effective_turn_state() == TurnState::Unknown);
-  replay.load({raw_capture::CaptureRecord::frame_record(turn_frame(1'000, false, true, false)),
-               raw_capture::CaptureRecord::frame_record(turn_frame(301'000, false, false, true))});
-
-  CHECK(replay.advance_to(1'000, [&](const RawCanFrame &frame, auto &) {
-    CHECK(decode_turn_switch(frame, store.mutable_state()) == DecodeStatus::Updated);
-  }) == 1);
+  feeder.feed(turn_frame(1'000, false, true, false), [&](const RawCanFrame &value) {
+    clock.set(value.timestamp_us);
+    CHECK(decode_turn_switch(value, store.mutable_state()) == DecodeStatus::Updated);
+  });
+  CHECK(feeder.delivered() == 1);
   CHECK(store.snapshot().turn_state.is_valid());
   CHECK(store.snapshot().effective_turn_state() == TurnState::Left);
 
   CHECK(store.state().snapshot(251'000).turn_state.is_valid());
-  CHECK(replay.advance_to(251'001, [&](const RawCanFrame &, auto &) {}) == 0);
+  clock.set(251'001);
   const auto stale = store.snapshot();
   CHECK(stale.turn_state.is_stale());
   CHECK(stale.effective_turn_state() == TurnState::Unknown);
 
-  CHECK(replay.advance_to(301'000, [&](const RawCanFrame &frame, auto &) {
-    CHECK(decode(frame, store.mutable_state()) == DecodeStatus::Updated);
-  }) == 1);
+  feeder.feed(turn_frame(301'000, false, false, true), [&](const RawCanFrame &value) {
+    clock.set(value.timestamp_us);
+    CHECK(decode(value, store.mutable_state()) == DecodeStatus::Updated);
+  });
+  CHECK(feeder.delivered() == 2);
   const auto recovered = store.snapshot();
   CHECK(recovered.turn_state.is_valid());
   CHECK(recovered.effective_turn_state() == TurnState::Right);
