@@ -42,6 +42,12 @@ add_executable(mazda_state_tests mazda_state_tests.cpp)
 target_link_libraries(mazda_state_tests PRIVATE mazda telemetry_test_support doctest::doctest)
 target_compile_features(mazda_state_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_state_tests)
+
+add_executable(mazda_availability_tests mazda_availability_tests.cpp)
+target_link_libraries(mazda_availability_tests PRIVATE mazda telemetry_test_support doctest::doctest)
+target_compile_features(mazda_availability_tests PRIVATE cxx_std_17)
+doctest_discover_tests(mazda_availability_tests)
+
 add_executable(board_config_tests board_config_tests.cpp)
 target_include_directories(board_config_tests PRIVATE ${CMAKE_SOURCE_DIR}/components/board/include)
 target_compile_features(board_config_tests PRIVATE cxx_std_17)

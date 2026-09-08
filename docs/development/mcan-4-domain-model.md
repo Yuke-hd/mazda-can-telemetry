@@ -22,17 +22,18 @@ interface in this component.
 
 ## Signals and freshness
 
-`vehicle_core::Signal<T>` stores a value, generic `SignalUnit`, last-update monotonic timestamp, and
-`SignalStatus` (`Unknown`, `Valid`, or `Stale`). Status is explicit, so a valid
-zero speed or RPM is never confused with an uninitialized value. `update()`
-rejects an older timestamp. Each signal stores its own bounded freshness
-timeout; `refresh(now)` marks a valid signal stale only after the elapsed time
-is greater than that signal's configured timeout. Unknown signals remain
-unknown until their first update. The initial turn/request policy is 250 ms.
-The confirmed signal mappings do not include cycle-time evidence, so their
-additional freshness policies remain intentionally unconfigured; an
-unconfigured signal becomes stale as soon as time advances after its update,
-so it cannot remain silently valid.
+`vehicle_core::Signal<T>` stores a value, explicit `has_value` bit, generic
+`SignalUnit`, last-update monotonic timestamp, and `SignalStatus` (`Unknown`,
+`Valid`, or `Stale`). Status is explicit, so a valid zero speed or RPM is never
+confused with an uninitialized value. `update()` rejects an older timestamp and
+conflicting equal-time values; identical equal-time observations are
+idempotent. Each signal stores its own bounded freshness timeout. The pure
+`status_at(now)`/`snapshot(now)` helpers clamp backwards time to age zero,
+preserve retained values, and report `FreshnessUnverified` when no timeout
+evidence is configured. The mutating `refresh(now)` compatibility path still
+produces a conservative raw `Stale` view for legacy callers. Unknown signals
+remain `NoData` until their first update; an explicitly invalidated retained
+value is `Unavailable`. The initial turn/request policy is 250 ms.
 
 `mazda::VehicleState` provides speed, RPM, selector position, actual transmission
 gear, liftgate/door state, central unlock state, indicator-lamp state,
@@ -41,9 +42,13 @@ right-turn signal slots. Selector position and actual gear are separate value
 signals and cannot overwrite or alias one another. More signals can be added
 without introducing transport or board types. `snapshot(now)` evaluates each
 signal's own freshness policy on a value copy and leaves the source state
-unchanged. A `VehicleFreshnessPolicy` can supply synthetic or later verified
-per-signal timeouts without adding dynamic storage or asserting unverified
-production defaults.
+unchanged. `reading_at(signal, identifier, now)` additionally applies the
+relevant message and transport health, retaining a last value while reporting
+`Unavailable`. A `VehicleFreshnessPolicy` can supply synthetic or later
+verified per-signal timeouts without adding dynamic storage or asserting
+unverified production defaults. Fixed per-message records reject older or
+conflicting frames, latch relevant malformed faults, and clear them only on a
+strictly newer valid frame.
 
 ## Semantic events and time
 

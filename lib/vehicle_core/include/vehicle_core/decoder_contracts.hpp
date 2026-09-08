@@ -24,7 +24,9 @@ struct HealthObservation {
   TransportHealth transport{TransportHealth::Stopped};
   MessageHealth message{MessageHealth::Unknown};
   SignalHealth signal{SignalHealth::NoData};
+  bool has_last_frame{false};
   MonotonicTimestamp last_frame_us{0};
+  bool has_last_accepted{false};
   MonotonicTimestamp last_accepted_us{0};
   std::optional<MonotonicTimestamp> fault_timestamp_us{};
 };
