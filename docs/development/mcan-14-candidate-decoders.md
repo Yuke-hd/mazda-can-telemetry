@@ -5,9 +5,9 @@ confirmed from the capture-derived DBC supplied for #51.
 
 The decoder accepts a `vehicle_core::RawCanFrame` and writes only semantic
 fields in a `VehicleState`; it has no CAN driver, transport, polling,
-injection, board header, or global clock dependency. `raw_capture::ReplayHarness`
-can call the same functions used by a receive path, so replay tests do not
-have a second decoder implementation.
+injection, board header, or global clock dependency. Test-only direct frame
+helpers deliver synthetic frames to the same functions used by a receive path;
+there is no file-format parser or public replay API.
 
 ## Confirmed fields and retained candidate
 
