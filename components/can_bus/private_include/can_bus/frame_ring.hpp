@@ -9,6 +9,34 @@
 
 namespace can_bus::internal {
 
+enum class RingIndex : std::uint8_t {
+  kHead,
+  kTail,
+};
+
+// Read the consumer-owned index on both sides of the producer-owned index.
+// A statistics observer can be delayed after reading head while pop() advances
+// tail; accepting those independent reads would make unsigned subtraction
+// report a depth near SIZE_MAX. The retry also rejects any sample whose
+// distance is outside the fixed ring capacity instead of hiding a bad sample
+// by clamping it. Load must return the corresponding monotonic ring index.
+template <std::size_t Capacity, typename Load>
+[[nodiscard]] std::uint32_t coherent_depth(Load &&load) noexcept {
+  for (;;) {
+    const std::size_t tail_before = load(RingIndex::kTail);
+    const std::size_t head = load(RingIndex::kHead);
+    const std::size_t tail_after = load(RingIndex::kTail);
+    if (tail_before != tail_after) {
+      continue;
+    }
+
+    const std::size_t distance = head - tail_after;
+    if (distance <= Capacity) {
+      return static_cast<std::uint32_t>(distance);
+    }
+  }
+}
+
 // A fixed-capacity SPSC boundary. The producer always drops the newest frame
 // when full, so an absent or slow consumer can never block acquisition. The
 // public receive API documents the single-consumer ownership requirement.
@@ -60,7 +88,15 @@ public:
     controller_resets_.fetch_add(count, std::memory_order_relaxed);
   }
 
+  void record_bus_off(std::uint64_t count = 1) noexcept {
+    bus_off_events_.fetch_add(count, std::memory_order_relaxed);
+  }
+
   [[nodiscard]] Statistics snapshot(const StatisticsOperation operation) noexcept {
+    // Each counter is an independent atomic observation. A returned snapshot
+    // is therefore not a transactional cross-counter report: activity racing
+    // a reset may be attributed to either adjacent interval. Queue indices are
+    // sampled coherently below, so depth and watermark remain bounded.
     Statistics result{};
     result.queue_depth = depth();
     result.queue_capacity = static_cast<std::uint32_t>(Capacity);
@@ -74,6 +110,7 @@ public:
       result.bus_errors = bus_errors_.exchange(0, std::memory_order_relaxed);
       result.driver_rx_missed = driver_rx_missed_.exchange(0, std::memory_order_relaxed);
       result.controller_resets = controller_resets_.exchange(0, std::memory_order_relaxed);
+      result.bus_off_events = bus_off_events_.exchange(0, std::memory_order_relaxed);
       result.queue_high_watermark =
           queue_high_watermark_.exchange(result.queue_depth, std::memory_order_relaxed);
       // A producer may have published a frame after the initial depth read.
@@ -89,6 +126,7 @@ public:
       result.bus_errors = bus_errors_.load(std::memory_order_relaxed);
       result.driver_rx_missed = driver_rx_missed_.load(std::memory_order_relaxed);
       result.controller_resets = controller_resets_.load(std::memory_order_relaxed);
+      result.bus_off_events = bus_off_events_.load(std::memory_order_relaxed);
       result.queue_high_watermark = queue_high_watermark_.load(std::memory_order_relaxed);
     }
     return result;
@@ -103,9 +141,10 @@ public:
 
 private:
   [[nodiscard]] std::uint32_t depth() const noexcept {
-    const std::size_t head = head_.load(std::memory_order_acquire);
-    const std::size_t tail = tail_.load(std::memory_order_acquire);
-    return static_cast<std::uint32_t>(head - tail);
+    return coherent_depth<Capacity>([this](const RingIndex index) noexcept {
+      return index == RingIndex::kHead ? head_.load(std::memory_order_acquire)
+                                       : tail_.load(std::memory_order_acquire);
+    });
   }
 
   void update_watermark(const std::uint32_t depth_value) noexcept {
@@ -133,6 +172,7 @@ private:
   std::atomic<std::uint64_t> bus_errors_{0};
   std::atomic<std::uint64_t> driver_rx_missed_{0};
   std::atomic<std::uint64_t> controller_resets_{0};
+  std::atomic<std::uint64_t> bus_off_events_{0};
   std::atomic<std::uint32_t> queue_high_watermark_{0};
 };
 

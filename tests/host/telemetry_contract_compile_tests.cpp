@@ -61,6 +61,10 @@ TEST_CASE("facade exposes fixed polling and notify channels without implementati
 
   CHECK(mazda::TelemetryConfig{}.transport_silence_timeout_us == 1'000'000);
   CHECK(mazda::TelemetryConfig{}.callback_stop_timeout_us == 500'000);
+
+  const mazda::AcquisitionMetrics acquisition{};
+  CHECK(acquisition.controller_resets == 0);
+  CHECK(acquisition.bus_off_events == 0);
 }
 
 TEST_CASE("decoder and private lighting contracts keep health separate") {
