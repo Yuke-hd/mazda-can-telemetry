@@ -69,15 +69,17 @@ raises the watermark afterward. Consequently, a concurrent producer cannot make
 the new watermark claim that an already occupied queue started empty.
 
 `controller_resets` is one on an acquisition interval that follows a prior
-successful start, and zero on the first interval. An unexpected bus-off alert
-is recorded separately in `bus_off`; it represents an abnormal driver state in
-strict listen-only operation, but it is not itself a controller reset. The
-component does not initiate active bus recovery.
+successful start, and zero on the first interval. The S1-H counter/API contract
+provides `bus_off_events` for unexpected bus-off events; S1-B owns mapping
+`TWAI_ALERT_BUS_OFF` to `record_bus_off()`. A bus-off event represents an
+abnormal driver state in strict listen-only operation, but it is not itself a
+controller reset. The component does not initiate active bus recovery.
 `bus_errors` is the delta of the driver's cumulative `bus_error_count` status
 counter. Driver loss and error counters are sampled by the receive task before
 each alert poll, so they represent driver-reported counts rather than
-coalesced alert occurrences. `bus_off` is an interval count of unexpected
-`TWAI_ALERT_BUS_OFF` alerts; the component never initiates active recovery.
+coalesced alert occurrences. Once S1-B supplies the alert mapping,
+`bus_off_events` is the interval count of unexpected `TWAI_ALERT_BUS_OFF`
+alerts; the component never initiates active recovery.
 
 ## References
 
@@ -91,8 +93,9 @@ ESP-IDF v5.5.4 documentation:
 ## Validation status
 
 Host tests exercise bitrate rejection, full frame fidelity, FIFO order,
-drop-newest behavior, overflow and watermark accounting, statistics reset, and
-1,000 producer calls with an absent consumer. The structural check verifies
+drop-newest behavior, overflow and watermark accounting, independent
+controller-reset and bus-off event counters, statistics reset, and 1,000
+producer calls with an absent consumer. The structural check verifies
 the public operation set, strict listen-only token, disabled TX queue, absence
 of alternate modes in the vehicle CAN implementation, and absence of TWAI
 transmit calls. The WeAct artifact check additionally verifies that normal
