@@ -1,8 +1,11 @@
 # MCAN-4 portable domain model
 
-The `vehicle_core` public header defines the domain boundary shared by host
-tools and device firmware. It is C++17 and has no ESP-IDF, Arduino, FreeRTOS,
-transport, display, or LED dependency.
+The portable `vehicle_core` headers define the low-level boundary shared by
+host tools and device firmware. They are C++17 and have no Mazda decoder,
+ESP-IDF, Arduino, FreeRTOS, transport, display, or LED dependency. Mazda
+semantic state and model types are owned by `lib/mazda`; see
+[`mcan-17-module-boundaries.md`](mcan-17-module-boundaries.md) for the header
+map and migration notes.
 
 ## Raw frames
 
@@ -19,7 +22,7 @@ interface in this component.
 
 ## Signals and freshness
 
-`Signal<T>` stores a value, `SignalUnit`, last-update monotonic timestamp, and
+`vehicle_core::Signal<T>` stores a value, generic `SignalUnit`, last-update monotonic timestamp, and
 `SignalStatus` (`Unknown`, `Valid`, or `Stale`). Status is explicit, so a valid
 zero speed or RPM is never confused with an uninitialized value. `update()`
 rejects an older timestamp. Each signal stores its own bounded freshness
@@ -31,7 +34,7 @@ additional freshness policies remain intentionally unconfigured; an
 unconfigured signal becomes stale as soon as time advances after its update,
 so it cannot remain silently valid.
 
-`VehicleState` provides speed, RPM, selector position, actual transmission
+`mazda::VehicleState` provides speed, RPM, selector position, actual transmission
 gear, liftgate/door state, central unlock state, indicator-lamp state,
 low-speed wiper state, front-wiper selection, turn, hazard, left-turn, and
 right-turn signal slots. Selector position and actual gear are separate value
@@ -44,14 +47,14 @@ production defaults.
 
 ## Semantic events and time
 
-`TurnEdgeEvent` contains only semantic previous/current turn states and a
+`mazda::TurnEdgeEvent` contains only semantic previous/current turn states and a
 monotonic timestamp. It deliberately has no CAN ID or payload. A
-`MonotonicClock` adapter supplies time, while `VehicleStateStore` owns one
+`vehicle_core::MonotonicClock` adapter supplies time, while `mazda::VehicleStateStore` owns one
 state by value and provides deterministic snapshots through the
 `SnapshotProvider` interface. Host tests can provide a fixed clock; firmware
 can adapt its monotonic timer without changing the domain model.
 
-All ownership is explicit and non-owning at interfaces: `VehicleStateStore`
+All ownership is explicit and non-owning at interfaces: `mazda::VehicleStateStore`
 keeps a pointer to the caller-owned clock, which must outlive the store. Frames,
 signals, events, and states own only fixed-size value data. The model performs
 no heap allocation, and callers must use bounded queues/ring buffers around it

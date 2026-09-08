@@ -209,9 +209,8 @@ bool submit(const SemanticSnapshot snapshot) noexcept {
 }
 
 void fail_off() noexcept {
-  const SemanticSnapshot snapshot{vehicle_core::TurnState::Unknown,
-                                  vehicle_core::SignalStatus::Unknown, now_us(),
-                                  SemanticHealth::CanOffline};
+  const SemanticSnapshot snapshot{mazda::TurnState::Unknown, vehicle_core::SignalStatus::Unknown,
+                                  now_us(), SemanticHealth::CanOffline};
   if (!submit(snapshot)) {
     (void)g_sink.write(kBlack);
   }

@@ -29,15 +29,19 @@ target_compile_features(telemetry_contract_compile_tests PRIVATE cxx_std_17)
 doctest_discover_tests(telemetry_contract_compile_tests)
 
 add_executable(mazda_candidate_tests mazda_candidate_tests.cpp)
-target_link_libraries(mazda_candidate_tests PRIVATE vehicle_core telemetry_test_support doctest::doctest)
+target_link_libraries(mazda_candidate_tests PRIVATE mazda telemetry_test_support doctest::doctest)
 target_compile_features(mazda_candidate_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_candidate_tests)
 
 add_executable(mazda_turn_tests mazda_turn_tests.cpp)
-target_link_libraries(mazda_turn_tests PRIVATE vehicle_core telemetry_test_support doctest::doctest)
+target_link_libraries(mazda_turn_tests PRIVATE mazda telemetry_test_support doctest::doctest)
 target_compile_features(mazda_turn_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_turn_tests)
 
+add_executable(mazda_state_tests mazda_state_tests.cpp)
+target_link_libraries(mazda_state_tests PRIVATE mazda telemetry_test_support doctest::doctest)
+target_compile_features(mazda_state_tests PRIVATE cxx_std_17)
+doctest_discover_tests(mazda_state_tests)
 add_executable(board_config_tests board_config_tests.cpp)
 target_include_directories(board_config_tests PRIVATE ${CMAKE_SOURCE_DIR}/components/board/include)
 target_compile_features(board_config_tests PRIVATE cxx_std_17)
@@ -80,7 +84,7 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}/firmware/weact-can485-v1.1/main
     ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
 )
-target_link_libraries(local_argb_tests PRIVATE vehicle_core doctest::doctest)
+target_link_libraries(local_argb_tests PRIVATE mazda doctest::doctest)
 target_compile_features(local_argb_tests PRIVATE cxx_std_17)
 doctest_discover_tests(local_argb_tests)
 

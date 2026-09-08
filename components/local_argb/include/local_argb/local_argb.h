@@ -2,7 +2,9 @@
 
 #include <cstdint>
 
-#include "vehicle_core/vehicle_core.hpp"
+#include "mazda/state.hpp"
+#include "vehicle_core/signal.hpp"
+#include "vehicle_core/time.hpp"
 
 namespace local_argb {
 
@@ -36,13 +38,13 @@ inline constexpr Rgb kHazardAmber{kBrightnessCeiling, kBrightnessCeiling / 2, 0}
 enum class SemanticHealth : std::uint8_t { Online, CanOffline, DecoderError };
 
 struct SemanticSnapshot {
-  vehicle_core::TurnState turn{vehicle_core::TurnState::Unknown};
+  mazda::TurnState turn{mazda::TurnState::Unknown};
   vehicle_core::SignalStatus turn_status{vehicle_core::SignalStatus::Unknown};
   vehicle_core::MonotonicTimestamp turn_last_update_us{0};
   SemanticHealth health{SemanticHealth::CanOffline};
 };
 
-[[nodiscard]] SemanticSnapshot from_vehicle_state(const vehicle_core::VehicleState &state,
+[[nodiscard]] SemanticSnapshot from_vehicle_state(const mazda::VehicleState &state,
                                                   SemanticHealth health) noexcept;
 [[nodiscard]] Rgb color_for(const SemanticSnapshot &snapshot,
                             vehicle_core::MonotonicTimestamp now_us) noexcept;

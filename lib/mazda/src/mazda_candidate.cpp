@@ -1,15 +1,17 @@
-#include "vehicle_core/vehicle_core.hpp"
+#include "mazda/decoder.hpp"
 
-namespace vehicle_core::mazda_candidate {
+namespace mazda::candidate {
 namespace {
 
-bool candidate_frame(const RawCanFrame &frame, const std::uint32_t identifier) noexcept {
+bool candidate_frame(const vehicle_core::RawCanFrame &frame,
+                     const std::uint32_t identifier) noexcept {
   return frame.is_valid() && !frame.is_extended() && !frame.remote_request &&
          frame.identifier == identifier;
 }
 
-std::uint16_t big_endian_u16(const std::array<std::uint8_t, kCanClassicPayloadBytes> &data,
-                             const std::size_t offset) noexcept {
+std::uint16_t
+big_endian_u16(const std::array<std::uint8_t, vehicle_core::kCanClassicPayloadBytes> &data,
+               const std::size_t offset) noexcept {
   return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[offset]) << 8U) |
                                     data[offset + 1]);
 }
@@ -81,7 +83,8 @@ TurnState normalize_turn(const bool hazard, const bool left, const bool right) n
 
 } // namespace
 
-DecodeStatus decode_engine_data(const RawCanFrame &frame, VehicleState &state) noexcept {
+DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame,
+                                VehicleState &state) noexcept {
   if (!candidate_frame(frame, kEngineDataId))
     return DecodeStatus::Ignored;
   if (frame.dlc != kCandidateDlc)
@@ -107,7 +110,7 @@ DecodeStatus decode_engine_data(const RawCanFrame &frame, VehicleState &state) n
   return DecodeStatus::Invalid;
 }
 
-DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept {
+DecodeStatus decode_gear(const vehicle_core::RawCanFrame &frame, VehicleState &state) noexcept {
   if (!candidate_frame(frame, kGearId))
     return DecodeStatus::Ignored;
   if (frame.dlc != kCandidateDlc)
@@ -133,7 +136,7 @@ DecodeStatus decode_gear(const RawCanFrame &frame, VehicleState &state) noexcept
   return DecodeStatus::Invalid;
 }
 
-DecodeStatus decode_doors(const RawCanFrame &frame, VehicleState &state) noexcept {
+DecodeStatus decode_doors(const vehicle_core::RawCanFrame &frame, VehicleState &state) noexcept {
   if (!candidate_frame(frame, kDoorsId))
     return DecodeStatus::Ignored;
   if (frame.dlc != kCandidateDlc)
@@ -165,7 +168,8 @@ DecodeStatus decode_doors(const RawCanFrame &frame, VehicleState &state) noexcep
   return DecodeStatus::Invalid;
 }
 
-DecodeStatus decode_blink_info(const RawCanFrame &frame, VehicleState &state) noexcept {
+DecodeStatus decode_blink_info(const vehicle_core::RawCanFrame &frame,
+                               VehicleState &state) noexcept {
   if (!candidate_frame(frame, kBlinkInfoId))
     return DecodeStatus::Ignored;
   if (frame.dlc != kCandidateDlc)
@@ -190,7 +194,7 @@ DecodeStatus decode_blink_info(const RawCanFrame &frame, VehicleState &state) no
   return DecodeStatus::Invalid;
 }
 
-DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
+DecodeStatus decode_turn_switch(const vehicle_core::RawCanFrame &frame, VehicleState &state,
                                 std::optional<TurnEdgeEvent> *edge) noexcept {
   if (edge != nullptr)
     edge->reset();
@@ -221,7 +225,7 @@ DecodeStatus decode_turn_switch(const RawCanFrame &frame, VehicleState &state,
   return updated ? DecodeStatus::Updated : DecodeStatus::Invalid;
 }
 
-DecodeStatus decode(const RawCanFrame &frame, VehicleState &state,
+DecodeStatus decode(const vehicle_core::RawCanFrame &frame, VehicleState &state,
                     std::optional<TurnEdgeEvent> *edge) noexcept {
   if (edge != nullptr)
     edge->reset();
@@ -240,4 +244,4 @@ DecodeStatus decode(const RawCanFrame &frame, VehicleState &state,
   return decode_turn_switch(frame, state, edge);
 }
 
-} // namespace vehicle_core::mazda_candidate
+} // namespace mazda::candidate

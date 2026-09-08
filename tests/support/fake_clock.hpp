@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vehicle_core/vehicle_core.hpp"
+#include "vehicle_core/time.hpp"
 
 namespace test_support {
 

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "local_argb/local_argb.h"
-#include "vehicle_core/vehicle_core.hpp"
+#include "mazda/decoder.hpp"
 
 namespace weact_app {
 
 struct Context {
-  vehicle_core::VehicleState vehicle_state{};
+  mazda::VehicleState vehicle_state{};
   local_argb::SemanticHealth health{local_argb::SemanticHealth::CanOffline};
   vehicle_core::MonotonicTimestamp decoder_error_us{0};
 };

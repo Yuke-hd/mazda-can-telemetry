@@ -1,3 +1,3 @@
 #pragma once
 
-#include "mazda/telemetry_contracts.hpp"
+#include "mazda/availability.hpp"
