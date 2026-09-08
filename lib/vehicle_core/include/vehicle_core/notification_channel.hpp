@@ -168,6 +168,7 @@ public:
 
     running_ = true;
     dispatching_ = false;
+    dispatch_cursor_order_ = 0;
     current_ = Reading<T>{};
     has_available_period_ = false;
     for (Subscriber &subscriber : subscribers_) {
@@ -273,6 +274,7 @@ public:
       callback = subscriber->callback;
       context = subscriber->context;
       notice = subscriber->pending_notice;
+      dispatch_cursor_order_ = subscriber->registration_order;
       subscriber->pending = false;
       subscriber->pending_initial_seed = false;
       dispatching_ = true;
@@ -363,6 +365,25 @@ private:
       if (!subscriber.active || !subscriber.pending) {
         continue;
       }
+      if (subscriber.registration_order <= dispatch_cursor_order_) {
+        continue;
+      }
+      if (selected == nullptr || subscriber.registration_order < selected->registration_order) {
+        selected = &subscriber;
+      }
+    }
+
+    if (selected != nullptr) {
+      return selected;
+    }
+
+    // No pending subscriber is newer than the cursor.  Wrap to the oldest
+    // pending registration so a callback that keeps publishing cannot starve
+    // an earlier subscriber indefinitely.
+    for (Subscriber &subscriber : subscribers_) {
+      if (!subscriber.active || !subscriber.pending) {
+        continue;
+      }
       if (selected == nullptr || subscriber.registration_order < selected->registration_order) {
         selected = &subscriber;
       }
@@ -374,6 +395,7 @@ private:
   std::array<Subscriber, kNotificationSubscribersPerChannel> subscribers_{};
   Reading<T> current_{};
   std::uint64_t next_registration_order_{1};
+  std::uint64_t dispatch_cursor_order_{0};
   bool has_available_period_{false};
   bool running_{false};
   bool dispatching_{false};

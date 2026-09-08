@@ -18,8 +18,11 @@ struct CallbackState {
   Channel *channel{nullptr};
   std::vector<vehicle_core::Notification<int>> notices{};
   std::vector<int> order{};
+  std::vector<int> *shared_order{nullptr};
   int order_id{0};
   bool publish_during_callback{false};
+  std::size_t publishes_remaining{0};
+  int next_publish_value{1000};
   Status subscribe_from_callback{Status::Ok};
   Status unsubscribe_from_callback{Status::Ok};
   vehicle_core::NotificationHandle handle{};
@@ -29,10 +32,21 @@ void callback(void *raw, const vehicle_core::Notification<int> &notice) noexcept
   auto &state = *static_cast<CallbackState *>(raw);
   state.notices.push_back(notice);
   state.order.push_back(state.order_id);
+  if (state.shared_order != nullptr) {
+    state.shared_order->push_back(state.order_id);
+  }
   if (state.publish_during_callback) {
     state.publish_during_callback = false;
     vehicle_core::Reading<int> next{};
     next.value = 99;
+    next.availability = vehicle_core::Availability::Fresh;
+    next.validation = vehicle_core::ValidationStatus::Reference;
+    assert(state.channel->publish(next) == Status::Ok);
+  }
+  if (state.publishes_remaining > 0) {
+    --state.publishes_remaining;
+    vehicle_core::Reading<int> next{};
+    next.value = state.next_publish_value++;
     next.availability = vehicle_core::Availability::Fresh;
     next.validation = vehicle_core::ValidationStatus::Reference;
     assert(state.channel->publish(next) == Status::Ok);
@@ -117,9 +131,13 @@ void test_coalesced_failure_and_same_value_recovery() {
 
 void test_two_slots_capacity_stale_handle_and_registration_order() {
   Channel channel;
+  std::vector<int> shared_order{};
   CallbackState first{&channel};
   CallbackState second{&channel};
   CallbackState extra{&channel};
+  first.shared_order = &shared_order;
+  second.shared_order = &shared_order;
+  extra.shared_order = &shared_order;
   first.order_id = 1;
   second.order_id = 2;
   auto first_registration = channel.subscribe(&callback, &first);
@@ -131,6 +149,7 @@ void test_two_slots_capacity_stale_handle_and_registration_order() {
   assert(channel.subscribe(&callback, &extra).status == Status::CapacityExceeded);
   assert(channel.start() == Status::Ok);
   assert(channel.dispatch_pending() == 2);
+  assert((shared_order == std::vector<int>{1, 2}));
   assert(first.order == std::vector<int>{1});
   assert(second.order == std::vector<int>{2});
   assert(channel.stop() == Status::Ok);
@@ -141,7 +160,10 @@ void test_two_slots_capacity_stale_handle_and_registration_order() {
   extra.handle = *replacement.value;
   extra.order_id = 3;
   assert(channel.start() == Status::Ok);
-  assert(channel.dispatch_pending() == 2);
+  assert(channel.dispatch_pending(1) == 1);
+  assert((shared_order == std::vector<int>{1, 2, 2}));
+  assert(channel.dispatch_pending(1) == 1);
+  assert((shared_order == std::vector<int>{1, 2, 2, 3}));
   assert(second.order.back() == 2);
   assert(extra.order.back() == 3);
   assert(channel.stop() == Status::Ok);
@@ -200,6 +222,59 @@ void test_updates_during_callback_survive_detach() {
   assert(state.notices.size() == 2);
   assert(state.notices.back().current.value == 99);
   assert(!state.notices.back().initial);
+  assert(channel.stop() == Status::Ok);
+}
+
+void test_fair_progress_with_repeated_dispatch_one() {
+  Channel channel;
+  std::vector<int> shared_order{};
+  CallbackState first{&channel};
+  CallbackState second{&channel};
+  first.shared_order = &shared_order;
+  second.shared_order = &shared_order;
+  first.order_id = 1;
+  second.order_id = 2;
+  first.publishes_remaining = 3;
+  second.publishes_remaining = 3;
+
+  assert(channel.subscribe(&callback, &first).ok());
+  assert(channel.subscribe(&callback, &second).ok());
+  assert(channel.start() == Status::Ok);
+
+  for (int pass = 0; pass < 3; ++pass) {
+    assert(channel.dispatch_one() == Status::Ok);
+    assert(channel.dispatch_one() == Status::Ok);
+  }
+
+  assert((shared_order == std::vector<int>{1, 2, 1, 2, 1, 2}));
+  assert(first.order.size() == 3);
+  assert(second.order.size() == 3);
+  assert(channel.stop() == Status::Ok);
+}
+
+void test_fair_progress_with_repeated_bounded_dispatch() {
+  Channel channel;
+  std::vector<int> shared_order{};
+  CallbackState first{&channel};
+  CallbackState second{&channel};
+  first.shared_order = &shared_order;
+  second.shared_order = &shared_order;
+  first.order_id = 1;
+  second.order_id = 2;
+  first.publishes_remaining = 4;
+  second.publishes_remaining = 4;
+
+  assert(channel.subscribe(&callback, &first).ok());
+  assert(channel.subscribe(&callback, &second).ok());
+  assert(channel.start() == Status::Ok);
+
+  for (int pass = 0; pass < 8; ++pass) {
+    assert(channel.dispatch_pending(1) == 1);
+  }
+
+  assert((shared_order == std::vector<int>{1, 2, 1, 2, 1, 2, 1, 2}));
+  assert(first.order.size() == 4);
+  assert(second.order.size() == 4);
   assert(channel.stop() == Status::Ok);
 }
 
@@ -266,6 +341,8 @@ int main() {
   test_two_slots_capacity_stale_handle_and_registration_order();
   test_bounded_latest_state_and_independent_extra_channel();
   test_updates_during_callback_survive_detach();
+  test_fair_progress_with_repeated_dispatch_one();
+  test_fair_progress_with_repeated_bounded_dispatch();
   test_restart_clears_history_and_pending_flags();
   test_concurrent_publish_and_dispatch_are_race_free();
   return 0;
