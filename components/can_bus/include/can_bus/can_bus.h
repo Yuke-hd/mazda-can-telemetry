@@ -13,9 +13,31 @@ enum class Result : std::uint8_t {
   kInvalidConfiguration,
   kAlreadyStarted,
   kNotStarted,
+  // The receive task or driver cleanup still owns the acquisition boundary.
+  // Callers may retry stop(); start() must not create a second owner.
+  kStopping,
+  // A terminal receive/status or cleanup fault has been latched. Cleanup is
+  // still permitted, but a new acquisition cannot start until it succeeds.
+  kFaulted,
   kTimeout,
   kDriverFailure,
   kTaskFailure,
+};
+
+// Lifecycle is observable separately from the operation result. In
+// particular, a failed stop can leave ownership in Stopping while a driver
+// retry is in progress, or in Faulted when cleanup itself fails.
+enum class LifecycleState : std::uint8_t {
+  kStopped,
+  kRunning,
+  kStopping,
+  kFaulted,
+  // Spellings without the legacy k-prefix make this usable alongside the
+  // Stage 0 facade contract without changing the established values.
+  Stopped = kStopped,
+  Running = kRunning,
+  Stopping = kStopping,
+  Faulted = kFaulted,
 };
 
 // Vehicle mode is deliberately not configurable. The implementation always
@@ -50,6 +72,7 @@ enum class StatisticsOperation : std::uint8_t {
 
 Result start(const Configuration &configuration) noexcept;
 Result stop() noexcept;
+[[nodiscard]] LifecycleState lifecycle() noexcept;
 // The receive boundary is SPSC: one acquisition task produces frames and one
 // consumer task owns calls to receive(). Callers must serialize receive() calls
 // and stop that consumer before restarting acquisition.

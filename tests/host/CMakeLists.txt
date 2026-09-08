@@ -62,6 +62,18 @@ target_link_libraries(can_bus_boundary_tests PRIVATE doctest::doctest)
 target_compile_features(can_bus_boundary_tests PRIVATE cxx_std_17)
 doctest_discover_tests(can_bus_boundary_tests)
 
+add_executable(can_bus_lifecycle_tests can_bus_lifecycle_tests.cpp)
+target_include_directories(
+  can_bus_lifecycle_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/components/can_bus/include
+    ${CMAKE_SOURCE_DIR}/components/can_bus/private_include
+    ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
+)
+target_compile_features(can_bus_lifecycle_tests PRIVATE cxx_std_17)
+target_link_libraries(can_bus_lifecycle_tests PRIVATE doctest::doctest)
+doctest_discover_tests(can_bus_lifecycle_tests)
+
 add_executable(
   local_argb_tests
   local_argb_tests.cpp
