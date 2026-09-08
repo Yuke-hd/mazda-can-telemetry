@@ -30,8 +30,9 @@ stages.
 `tests/support/fake_clock.hpp` provides an injectable monotonic clock and
 `tests/support/direct_frame_feeder.hpp` delivers synthetic frames directly to
 decoder tests. Decoder/freshness tests use these helpers and do not depend on
-the legacy capture parser. `capture_reader_tests` remains the isolated
-capture-format test target for the later capture-retirement work.
+the retired capture parser. Capture-format tests were removed with the custom
+capture product in S1-D; no parser or replay API remains in test
+infrastructure.
 
 ## Baseline verification
 

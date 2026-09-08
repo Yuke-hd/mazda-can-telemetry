@@ -14,7 +14,6 @@ option(MAZDA_BUILD_HOST_TESTS "Build portable vehicle_core host tests" ${BUILD_T
 
 add_subdirectory(lib/vehicle_core)
 add_subdirectory(lib/mazda)
-add_subdirectory(lib/raw_capture)
 add_subdirectory(components/vehicle_telemetry)
 
 if(MAZDA_BUILD_HOST_TESTS)
