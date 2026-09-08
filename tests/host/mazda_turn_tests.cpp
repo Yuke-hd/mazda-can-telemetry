@@ -3,7 +3,7 @@
 
 #include "../support/direct_frame_feeder.hpp"
 #include "../support/fake_clock.hpp"
-#include "vehicle_core/vehicle_core.hpp"
+#include "mazda/decoder.hpp"
 
 namespace {
 
@@ -11,7 +11,7 @@ vehicle_core::RawCanFrame turn_frame(const vehicle_core::MonotonicTimestamp time
                                      const bool hazard, const bool left, const bool right) {
   vehicle_core::RawCanFrame frame{};
   frame.timestamp_us = timestamp;
-  frame.identifier = vehicle_core::mazda_candidate::kTurnSwitchId;
+  frame.identifier = mazda::candidate::kTurnSwitchId;
   frame.dlc = 8;
   frame.data[1] = static_cast<std::uint8_t>((hazard ? 1U << 2U : 0U) | (right ? 1U << 4U : 0U) |
                                             (left ? 1U << 5U : 0U));
@@ -21,8 +21,8 @@ vehicle_core::RawCanFrame turn_frame(const vehicle_core::MonotonicTimestamp time
 } // namespace
 
 TEST_CASE("turn switch normalizes candidate bits with hazard and conflict precedence") {
-  using namespace vehicle_core;
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda;
+  using namespace mazda::candidate;
 
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
@@ -64,8 +64,8 @@ TEST_CASE("turn switch normalizes candidate bits with hazard and conflict preced
 }
 
 TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info") {
-  using namespace vehicle_core;
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda;
+  using namespace mazda::candidate;
 
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
@@ -80,7 +80,7 @@ TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info")
   CHECK(state.turn_state.value == TurnState::Left);
 
   auto extended = initial;
-  extended.identifier_format = CanIdentifierFormat::Extended;
+  extended.identifier_format = vehicle_core::CanIdentifierFormat::Extended;
   CHECK(decode_turn_switch(extended, state, &edge) == DecodeStatus::Ignored);
   CHECK_FALSE(edge.has_value());
 
@@ -110,30 +110,30 @@ TEST_CASE("turn switch rejects malformed input and dispatch decodes blink info")
 }
 
 TEST_CASE("duplicate turn states do not create duplicate semantic edges") {
-  vehicle_core::VehicleState state{};
+  mazda::VehicleState state{};
 
-  const auto first = state.update_turn(vehicle_core::TurnState::Left, 10);
+  const auto first = state.update_turn(mazda::TurnState::Left, 10);
   REQUIRE(first.has_value());
-  CHECK(first->previous == vehicle_core::TurnState::Unknown);
-  CHECK(first->current == vehicle_core::TurnState::Left);
-  CHECK_FALSE(state.update_turn(vehicle_core::TurnState::Left, 11).has_value());
+  CHECK(first->previous == mazda::TurnState::Unknown);
+  CHECK(first->current == mazda::TurnState::Left);
+  CHECK_FALSE(state.update_turn(mazda::TurnState::Left, 11).has_value());
 
-  const auto changed = state.update_turn(vehicle_core::TurnState::Hazard, 20);
+  const auto changed = state.update_turn(mazda::TurnState::Hazard, 20);
   REQUIRE(changed.has_value());
-  CHECK(changed->previous == vehicle_core::TurnState::Left);
-  CHECK(changed->current == vehicle_core::TurnState::Hazard);
-  CHECK_FALSE(state.update_turn(vehicle_core::TurnState::Hazard, 21).has_value());
+  CHECK(changed->previous == mazda::TurnState::Left);
+  CHECK(changed->current == mazda::TurnState::Hazard);
+  CHECK_FALSE(state.update_turn(mazda::TurnState::Hazard, 21).has_value());
 }
 
 TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionable") {
-  using namespace vehicle_core;
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda;
+  using namespace mazda::candidate;
 
   test_support::FakeClock clock;
   test_support::DirectFrameFeeder feeder;
   VehicleStateStore store{clock};
   CHECK(store.snapshot().effective_turn_state() == TurnState::Unknown);
-  feeder.feed(turn_frame(1'000, false, true, false), [&](const RawCanFrame &value) {
+  feeder.feed(turn_frame(1'000, false, true, false), [&](const vehicle_core::RawCanFrame &value) {
     clock.set(value.timestamp_us);
     CHECK(decode_turn_switch(value, store.mutable_state()) == DecodeStatus::Updated);
   });
@@ -147,7 +147,7 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
   CHECK(stale.turn_state.is_stale());
   CHECK(stale.effective_turn_state() == TurnState::Unknown);
 
-  feeder.feed(turn_frame(301'000, false, false, true), [&](const RawCanFrame &value) {
+  feeder.feed(turn_frame(301'000, false, false, true), [&](const vehicle_core::RawCanFrame &value) {
     clock.set(value.timestamp_us);
     CHECK(decode(value, store.mutable_state()) == DecodeStatus::Updated);
   });
@@ -159,8 +159,8 @@ TEST_CASE("simulated replay makes turn stale after 250 ms and recovery actionabl
 }
 
 TEST_CASE("decoder emits recovery edges after freshness loss, including same direction") {
-  using namespace vehicle_core;
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda;
+  using namespace mazda::candidate;
 
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
@@ -188,8 +188,8 @@ TEST_CASE("decoder emits recovery edges after freshness loss, including same dir
 }
 
 TEST_CASE("duplicate frames through decoder clear edge output") {
-  using namespace vehicle_core;
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda;
+  using namespace mazda::candidate;
 
   VehicleState state{};
   std::optional<TurnEdgeEvent> edge;
@@ -202,7 +202,7 @@ TEST_CASE("duplicate frames through decoder clear edge output") {
 }
 
 TEST_CASE("confirmed switch definitions document capture provenance") {
-  using namespace vehicle_core::mazda_candidate;
+  using namespace mazda::candidate;
   CHECK(kTurnSwitchDefinition.identifier == 0x091);
   CHECK(kTurnSwitchDefinition.expected_dlc == 8);
   CHECK(kTurnSwitchDefinition.freshness_timeout_us.value() == 250'000);

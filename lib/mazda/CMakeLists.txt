@@ -1,11 +1,25 @@
 if(COMMAND idf_component_register)
-  idf_component_register(INCLUDE_DIRS "include" REQUIRES vehicle_core)
+  idf_component_register(SRCS "src/state.cpp" "src/mazda_candidate.cpp"
+                         INCLUDE_DIRS "include" REQUIRES vehicle_core)
   return()
 endif()
 
-# Stage 0 exposes Mazda-facing types without adding a production runtime
-# target. Later stages can add sources without changing consumers' include
-# paths or the root test graph.
+add_library(mazda STATIC
+  src/state.cpp
+  src/mazda_candidate.cpp
+)
+target_include_directories(mazda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(mazda PUBLIC vehicle_core)
+target_compile_features(mazda PUBLIC cxx_std_17)
+
+if(MSVC)
+  target_compile_options(mazda PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(mazda PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Keep the Stage 0 target name as a source/build compatibility seam for the
+# facade while the Mazda implementation now has an owned production target.
 add_library(mazda_contracts INTERFACE)
 target_include_directories(mazda_contracts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(mazda_contracts INTERFACE vehicle_core)
+target_link_libraries(mazda_contracts INTERFACE mazda)

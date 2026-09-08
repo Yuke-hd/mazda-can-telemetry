@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mazda/telemetry_contracts.hpp"
+#include "mazda/facade_contracts.hpp"
 
 namespace mazda {
 

@@ -2,7 +2,7 @@
 
 namespace local_argb {
 
-SemanticSnapshot from_vehicle_state(const vehicle_core::VehicleState &state,
+SemanticSnapshot from_vehicle_state(const mazda::VehicleState &state,
                                     const SemanticHealth health) noexcept {
   return SemanticSnapshot{state.turn_state.value, state.turn_state.status,
                           state.turn_state.last_update_us, health};
@@ -17,14 +17,14 @@ Rgb color_for(const SemanticSnapshot &snapshot,
     return kBlack;
   }
   switch (snapshot.turn) {
-  case vehicle_core::TurnState::Left:
+  case mazda::TurnState::Left:
     return kLeftGreen;
-  case vehicle_core::TurnState::Right:
+  case mazda::TurnState::Right:
     return kRightBlue;
-  case vehicle_core::TurnState::Hazard:
+  case mazda::TurnState::Hazard:
     return kHazardAmber;
-  case vehicle_core::TurnState::Unknown:
-  case vehicle_core::TurnState::Off:
+  case mazda::TurnState::Unknown:
+  case mazda::TurnState::Off:
     return kBlack;
   }
   return kBlack;
