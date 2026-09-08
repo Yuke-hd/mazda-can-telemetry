@@ -80,6 +80,9 @@ void latch_terminal_fault() noexcept {
     // Record the unexpected driver state separately from actual controller
     // resets, latch the fault, and never attempt active recovery.
     g_frames.record_bus_off();
+    // Record the unexpected controller state, latch the fault, and never
+    // attempt active recovery.
+    g_frames.record_controller_reset();
     latch_terminal_fault();
     return false;
   }
