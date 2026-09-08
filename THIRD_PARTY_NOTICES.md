@@ -44,9 +44,9 @@ source, exact version or commit, license, and required notices.
 ## doctest
 
 - **Source:** <https://github.com/doctest/doctest>
-- **Exact version/commit:** `v2.4.11`, `ae7a13539fb71f270b87eb2e874fbac80bc8dda2`
-- **License:** MIT, upstream [LICENSE.txt](https://github.com/doctest/doctest/blob/v2.4.11/LICENSE.txt)
-- **Role/status:** CMake FetchContent host-test dependency; the exact commit is pinned in `tests/host/CMakeLists.txt`.
+- **Exact version/commit:** `v2.5.0`, `d44d4f6e66232d716af82f00a063759e9d0e50d6`
+- **License:** MIT, upstream [LICENSE.txt](https://github.com/doctest/doctest/blob/v2.5.0/LICENSE.txt)
+- **Role/status:** CMake FetchContent host-test dependency. v2.5.0 is pinned because the prior v2.4.11 CMake metadata used a pre-3.5 minimum rejected by CMake 4; the exact commit is pinned in `tests/host/CMakeLists.txt`.
 
 ## ESP-IDF
 

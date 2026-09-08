@@ -62,6 +62,16 @@ class ToolchainCheckerTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("reported 5.5.4-dev; need exactly 5.5.4", detail)
 
+    def test_cmake_support_includes_minimum_and_modern_legs(self) -> None:
+        requirement = next(item for item in check_toolchain.REQUIREMENTS if item.name == "CMake")
+        minimum_valid, _ = requirement.check("cmake version 3.20.5")
+        modern_valid, _ = requirement.check("cmake version 4.4.3")
+        below_minimum, detail = requirement.check("cmake version 3.19.9")
+        self.assertTrue(minimum_valid)
+        self.assertTrue(modern_valid)
+        self.assertFalse(below_minimum)
+        self.assertIn("need >= 3.20", detail)
+
     def test_venv_sibling_tool_is_found_without_path_entry(self) -> None:
         with patch.object(check_toolchain.shutil, "which", return_value=None), patch.object(
             check_toolchain.sys, "executable", "/tmp/venv/bin/python"

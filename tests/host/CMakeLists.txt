@@ -4,7 +4,9 @@ include(FetchContent)
 FetchContent_Declare(
   doctest
   GIT_REPOSITORY https://github.com/doctest/doctest.git
-  GIT_TAG ae7a13539fb71f270b87eb2e874fbac80bc8dda2
+  # v2.5.0 raises doctest's CMake minimum to 3.14, which remains compatible
+  # with the project's 3.20 minimum and modern CMake 4.x.
+  GIT_TAG d44d4f6e66232d716af82f00a063759e9d0e50d6
 )
 FetchContent_MakeAvailable(doctest)
 
@@ -17,13 +19,22 @@ target_compile_features(vehicle_core_tests PRIVATE cxx_std_17)
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(vehicle_core_tests)
 
+add_executable(telemetry_contract_compile_tests telemetry_contract_compile_tests.cpp)
+target_link_libraries(telemetry_contract_compile_tests PRIVATE vehicle_telemetry_contracts
+                                                             telemetry_test_support
+                                                             doctest::doctest)
+target_include_directories(telemetry_contract_compile_tests PRIVATE
+  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include)
+target_compile_features(telemetry_contract_compile_tests PRIVATE cxx_std_17)
+doctest_discover_tests(telemetry_contract_compile_tests)
+
 add_executable(mazda_candidate_tests mazda_candidate_tests.cpp)
-target_link_libraries(mazda_candidate_tests PRIVATE raw_capture doctest::doctest)
+target_link_libraries(mazda_candidate_tests PRIVATE vehicle_core telemetry_test_support doctest::doctest)
 target_compile_features(mazda_candidate_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_candidate_tests)
 
 add_executable(mazda_turn_tests mazda_turn_tests.cpp)
-target_link_libraries(mazda_turn_tests PRIVATE raw_capture doctest::doctest)
+target_link_libraries(mazda_turn_tests PRIVATE vehicle_core telemetry_test_support doctest::doctest)
 target_compile_features(mazda_turn_tests PRIVATE cxx_std_17)
 doctest_discover_tests(mazda_turn_tests)
 

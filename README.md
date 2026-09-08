@@ -24,6 +24,9 @@ contains the complete commands and exact dependency pins; run
 build. Missing tools and version mismatches are reported together with an
 official installation link.
 
+For the tested CMake minimum and modern compatibility matrix, see
+[`docs/development/supported-build.md`](docs/development/supported-build.md).
+
 | Workflow | Required tool | Supported version or constraint | Purpose and installation |
 | --- | --- | --- | --- |
 | Host library/tests | Bash/Linux shell, Git, Python 3, ripgrep | Bash and Git current supported releases; Python >= 3.8; ripgrep current supported release | Repository commands and source discovery ([Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git), [Python](https://www.python.org/downloads/), [ripgrep](https://github.com/BurntSushi/ripgrep#installation)) |
