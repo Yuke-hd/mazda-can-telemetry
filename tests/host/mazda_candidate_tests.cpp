@@ -328,8 +328,8 @@ TEST_CASE("invalid and missing updates become stale on the same replay clock") {
                 clock.set(value.timestamp_us);
                 (void)vehicle_core::mazda_candidate::decode(value, store.mutable_state());
               });
-  // Match ReplayHarness::replay's final advance: the test clock reaches the
-  // end of the synthetic stream after all frames have been delivered.
+  // Advance the test clock to the end of the synthetic frame sequence after
+  // all frames have been delivered.
   clock.set(std::numeric_limits<vehicle_core::MonotonicTimestamp>::max());
   REQUIRE(store.state().engine_rpm.is_valid());
   REQUIRE(store.state().actual_gear.is_valid());

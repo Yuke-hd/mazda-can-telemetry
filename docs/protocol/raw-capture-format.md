@@ -1,6 +1,13 @@
-# Versioned USB raw CAN capture format
+# Versioned USB raw CAN capture format (retired)
 
-Status: normative v1 specification for MCAN-5.
+> Retired 2026-09-08 by S1-D / [#59](https://github.com/Yuke-hd/mazda-can-telemetry/issues/59).
+> The custom format and its reader, writer, replay harness, fixture, and
+> validator were removed from the repository. SavvyCAN is the selected capture
+> and replay tool. Do not add a new implementation, parser, exporter, or
+> adapter based on this historical specification.
+
+Status: historical v1 specification for superseded MCAN-5 work; retained for
+context and attribution only.
 
 This format is an output-only, line-oriented text stream. It records frames
 received by a receive-only CAN device and the loss or discontinuity information
@@ -178,9 +185,9 @@ The following are explicitly not part of this format:
 
 ## 6. Normative example and golden fixture
 
-The following complete stream is the canonical small golden fixture stored at
-[`tests/fixtures/capture/golden-v1.txt`](../../tests/fixtures/capture/golden-v1.txt).
-Its values are synthetic and contain no vehicle data.
+The following complete stream was the canonical small golden fixture for the
+superseded MCAN-5 work. Its values are synthetic and contain no vehicle data;
+the fixture file was removed with the custom capture product.
 
 ```text
 MCAN-CAPTURE 1
@@ -195,5 +202,6 @@ FRAME t_us=2200 bus=1 id=0x123 format=std rtr=1 dlc=2 data=-
 STATS t_us=2200 segment=1 dropped_frames=2 dropped_records=0
 ```
 
-The repository validator checks this example and the fixture byte-for-byte;
-it is a syntax/field-losslessness check, not the complete MCAN-9 parser.
+The former repository validator checked this example and its fixture
+byte-for-byte. Both were removed with the custom capture product; this
+historical document is no longer part of the build or test contract.
