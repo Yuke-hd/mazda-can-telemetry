@@ -3,7 +3,8 @@
 #include <cstdint>
 #include <optional>
 
-#include "vehicle_core/vehicle_core.hpp"
+#include "vehicle_core/frame.hpp"
+#include "vehicle_core/health.hpp"
 
 namespace vehicle_core {
 
@@ -18,10 +19,6 @@ struct DecoderObservation {
   std::uint8_t bus_id{0};
   std::uint8_t dlc{0};
 };
-
-enum class TransportHealth : std::uint8_t { AwaitingTraffic, Live, TimedOut, Faulted, Stopped };
-enum class MessageHealth : std::uint8_t { Unknown, Healthy, Faulted };
-enum class SignalHealth : std::uint8_t { NoData, Available, Unavailable };
 
 struct HealthObservation {
   TransportHealth transport{TransportHealth::Stopped};

@@ -1,11 +1,10 @@
 if(COMMAND idf_component_register)
-  idf_component_register(SRCS "src/vehicle_core.cpp" "src/mazda_candidate.cpp" INCLUDE_DIRS "include")
+  idf_component_register(SRCS "src/vehicle_core.cpp" INCLUDE_DIRS "include")
   return()
 endif()
 
 add_library(vehicle_core STATIC
   src/vehicle_core.cpp
-  src/mazda_candidate.cpp
 )
 
 target_include_directories(vehicle_core

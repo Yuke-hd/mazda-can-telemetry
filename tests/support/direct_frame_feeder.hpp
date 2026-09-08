@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "vehicle_core/vehicle_core.hpp"
+#include "vehicle_core/frame.hpp"
 
 namespace test_support {
 

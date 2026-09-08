@@ -4,26 +4,26 @@ namespace weact_app {
 
 void process_received_frame(Context &context, const vehicle_core::RawCanFrame &frame) noexcept {
   const auto turn_update_before = context.vehicle_state.turn_state.last_update_us;
-  const auto decode_status = vehicle_core::mazda_candidate::decode(frame, context.vehicle_state);
+  const auto decode_status = mazda::candidate::decode(frame, context.vehicle_state);
   const bool valid_turn_update =
-      decode_status == vehicle_core::mazda_candidate::DecodeStatus::Updated &&
+      decode_status == mazda::candidate::DecodeStatus::Updated &&
       context.vehicle_state.turn_state.status == vehicle_core::SignalStatus::Valid &&
       context.vehicle_state.turn_state.last_update_us > turn_update_before &&
       (context.health != local_argb::SemanticHealth::DecoderError ||
        context.vehicle_state.turn_state.last_update_us > context.decoder_error_us);
 
   switch (decode_status) {
-  case vehicle_core::mazda_candidate::DecodeStatus::Updated:
+  case mazda::candidate::DecodeStatus::Updated:
     if (valid_turn_update || context.health == local_argb::SemanticHealth::CanOffline) {
       context.health = local_argb::SemanticHealth::Online;
     }
     break;
-  case vehicle_core::mazda_candidate::DecodeStatus::Ignored:
+  case mazda::candidate::DecodeStatus::Ignored:
     if (context.health == local_argb::SemanticHealth::CanOffline) {
       context.health = local_argb::SemanticHealth::Online;
     }
     break;
-  case vehicle_core::mazda_candidate::DecodeStatus::Invalid:
+  case mazda::candidate::DecodeStatus::Invalid:
     context.health = local_argb::SemanticHealth::DecoderError;
     if (frame.timestamp_us > context.decoder_error_us) {
       context.decoder_error_us = frame.timestamp_us;

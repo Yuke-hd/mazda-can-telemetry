@@ -4,7 +4,7 @@ Status: portable decoder implementation; the listed signal definitions are
 confirmed from the capture-derived DBC supplied for #51.
 
 The decoder accepts a `vehicle_core::RawCanFrame` and writes only semantic
-fields in a `VehicleState`; it has no CAN driver, transport, polling,
+fields in a `mazda::VehicleState`; it has no CAN driver, transport, polling,
 injection, board header, or global clock dependency. Test-only direct frame
 helpers deliver synthetic frames to the same functions used by a receive path;
 there is no file-format parser or public replay API.
@@ -42,7 +42,7 @@ signal untouched and cannot create a valid value. Boolean fields decode both
 states directly. Frames must be standard, non-RTR, exactly eight bytes, and
 have the expected identifier.
 
-`TURN_SWITCH` continues to normalize the confirmed hazard/right/left switch
+`mazda::candidate::decode_turn_switch()` continues to normalize the confirmed hazard/right/left switch
 bits into `TurnState` and retains the existing 250 ms turn/request freshness
 behavior. The supplied DBC has no cycle-time declaration, so the other
 confirmed signals expose unconfigured freshness by default; callers can set

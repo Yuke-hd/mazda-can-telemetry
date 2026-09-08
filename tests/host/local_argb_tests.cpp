@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "local_argb/local_argb.h"
+#include "mazda/decoder.hpp"
 #include "semantic_led_policy.h"
 
 namespace {
@@ -24,7 +25,7 @@ public:
   int failures_remaining{0};
 };
 
-local_argb::SemanticSnapshot valid(const vehicle_core::TurnState turn,
+local_argb::SemanticSnapshot valid(const mazda::TurnState turn,
                                    const vehicle_core::MonotonicTimestamp timestamp = 100) {
   return {turn, vehicle_core::SignalStatus::Valid, timestamp, local_argb::SemanticHealth::Online};
 }
@@ -41,7 +42,7 @@ vehicle_core::RawCanFrame frame(const std::uint32_t id,
 
 vehicle_core::RawCanFrame turn_frame(const vehicle_core::MonotonicTimestamp timestamp,
                                      const bool left) {
-  auto result = frame(vehicle_core::mazda_candidate::kTurnSwitchId, timestamp);
+  auto result = frame(mazda::candidate::kTurnSwitchId, timestamp);
   result.data[1] = left ? 1U << 5U : 1U << 4U;
   return result;
 }
@@ -57,12 +58,10 @@ TEST_CASE("startup transmits an explicit black frame") {
 }
 
 TEST_CASE("semantic states map to bounded diagnostic colors") {
-  CHECK(local_argb::color_for(valid(vehicle_core::TurnState::Left), 100) == local_argb::kLeftGreen);
-  CHECK(local_argb::color_for(valid(vehicle_core::TurnState::Right), 100) ==
-        local_argb::kRightBlue);
-  CHECK(local_argb::color_for(valid(vehicle_core::TurnState::Hazard), 100) ==
-        local_argb::kHazardAmber);
-  CHECK(local_argb::color_for(valid(vehicle_core::TurnState::Off), 100) == local_argb::kBlack);
+  CHECK(local_argb::color_for(valid(mazda::TurnState::Left), 100) == local_argb::kLeftGreen);
+  CHECK(local_argb::color_for(valid(mazda::TurnState::Right), 100) == local_argb::kRightBlue);
+  CHECK(local_argb::color_for(valid(mazda::TurnState::Hazard), 100) == local_argb::kHazardAmber);
+  CHECK(local_argb::color_for(valid(mazda::TurnState::Off), 100) == local_argb::kBlack);
 
   const local_argb::Rgb colors[]{local_argb::kBlack, local_argb::kLeftGreen, local_argb::kRightBlue,
                                  local_argb::kHazardAmber};
@@ -74,7 +73,7 @@ TEST_CASE("semantic states map to bounded diagnostic colors") {
 }
 
 TEST_CASE("unknown stale offline and decoder error fail black") {
-  auto snapshot = valid(vehicle_core::TurnState::Left);
+  auto snapshot = valid(mazda::TurnState::Left);
   snapshot.turn_status = vehicle_core::SignalStatus::Unknown;
   CHECK(local_argb::color_for(snapshot, 100) == local_argb::kBlack);
   snapshot.turn_status = vehicle_core::SignalStatus::Stale;
@@ -87,7 +86,7 @@ TEST_CASE("unknown stale offline and decoder error fail black") {
 }
 
 TEST_CASE("freshness is inclusive at 250000 us and clears at 250001 us") {
-  const auto snapshot = valid(vehicle_core::TurnState::Left, 1'000);
+  const auto snapshot = valid(mazda::TurnState::Left, 1'000);
   CHECK(local_argb::color_for(snapshot, 251'000) == local_argb::kLeftGreen);
   CHECK(local_argb::color_for(snapshot, 251'001) == local_argb::kBlack);
 }
@@ -96,10 +95,10 @@ TEST_CASE("controller independently clears stale state and recovers same directi
   FakeSink sink;
   local_argb::Controller controller{sink};
   REQUIRE(controller.start());
-  REQUIRE(controller.apply(valid(vehicle_core::TurnState::Left, 10), 10));
+  REQUIRE(controller.apply(valid(mazda::TurnState::Left, 10), 10));
   REQUIRE(controller.tick(250'011));
   CHECK(sink.attempts.back() == local_argb::kBlack);
-  REQUIRE(controller.apply(valid(vehicle_core::TurnState::Left, 300'000), 300'000));
+  REQUIRE(controller.apply(valid(mazda::TurnState::Left, 300'000), 300'000));
   CHECK(sink.attempts.back() == local_argb::kLeftGreen);
 }
 
@@ -107,7 +106,7 @@ TEST_CASE("duplicate semantic submissions avoid redundant hardware refreshes") {
   FakeSink sink;
   local_argb::Controller controller{sink};
   REQUIRE(controller.start());
-  const auto snapshot = valid(vehicle_core::TurnState::Right, 50);
+  const auto snapshot = valid(mazda::TurnState::Right, 50);
   REQUIRE(controller.apply(snapshot, 50));
   const auto writes = sink.attempts.size();
   REQUIRE(controller.apply(snapshot, 60));
@@ -117,11 +116,11 @@ TEST_CASE("duplicate semantic submissions avoid redundant hardware refreshes") {
 
 TEST_CASE("length-one mailbox overwrites backpressure with newest semantics") {
   local_argb::Mailbox mailbox;
-  mailbox.submit(valid(vehicle_core::TurnState::Left, 1));
-  mailbox.submit(valid(vehicle_core::TurnState::Hazard, 2));
+  mailbox.submit(valid(mazda::TurnState::Left, 1));
+  mailbox.submit(valid(mazda::TurnState::Hazard, 2));
   local_argb::SemanticSnapshot result{};
   REQUIRE(mailbox.take(result));
-  CHECK(result.turn == vehicle_core::TurnState::Hazard);
+  CHECK(result.turn == mazda::TurnState::Hazard);
   CHECK(result.turn_last_update_us == 2);
   CHECK_FALSE(mailbox.take(result));
 }
@@ -131,14 +130,14 @@ TEST_CASE("driver failure attempts black and retries only after recovery input")
   local_argb::Controller controller{sink};
   REQUIRE(controller.start());
   sink.failures_remaining = 1;
-  CHECK_FALSE(controller.apply(valid(vehicle_core::TurnState::Left), 100));
+  CHECK_FALSE(controller.apply(valid(mazda::TurnState::Left), 100));
   REQUIRE(sink.attempts.size() == 3);
   CHECK(sink.attempts[1] == local_argb::kLeftGreen);
   CHECK(sink.attempts[2] == local_argb::kBlack);
   CHECK(controller.faulted());
   REQUIRE(controller.tick(110));
   CHECK(sink.attempts.size() == 3);
-  REQUIRE(controller.apply(valid(vehicle_core::TurnState::Left, 120), 120));
+  REQUIRE(controller.apply(valid(mazda::TurnState::Left, 120), 120));
   CHECK(sink.attempts.back() == local_argb::kLeftGreen);
 }
 
@@ -159,12 +158,12 @@ TEST_CASE("failed fallback clear blocks color until black succeeds") {
   local_argb::Controller controller{sink};
   REQUIRE(controller.start());
   sink.failures_remaining = 2;
-  CHECK_FALSE(controller.apply(valid(vehicle_core::TurnState::Left), 100));
+  CHECK_FALSE(controller.apply(valid(mazda::TurnState::Left), 100));
   CHECK(controller.faulted());
-  REQUIRE(controller.apply(valid(vehicle_core::TurnState::Right, 110), 110));
+  REQUIRE(controller.apply(valid(mazda::TurnState::Right, 110), 110));
   CHECK(sink.attempts.back() == local_argb::kBlack);
   CHECK(controller.faulted());
-  REQUIRE(controller.apply(valid(vehicle_core::TurnState::Right, 120), 120));
+  REQUIRE(controller.apply(valid(mazda::TurnState::Right, 120), 120));
   CHECK(sink.attempts.back() == local_argb::kRightBlue);
   CHECK_FALSE(controller.faulted());
 }
@@ -173,19 +172,18 @@ TEST_CASE("only a valid turn update recovers decoder error after mixed traffic")
   weact_app::Context context{};
   weact_app::process_received_frame(context, turn_frame(100, true));
   REQUIRE(context.health == local_argb::SemanticHealth::Online);
-  REQUIRE(weact_app::semantic_snapshot(context, 100).turn == vehicle_core::TurnState::Left);
+  REQUIRE(weact_app::semantic_snapshot(context, 100).turn == mazda::TurnState::Left);
 
-  weact_app::process_received_frame(context,
-                                    frame(vehicle_core::mazda_candidate::kTurnSwitchId, 110, 7));
+  weact_app::process_received_frame(context, frame(mazda::candidate::kTurnSwitchId, 110, 7));
   REQUIRE(context.health == local_argb::SemanticHealth::DecoderError);
   CHECK(local_argb::color_for(weact_app::semantic_snapshot(context, 110), 110) ==
         local_argb::kBlack);
 
-  auto engine = frame(vehicle_core::mazda_candidate::kEngineDataId, 120);
+  auto engine = frame(mazda::candidate::kEngineDataId, 120);
   engine.data[0] = 1;
   weact_app::process_received_frame(context, engine);
   CHECK(context.health == local_argb::SemanticHealth::DecoderError);
-  auto gear = frame(vehicle_core::mazda_candidate::kGearId, 125);
+  auto gear = frame(mazda::candidate::kGearId, 125);
   gear.data[0] = 4;
   gear.data[4] = 4;
   weact_app::process_received_frame(context, gear);
@@ -206,7 +204,7 @@ TEST_CASE("only a valid turn update recovers decoder error after mixed traffic")
 
 TEST_CASE("publication policy emits changes and bounded heartbeat only") {
   local_argb::PublicationPolicy policy;
-  const auto left = valid(vehicle_core::TurnState::Left, 10);
+  const auto left = valid(mazda::TurnState::Left, 10);
   CHECK(policy.should_publish(left, 10));
   CHECK_FALSE(policy.should_publish(left, 10 + local_argb::kPublishHeartbeatUs - 1));
   CHECK(policy.should_publish(left, 10 + local_argb::kPublishHeartbeatUs));
@@ -226,12 +224,12 @@ TEST_CASE("engine gear and unrelated frames do not wake LED publication") {
   weact_app::process_received_frame(context, turn_frame(100, true));
   REQUIRE(policy.should_publish(weact_app::semantic_snapshot(context, 100), 100));
 
-  auto engine = frame(vehicle_core::mazda_candidate::kEngineDataId, 110);
+  auto engine = frame(mazda::candidate::kEngineDataId, 110);
   engine.data[0] = 1;
   weact_app::process_received_frame(context, engine);
   CHECK_FALSE(policy.should_publish(weact_app::semantic_snapshot(context, 110), 110));
 
-  auto gear = frame(vehicle_core::mazda_candidate::kGearId, 120);
+  auto gear = frame(mazda::candidate::kGearId, 120);
   gear.data[0] = 4;
   gear.data[4] = 4;
   weact_app::process_received_frame(context, gear);

@@ -1,6 +1,6 @@
 # MCAN-15 normalized turn and hazard state
 
-`vehicle_core::mazda_candidate::decode_turn_switch()` accepts only a valid,
+`mazda::candidate::decode_turn_switch()` accepts only a valid,
 standard, non-RTR classic-CAN frame with ID `0x091` and DLC 8. It extracts the
 confirmed `HazardSwitch`, `RightIndicatorSwitch`, and `LeftIndicatorSwitch`
 fields using byte/LSB numbering (byte 1 bits 2, 4, and 5 respectively),
@@ -22,10 +22,10 @@ stale states are non-actionable: `VehicleState::effective_turn_state()` returns
 `Unknown`, which gives indicator consumers fail-off semantics. The stored raw
 value is retained for diagnostics while its status is stale.
 
-`VehicleState::update_turn()` emits a `TurnEdgeEvent` only when the semantic
+`mazda::VehicleState::update_turn()` emits a `mazda::TurnEdgeEvent` only when the semantic
 state changes. Equal states and duplicate frames do not create duplicate
 edges. The decoder can optionally write that event to an output
-`std::optional<TurnEdgeEvent>`, which is cleared for ignored, invalid, and
+`std::optional<mazda::TurnEdgeEvent>`, which is cleared for ignored, invalid, and
 duplicate frames. Before comparing states, `update_turn()` refreshes the
 mutable turn signal at the incoming timestamp. A stale value is therefore not
 actionable, and a recovered frame produces an edge from effective `Unknown`,

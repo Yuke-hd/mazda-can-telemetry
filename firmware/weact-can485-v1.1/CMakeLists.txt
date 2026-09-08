@@ -6,7 +6,8 @@ set(TCAN485_BENCH_ACK_ONLY OFF CACHE BOOL "Enable the isolated bench ACK target"
 
 set(EXTRA_COMPONENT_DIRS
     "${CMAKE_CURRENT_LIST_DIR}/../../components"
-    "${CMAKE_CURRENT_LIST_DIR}/../../lib/vehicle_core")
+    "${CMAKE_CURRENT_LIST_DIR}/../../lib/vehicle_core"
+    "${CMAKE_CURRENT_LIST_DIR}/../../lib/mazda")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(weact_can485_v11_vehicle_listen_only)
