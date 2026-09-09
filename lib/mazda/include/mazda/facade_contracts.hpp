@@ -4,18 +4,18 @@
 #include <cstdint>
 #include <optional>
 
-#include "mazda/availability.hpp"
 #include "mazda/freshness.hpp"
+#include "mazda/notification.hpp"
+#include "mazda/reading.hpp"
 #include "mazda/types.hpp"
 #include "vehicle_core/health.hpp"
-#include "vehicle_core/signal.hpp"
+#include "vehicle_core/time.hpp"
 
 namespace mazda {
 
 using vehicle_core::Callback;
 using vehicle_core::Microseconds;
 using vehicle_core::MonotonicTimestamp;
-using vehicle_core::SignalStatus;
 using vehicle_core::TransportHealth;
 
 inline constexpr std::size_t kNotifySubscribersPerChannel = 2;
