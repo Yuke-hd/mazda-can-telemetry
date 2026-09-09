@@ -2,11 +2,13 @@
 
 namespace vehicle_core {
 
-template <typename T> struct Reading {
+template <typename T>
+struct Reading {
   T value{};
 };
 
-template <typename T> struct Notification {
+template <typename T>
+struct Notification {
   Reading<T> current{};
 };
 
