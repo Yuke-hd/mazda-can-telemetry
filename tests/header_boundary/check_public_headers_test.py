@@ -67,7 +67,26 @@ class PublicHeaderCheckerTests(unittest.TestCase):
             result = run_checker(root)
         output = result.stdout + result.stderr
         self.assertNotEqual(result.returncode, 0, output)
-        self.assertIn("exported private include path", output)
+        self.assertIn("exported private/internal include path", output)
+
+    def test_exported_internal_path_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            source = root / "lib/mazda/private_include/mazda/internal_contracts.hpp"
+            destination = root / "lib/mazda/internal_include/mazda/internal_contracts.hpp"
+            destination.parent.mkdir(parents=True)
+            destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+            cmake = root / "CMakeLists.txt"
+            cmake.write_text(
+                cmake.read_text(encoding="utf-8")
+                + "\ntarget_include_directories(vehicle_telemetry_contracts INTERFACE\n"
+                + "  ${CMAKE_CURRENT_SOURCE_DIR}/lib/mazda/internal_include)\n",
+                encoding="utf-8",
+            )
+            result = run_checker(root)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("exported private/internal include path", output)
 
 
 if __name__ == "__main__":

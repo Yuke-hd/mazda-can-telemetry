@@ -34,16 +34,15 @@ class PublicHeader:
     label: str
 
 
-# These are the five application-facing entry points.  The Mazda compatibility
-# umbrella (mazda/telemetry_contracts.hpp) is deliberately not in this list:
-# it is the legacy Stage 0 path and intentionally exposes internal handoff
-# contracts.  vehicle_core/telemetry_contracts.hpp is the public value-only
-# telemetry contract.
+# These are the application-facing entry points, including the frozen Mazda
+# compatibility umbrella.  The compatibility path remains public even while
+# its internal handoff includes are being moved behind an internal target.
 PUBLIC_HEADERS: Tuple[PublicHeader, ...] = (
     PublicHeader("mazda/vehicle_telemetry.hpp", "vehicle telemetry facade"),
     PublicHeader("mazda/facade_contracts.hpp", "facade contracts"),
     PublicHeader("mazda/reading.hpp", "reading contract"),
     PublicHeader("mazda/notification.hpp", "notification contract"),
+    PublicHeader("mazda/telemetry_contracts.hpp", "Mazda compatibility contracts"),
     PublicHeader("vehicle_core/telemetry_contracts.hpp", "public telemetry contracts"),
 )
 
@@ -179,8 +178,12 @@ def _dependency_violation(path: Path, root: Path) -> Optional[str]:
         relative_parts = {part.lower() for part in path.resolve().relative_to(root.resolve()).parts}
     except ValueError:
         relative_parts = set()
-    if "private_include" in relative_parts or "private" in relative_parts:
-        return "private include path"
+    if (
+        "private_include" in relative_parts
+        or "internal_include" in relative_parts
+        or "private" in relative_parts
+    ):
+        return "private/internal include path"
     if name.endswith("mazda/internal_contracts.hpp"):
         return "private internal contract"
     for category, suffixes in FORBIDDEN_DEPENDENCIES:
@@ -288,6 +291,7 @@ def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path]:
         '#include "mazda/facade_contracts.hpp"\n'
         '#include "mazda/reading.hpp"\n'
         '#include "mazda/notification.hpp"\n'
+        '#include "mazda/telemetry_contracts.hpp"\n'
         '#include "vehicle_core/telemetry_contracts.hpp"\n'
         "int main() { mazda::VehicleTelemetry telemetry; (void)telemetry; return 0; }\n",
         encoding="utf-8",
@@ -354,9 +358,9 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
     ).lower()
     # Check the command rather than CMake source spelling: this is the actual
     # interface consumed by a downstream target.
-    if "private_include" in command_text:
-        failures.append("CMake consumer target exports a private include path")
-        print("FAIL CMake consumer target: exported private include path")
+    if "private_include" in command_text or "internal_include" in command_text:
+        failures.append("CMake consumer target exports a private/internal include path")
+        print("FAIL CMake consumer target: exported private/internal include path")
     else:
         print("OK   CMake consumer target: isolated public interface compiled")
     return failures
@@ -366,9 +370,13 @@ def check_internal_access(
     root: Path, compiler: Sequence[str], work_dir: Path
 ) -> List[str]:
     failures: List[str] = []
-    internal = root / "lib/mazda/include/mazda/internal_contracts.hpp"
-    private_internal = root / "lib/mazda/private_include/mazda/internal_contracts.hpp"
-    if not internal.is_file() and not private_internal.is_file():
+    public_internal = root / "lib/mazda/include/mazda/internal_contracts.hpp"
+    authorized_candidates = (
+        root / "lib/mazda/internal_include/mazda/internal_contracts.hpp",
+        root / "lib/mazda/private_include/mazda/internal_contracts.hpp",
+    )
+    authorized_internal = next((path for path in authorized_candidates if path.is_file()), None)
+    if not public_internal.is_file() and authorized_internal is None:
         print("SKIP internal contract access probes: no mazda/internal_contracts.hpp")
         return failures
     normal_source = work_dir / "internal_normal.cpp"
@@ -397,7 +405,9 @@ def check_internal_access(
     # The include argument is mazda/internal_contracts.hpp, so the include
     # directory is the parent of the mazda/ directory, not mazda/ itself.
     explicit_private = (
-        private_internal.parent.parent if private_internal.is_file() else internal.parent.parent
+        authorized_internal.parent.parent
+        if authorized_internal is not None
+        else public_internal.parent.parent
     )
     if explicit_private not in authorized_dirs:
         authorized_dirs.append(explicit_private)
@@ -415,7 +425,11 @@ def check_internal_access(
         failures.append(f"authorized internal contract probe failed\n{detail}")
         print("FAIL internal contract probe: authorized access failed")
     else:
-        mode = "private include path" if private_internal.is_file() else "baseline compatibility path"
+        mode = (
+            "internal include path"
+            if authorized_internal is not None
+            else "baseline compatibility path"
+        )
         print(f"OK   internal contract probe: authorized access succeeded ({mode})")
     return failures
 
