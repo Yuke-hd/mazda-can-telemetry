@@ -77,6 +77,10 @@ class CommandResult:
     output: str
 
 
+REQUIRED_INTERNAL_HEADER = Path("lib/mazda/internal_include/mazda/internal_contracts.hpp")
+PUBLIC_INTERNAL_HEADER = Path("lib/mazda/include/mazda/internal_contracts.hpp")
+
+
 def _run(command: Sequence[str], *, cwd: Path, timeout: int = 90) -> CommandResult:
     try:
         result = subprocess.run(
@@ -113,9 +117,12 @@ def _include_dirs(root: Path) -> Tuple[Path, ...]:
 
 
 def _compiler_is_msvc(compiler: Sequence[str]) -> bool:
+    compiler_name = Path(compiler[0]).name.lower()
+    if compiler_name in {"cl", "cl.exe", "clang-cl", "clang-cl.exe"}:
+        return True
     result = _run((*compiler, "--version"), cwd=Path.cwd(), timeout=15)
     text = result.output.lower()
-    return result.returncode == 0 and ("microsoft" in text or Path(compiler[0]).name.lower() in {"cl", "cl.exe"})
+    return "microsoft" in text or "msvc" in text
 
 
 def _make_tokens(text: str) -> List[str]:
@@ -232,12 +239,20 @@ def _header_source(header: PublicHeader, directory: Path) -> Path:
     return source
 
 
+def _unsupported_msvc_failure() -> List[str]:
+    message = "MSVC dependency inspection is unsupported; use GCC or Clang"
+    print(f"FAIL public header boundary check: {message}")
+    return [message]
+
+
 def check_public_headers(root: Path, compiler: Sequence[str], work_dir: Path) -> List[str]:
     failures: List[str] = []
     include_dirs = _include_dirs(root)
     if not include_dirs:
         return ["no public include directories were found"]
     msvc = _compiler_is_msvc(compiler)
+    if msvc:
+        return _unsupported_msvc_failure()
     for index, header in enumerate(PUBLIC_HEADERS):
         source = _header_source(header, work_dir)
         depfile = work_dir / f"header_{index}.d"
@@ -257,11 +272,6 @@ def check_public_headers(root: Path, compiler: Sequence[str], work_dir: Path) ->
             print(f"FAIL {prefix}: compile failed")
             if detail:
                 print(f"      {detail}")
-            continue
-        if msvc:
-            # MSVC's /showIncludes format is intentionally not guessed here;
-            # the supported host checker uses GCC/Clang dependency files.
-            print(f"OK   {prefix}: compiled (MSVC dependency inspection unavailable)")
             continue
         dependencies = _dependency_paths(depfile, root)
         if not dependencies:
@@ -293,7 +303,14 @@ def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path]:
         '#include "mazda/notification.hpp"\n'
         '#include "mazda/telemetry_contracts.hpp"\n'
         '#include "vehicle_core/telemetry_contracts.hpp"\n'
-        "int main() { mazda::VehicleTelemetry telemetry; (void)telemetry; return 0; }\n",
+        '#include "vehicle_core/frame.hpp"\n'
+        "int main() {\n"
+        "  mazda::VehicleTelemetry telemetry;\n"
+        "  vehicle_core::RawCanFrame frame{};\n"
+        "  (void)telemetry;\n"
+        "  (void)frame;\n"
+        "  return 0;\n"
+        "}\n",
         encoding="utf-8",
     )
     cmake = probe_dir / "CMakeLists.txt"
@@ -311,12 +328,130 @@ def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path]:
     return cmake, source
 
 
+def _compile_database_entry_source(entry: object) -> Optional[Path]:
+    if not isinstance(entry, dict):
+        return None
+    file_name = entry.get("file")
+    if not isinstance(file_name, str) or not file_name:
+        return None
+    path = Path(file_name)
+    if not path.is_absolute():
+        directory = entry.get("directory")
+        if isinstance(directory, str) and directory:
+            path = Path(directory) / path
+    return path.resolve()
+
+
+def _split_command(command: str) -> List[str]:
+    try:
+        return shlex.split(command, posix=os.name != "nt")
+    except ValueError:
+        return []
+
+
+def _expand_response_files(
+    tokens: Sequence[str], base_dir: Path, seen: Optional[Tuple[Path, ...]] = None
+) -> Tuple[List[str], List[str]]:
+    expanded: List[str] = []
+    errors: List[str] = []
+    active = seen or ()
+    for token in tokens:
+        if not token.startswith("@") or len(token) == 1:
+            expanded.append(token)
+            continue
+        response_file = Path(token[1:])
+        if not response_file.is_absolute():
+            response_file = base_dir / response_file
+        response_file = response_file.resolve()
+        if response_file in active:
+            errors.append(f"response file cycle: {response_file}")
+            continue
+        try:
+            response_text = response_file.read_text(encoding="utf-8")
+        except OSError as error:
+            errors.append(f"unable to read response file {response_file}: {error}")
+            continue
+        response_tokens = _split_command(response_text)
+        if not response_tokens and response_text.strip():
+            errors.append(f"malformed response file: {response_file}")
+            continue
+        nested, nested_errors = _expand_response_files(
+            response_tokens, response_file.parent, (*active, response_file)
+        )
+        expanded.extend(nested)
+        errors.extend(nested_errors)
+    return expanded, errors
+
+
+def _compile_database_command(entry: object) -> Tuple[List[str], List[str]]:
+    if not isinstance(entry, dict):
+        return [], ["compile database entry is not an object"]
+    arguments = entry.get("arguments")
+    if isinstance(arguments, list) and all(isinstance(argument, str) for argument in arguments):
+        tokens = list(arguments)
+    else:
+        command = entry.get("command")
+        if not isinstance(command, str):
+            return [], ["compile database entry has neither arguments nor command"]
+        tokens = _split_command(command)
+        if not tokens and command.strip():
+            return [], ["compile database command is malformed"]
+    directory = entry.get("directory")
+    base_dir = Path(directory).resolve() if isinstance(directory, str) and directory else Path.cwd()
+    return _expand_response_files(tokens, base_dir)
+
+
+def _include_directory_arguments(tokens: Sequence[str], cwd: Path) -> Tuple[Path, ...]:
+    directories: List[Path] = []
+    separate_flags = {"-I", "/I", "-isystem", "-iquote", "-idirafter"}
+
+    def add(value: str) -> None:
+        path = Path(value)
+        if not path.is_absolute():
+            path = cwd / path
+        resolved = path.resolve()
+        if resolved not in directories:
+            directories.append(resolved)
+
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token in separate_flags:
+            if index + 1 < len(tokens):
+                add(tokens[index + 1])
+                index += 2
+                continue
+        elif token.startswith("--include-directory="):
+            add(token.split("=", 1)[1])
+        elif token.startswith("-I") and len(token) > 2:
+            add(token[2:])
+        elif token.startswith("/I") and len(token) > 2:
+            add(token[2:])
+        elif token.startswith("-isystem") and len(token) > len("-isystem"):
+            add(token[len("-isystem") :])
+        elif token.startswith("-iquote") and len(token) > len("-iquote"):
+            add(token[len("-iquote") :])
+        index += 1
+    return tuple(directories)
+
+
+def _private_include_argument(path: Path, root: Path) -> Optional[str]:
+    try:
+        relative_parts = path.resolve().relative_to(root.resolve()).parts
+    except ValueError:
+        return None
+    for marker in ("private_include", "internal_include"):
+        if marker in {part.lower() for part in relative_parts}:
+            return _relative_name(path, root)
+    return None
+
+
 def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_dir: Path) -> List[str]:
     failures: List[str] = []
     probe_dir = work_dir / "cmake_probe"
     build_dir = work_dir / "cmake_build"
     probe_dir.mkdir()
-    _cmake_probe_files(probe_dir, root)
+    _, source = _cmake_probe_files(probe_dir, root)
     configure = [cmake, "-S", str(probe_dir), "-B", str(build_dir), "-DBUILD_TESTING=OFF"]
     if len(compiler) == 1:
         configure.append(f"-DCMAKE_CXX_COMPILER={compiler[0]}")
@@ -348,20 +483,38 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
         failures.append(f"CMake consumer probe compile database is unreadable: {error}")
         print("FAIL CMake consumer target: compile database unreadable")
         return failures
-    consumer_entries = [entry for entry in entries if Path(entry.get("file", "")).name == "consumer.cpp"]
+    consumer_entries = [
+        entry
+        for entry in entries
+        if _compile_database_entry_source(entry) == source.resolve()
+    ]
     if not consumer_entries:
         failures.append("CMake consumer probe did not expose the consumer compile command")
         print("FAIL CMake consumer target: consumer compile command missing")
         return failures
-    command_text = " ".join(
-        str(value) for entry in consumer_entries for value in (entry.get("command", ""), entry.get("arguments", []))
-    ).lower()
-    # Check the command rather than CMake source spelling: this is the actual
-    # interface consumed by a downstream target.
-    if "private_include" in command_text or "internal_include" in command_text:
-        failures.append("CMake consumer target exports a private/internal include path")
+    forbidden: List[str] = []
+    for entry in consumer_entries:
+        tokens, parse_errors = _compile_database_command(entry)
+        if parse_errors:
+            detail = "; ".join(parse_errors)
+            failures.append(f"CMake consumer probe compile command is unreadable: {detail}")
+            print("FAIL CMake consumer target: compile command unreadable")
+            continue
+        directory = entry.get("directory") if isinstance(entry, dict) else None
+        command_cwd = Path(directory).resolve() if isinstance(directory, str) and directory else root
+        for include_dir in _include_directory_arguments(tokens, command_cwd):
+            marker = _private_include_argument(include_dir, root)
+            if marker is not None:
+                forbidden.append(marker)
+    if forbidden:
+        unique = list(dict.fromkeys(forbidden))
+        detail = ", ".join(unique)
+        failures.append(f"CMake consumer target exports a private/internal include path: {detail}")
         print("FAIL CMake consumer target: exported private/internal include path")
-    else:
+        print(f"      {detail}")
+    elif not failures:
+        # Check the exact consumer command rather than CMake source spelling:
+        # this is the actual interface consumed by a downstream target.
         print("OK   CMake consumer target: isolated public interface compiled")
     return failures
 
@@ -370,14 +523,20 @@ def check_internal_access(
     root: Path, compiler: Sequence[str], work_dir: Path
 ) -> List[str]:
     failures: List[str] = []
-    public_internal = root / "lib/mazda/include/mazda/internal_contracts.hpp"
-    authorized_candidates = (
-        root / "lib/mazda/internal_include/mazda/internal_contracts.hpp",
-        root / "lib/mazda/private_include/mazda/internal_contracts.hpp",
-    )
-    authorized_internal = next((path for path in authorized_candidates if path.is_file()), None)
-    if not public_internal.is_file() and authorized_internal is None:
-        print("SKIP internal contract access probes: no mazda/internal_contracts.hpp")
+    public_internal = root / PUBLIC_INTERNAL_HEADER
+    authorized_internal = root / REQUIRED_INTERNAL_HEADER
+    if not authorized_internal.is_file():
+        message = f"missing required internal header: {REQUIRED_INTERNAL_HEADER.as_posix()}"
+        failures.append(message)
+        print(f"FAIL internal contract probe: {message}")
+    if public_internal.is_file():
+        message = (
+            "public mazda/internal_contracts.hpp is top-level accessible; "
+            "internal access must be denied by top-level inaccessibility"
+        )
+        failures.append(message)
+        print(f"FAIL internal contract probe: {message}")
+    if failures:
         return failures
     normal_source = work_dir / "internal_normal.cpp"
     normal_source.write_text('#include "mazda/internal_contracts.hpp"\nint main() { return 0; }\n', encoding="utf-8")
@@ -404,11 +563,7 @@ def check_internal_access(
     authorized_dirs = list(include_dirs)
     # The include argument is mazda/internal_contracts.hpp, so the include
     # directory is the parent of the mazda/ directory, not mazda/ itself.
-    explicit_private = (
-        authorized_internal.parent.parent
-        if authorized_internal is not None
-        else public_internal.parent.parent
-    )
+    explicit_private = authorized_internal.parent.parent
     if explicit_private not in authorized_dirs:
         authorized_dirs.append(explicit_private)
     authorized = _compile_translation_unit(
@@ -425,12 +580,7 @@ def check_internal_access(
         failures.append(f"authorized internal contract probe failed\n{detail}")
         print("FAIL internal contract probe: authorized access failed")
     else:
-        mode = (
-            "internal include path"
-            if authorized_internal is not None
-            else "baseline compatibility path"
-        )
-        print(f"OK   internal contract probe: authorized access succeeded ({mode})")
+        print("OK   internal contract probe: authorized access succeeded (internal include path)")
     return failures
 
 
@@ -463,9 +613,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         work_dir = Path(temp_context.name)
     try:
         print(f"Public header boundary check: {root}")
-        failures = check_public_headers(root, compiler, work_dir)
-        failures.extend(check_consumer_target(root, args.cmake, compiler, work_dir))
-        failures.extend(check_internal_access(root, compiler, work_dir))
+        if _compiler_is_msvc(compiler):
+            failures = _unsupported_msvc_failure()
+        else:
+            failures = check_public_headers(root, compiler, work_dir)
+            failures.extend(check_consumer_target(root, args.cmake, compiler, work_dir))
+            failures.extend(check_internal_access(root, compiler, work_dir))
         if args.keep_temp:
             print(f"Probe files: {work_dir}")
         if failures:

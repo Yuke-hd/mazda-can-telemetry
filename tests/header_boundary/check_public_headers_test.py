@@ -15,6 +15,13 @@ ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "tools/check_public_headers.py"
 FIXTURE = Path(__file__).resolve().parent / "fixtures/clean"
 
+sys.path.insert(0, str(ROOT))
+from tools.check_public_headers import (
+    _compile_database_command,
+    _include_directory_arguments,
+    check_public_headers,
+)
+
 
 def run_checker(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -38,6 +45,72 @@ class PublicHeaderCheckerTests(unittest.TestCase):
             result = run_checker(self.copy_fixture(Path(directory)))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Header boundary check passed", result.stdout)
+        self.assertIn("normal access failed as expected", result.stdout)
+        self.assertIn("authorized access succeeded (internal include path)", result.stdout)
+
+    def test_missing_internal_include_is_a_failure_not_a_skip(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            (root / "lib/mazda/internal_include/mazda/internal_contracts.hpp").unlink()
+            result = run_checker(root)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("missing required internal header", output)
+        self.assertNotIn("SKIP internal contract access probes", output)
+
+    def test_public_internal_shim_is_rejected_for_top_level_access(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            public_shim = root / "lib/mazda/include/mazda/internal_contracts.hpp"
+            public_shim.write_text('#include "mazda/handoff_impl.hpp"\n', encoding="utf-8")
+            handoff = root / "lib/mazda/internal_include/mazda/handoff_impl.hpp"
+            handoff.write_text(
+                "#pragma once\n"
+                "namespace mazda { struct InternalContract {}; }\n",
+                encoding="utf-8",
+            )
+            result = run_checker(root)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("top-level accessible", output)
+        self.assertIn("top-level inaccessibility", output)
+
+    def test_direct_vehicle_core_frame_consumer_is_checked(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            (root / "lib/vehicle_core/include/vehicle_core/frame.hpp").unlink()
+            result = run_checker(root)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("CMake consumer probe build failed", output)
+
+    def test_parent_directory_name_is_not_a_private_include_match(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="internal_include-parent-") as directory:
+            result = run_checker(self.copy_fixture(Path(directory)))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_response_file_include_arguments_are_inspected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = Path(directory)
+            response_file = root / "consumer.rsp"
+            response_file.write_text(
+                f'-I"{root / "lib/mazda/internal_include"}"\n', encoding="utf-8"
+            )
+            tokens, errors = _compile_database_command(
+                {"directory": str(root), "arguments": ["c++", "@consumer.rsp", "consumer.cpp"]}
+            )
+            include_dirs = _include_directory_arguments(tokens, root)
+        self.assertEqual(errors, [])
+        self.assertIn((root / "lib/mazda/internal_include").resolve(), include_dirs)
+
+    def test_msvc_dependency_inspection_is_explicitly_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            failures = check_public_headers(root, ("cl",), Path(directory) / "work")
+        self.assertTrue(
+            any("MSVC dependency inspection is unsupported" in failure for failure in failures),
+            failures,
+        )
 
     def test_transitive_forbidden_include_is_detected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
@@ -72,10 +145,6 @@ class PublicHeaderCheckerTests(unittest.TestCase):
     def test_exported_internal_path_is_detected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
             root = self.copy_fixture(Path(directory))
-            source = root / "lib/mazda/private_include/mazda/internal_contracts.hpp"
-            destination = root / "lib/mazda/internal_include/mazda/internal_contracts.hpp"
-            destination.parent.mkdir(parents=True)
-            destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
             cmake = root / "CMakeLists.txt"
             cmake.write_text(
                 cmake.read_text(encoding="utf-8")
