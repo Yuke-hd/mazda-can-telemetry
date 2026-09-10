@@ -32,7 +32,8 @@ python3 tests/header_boundary/check_public_headers_test.py
 
 The checker also runs two access probes. A normal consumer is expected to fail
 when it includes `mazda/internal_contracts.hpp`; an explicitly authorized
-consumer that receives the `internal_include` (or legacy fixture
-`private_include`) directory must succeed. The baseline's public compatibility
-location is reported as a boundary failure, while the authorized probe remains
-useful evidence during the header split.
+consumer must be given the `lib/mazda/internal_include` directory and must
+succeed. The legacy `private_include` directory is not an accepted internal
+boundary; it remains a forbidden legacy/export marker. The baseline's public
+compatibility location is reported as a boundary failure, while the authorized
+probe remains useful evidence during the header split.
