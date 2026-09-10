@@ -3,10 +3,10 @@
 // Mazda-facing aliases for the frozen, value-copy availability contract.
 // Definitions remain in vehicle_core so generic consumers can reason about
 // data availability without depending on Mazda decoders or state storage.
+#include "mazda/notification.hpp"
 #include "vehicle_core/decoder_contracts.hpp"
 #include "vehicle_core/health.hpp"
 #include "vehicle_core/signal.hpp"
-#include "vehicle_core/telemetry_contracts.hpp"
 #include "vehicle_core/time.hpp"
 
 namespace mazda {
