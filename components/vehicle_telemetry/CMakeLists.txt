@@ -1,6 +1,6 @@
 if(COMMAND idf_component_register)
   idf_component_register(INCLUDE_DIRS "include" PRIV_INCLUDE_DIRS "private_include"
-                         REQUIRES vehicle_core)
+                         REQUIRES vehicle_core mazda)
   return()
 endif()
 
@@ -10,6 +10,5 @@ target_include_directories(
   vehicle_telemetry_contracts
   INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/private_include
 )
 target_link_libraries(vehicle_telemetry_contracts INTERFACE mazda_contracts)

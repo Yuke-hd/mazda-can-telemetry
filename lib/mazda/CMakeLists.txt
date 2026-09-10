@@ -1,6 +1,7 @@
 if(COMMAND idf_component_register)
   idf_component_register(SRCS "src/state.cpp" "src/mazda_candidate.cpp"
-                         INCLUDE_DIRS "include" REQUIRES vehicle_core)
+                         INCLUDE_DIRS "include" PRIV_INCLUDE_DIRS "internal_include"
+                         REQUIRES vehicle_core)
   return()
 endif()
 
@@ -8,7 +9,13 @@ add_library(mazda STATIC
   src/state.cpp
   src/mazda_candidate.cpp
 )
-target_include_directories(mazda PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# The public include root contains only application-facing Mazda contracts.
+# Decoder/service/lighting handoffs are implementation-only and are granted to
+# this production target through a PRIVATE include path.
+target_include_directories(mazda
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/internal_include
+)
 target_link_libraries(mazda PUBLIC vehicle_core)
 target_compile_features(mazda PUBLIC cxx_std_17)
 

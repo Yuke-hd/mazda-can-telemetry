@@ -9,7 +9,8 @@ namespace mazda {
 
 // Internal handoff contracts keep raw acquisition and decoder details out of
 // the application facade while allowing later modules to be implemented
-// independently.
+// independently. This header is intentionally available only through the
+// Mazda implementation include boundary, not the public include root.
 struct DecoderInput {
   vehicle_core::RawCanFrame frame{};
 };

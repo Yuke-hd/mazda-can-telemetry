@@ -24,7 +24,10 @@ target_link_libraries(telemetry_contract_compile_tests PRIVATE vehicle_telemetry
                                                              telemetry_test_support
                                                              doctest::doctest)
 target_include_directories(telemetry_contract_compile_tests PRIVATE
-  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include)
+  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include
+  # This test is an explicitly authorized implementation-boundary consumer;
+  # ordinary consumers reach only the public Mazda façade target.
+  ${CMAKE_SOURCE_DIR}/lib/mazda/internal_include)
 target_compile_features(telemetry_contract_compile_tests PRIVATE cxx_std_17)
 doctest_discover_tests(telemetry_contract_compile_tests)
 
