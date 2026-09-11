@@ -8,9 +8,9 @@ dependencies even when a header happens to compile successfully.  A small
 CMake consumer project then exercises the exported interface of the real
 ``vehicle_telemetry_contracts`` target.
 
-The checker is diagnostic at this stage of the migration.  The current
-baseline is expected to report violations; it is not wired into required CI
-until the public/private header split is complete.
+The checker is a required Stage 1.5 host regression gate. It is registered
+once by the host CTest flow after the public/private header split and returns a
+failure for any boundary violation.
 """
 
 from __future__ import annotations

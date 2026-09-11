@@ -119,3 +119,15 @@ add_test(
           ${CMAKE_SOURCE_DIR}/tools/validate_local_argb_boundary.py
           --root ${CMAKE_SOURCE_DIR}
 )
+
+# Required Stage 1.5 gate. The checker compiles each public entry point in
+# isolation, verifies the ordinary consumer target's exported include paths,
+# and keeps explicit internal access separate from public-header coverage.
+# Keep this as the single CTest registration; the host CI jobs invoke CTest
+# once per configured build and must not run the checker as a second step.
+add_test(
+  NAME public_header_boundary
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/check_public_headers.py
+          --root ${CMAKE_SOURCE_DIR}
+)
