@@ -20,16 +20,21 @@ CTest in `tests/host/CMakeLists.txt`. A full host build therefore runs it with
 the existing listen-only, artifact-separation, and LED semantic safety checks.
 The checker is expected to pass after the S1.5 A/B header split.
 
-The optional fixture test proves the checker itself. It copies the clean
-fixture to a temporary directory, adds a forbidden transitive include or an
-exported private path there, and verifies that the corresponding diagnostic is
-returned. Production files are never mutated:
+The required `public_header_checker_regression` CTest proves the checker
+itself. It copies the clean fixture to a temporary directory, adds a
+forbidden transitive include, exported private path, or target-controlled
+conditional include there, and verifies that the corresponding diagnostic is
+returned. Production files are never mutated. CTest passes its selected
+compiler and CMake executable to this suite:
 
 ```sh
-python3 tests/header_boundary/check_public_headers_test.py
+python3 tests/header_boundary/check_public_headers_test.py --compiler c++ --cmake cmake
 ```
 
-The checker also runs two access probes. A normal consumer is expected to fail
+The checker builds separate facade-only and explicit lower-level consumers.
+It inspects the facade dependency file produced by the exact CMake consumer
+compile command, including target-controlled definitions. The checker also
+runs two access probes. A normal consumer is expected to fail
 when it includes `mazda/internal_contracts.hpp`; an explicitly authorized
 consumer must be given the `lib/mazda/internal_include` directory and must
 succeed. The legacy `private_include` directory is not an accepted internal
