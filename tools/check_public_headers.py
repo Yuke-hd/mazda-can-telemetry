@@ -444,24 +444,26 @@ def _include_directory_arguments(tokens: Sequence[str], cwd: Path) -> Tuple[Path
     return tuple(directories)
 
 
-def _dependency_file_argument(tokens: Sequence[str], cwd: Path) -> Optional[Path]:
-    """Return the dependency file selected by a compiler command, if any."""
+def _consumer_dependency_probe(
+    entry: object, source: Path, work_dir: Path, index: int
+) -> Tuple[CommandResult, Path]:
+    """Re-run an exact CMake consumer command with an explicit depfile.
 
-    dependency_file: Optional[Path] = None
-    for index, token in enumerate(tokens):
-        value: Optional[str] = None
-        if token == "-MF" and index + 1 < len(tokens):
-            value = tokens[index + 1]
-        elif token.startswith("-MF") and len(token) > len("-MF"):
-            value = token[len("-MF") :]
-        if value is not None:
-            path = Path(value)
-            if not path.is_absolute():
-                path = cwd / path
-            # CMake/Ninja may append their own -MF after target options. The
-            # final flag is the compiler's effective dependency destination.
-            dependency_file = path.resolve()
-    return dependency_file
+    Some CMake versions/generators omit automatic dependency flags from
+    ``compile_commands.json`` and do not leave a usable ``<output>.d`` file.
+    Appending dependency-only flags to the actual command preserves all
+    target-provided definitions, include paths, and warning/options while
+    making the dependency observation deterministic.
+    """
+
+    tokens, parse_errors = _compile_database_command(entry)
+    depfile = work_dir / f"facade_consumer_{index}.d"
+    if parse_errors:
+        return CommandResult(1, "; ".join(parse_errors)), depfile
+    directory = entry.get("directory") if isinstance(entry, dict) else None
+    command_cwd = Path(directory).resolve() if isinstance(directory, str) and directory else source.parent
+    command = [*tokens, "-MD", "-MF", str(depfile), "-MT", str(source)]
+    return _run(command, cwd=command_cwd, timeout=120), depfile
 
 
 def _private_include_argument(path: Path, root: Path) -> Optional[str]:
@@ -550,32 +552,21 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
             if marker is not None:
                 forbidden.append(marker)
     facade_dependency_failures: List[str] = []
-    for entry in facade_entries:
-        tokens, parse_errors = _compile_database_command(entry)
-        if parse_errors:
+    for index, entry in enumerate(facade_entries):
+        probe, depfile = _consumer_dependency_probe(entry, facade_source, work_dir, index)
+        if probe.returncode != 0:
+            detail = probe.output[-3000:] if probe.output else "compiler failed"
+            facade_dependency_failures.append(
+                f"facade consumer dependency probe compile failed: {detail}"
+            )
+            continue
+        if not depfile.is_file():
+            facade_dependency_failures.append(
+                "facade consumer dependency probe did not produce a dependency file"
+            )
             continue
         directory = entry.get("directory") if isinstance(entry, dict) else None
         command_cwd = Path(directory).resolve() if isinstance(directory, str) and directory else root
-        depfile = _dependency_file_argument(tokens, command_cwd)
-        if depfile is None or not depfile.is_file():
-            # CMake's compile_commands.json omits the generator's automatic
-            # dependency flags for some generators (notably Unix Makefiles),
-            # even though the build command writes ``<output>.d``. Use that
-            # generator output as a fallback while retaining the compile
-            # command's actual definitions and include paths above.
-            output = entry.get("output") if isinstance(entry, dict) else None
-            if isinstance(output, str) and output:
-                output_path = Path(output)
-                if not output_path.is_absolute():
-                    output_path = command_cwd / output_path
-                output_depfile = Path(f"{output_path}.d").resolve()
-                if output_depfile.is_file():
-                    depfile = output_depfile
-        if depfile is None or not depfile.is_file():
-            facade_dependency_failures.append(
-                "facade consumer compile command did not produce a dependency file"
-            )
-            continue
         dependencies = _dependency_paths(depfile, command_cwd)
         if not dependencies:
             facade_dependency_failures.append(
