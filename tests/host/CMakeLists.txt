@@ -29,10 +29,10 @@ doctest_discover_tests(telemetry_contract_compile_tests)
 add_executable(telemetry_internal_contract_tests telemetry_internal_contract_tests.cpp)
 target_link_libraries(telemetry_internal_contract_tests PRIVATE doctest::doctest)
 target_include_directories(telemetry_internal_contract_tests PRIVATE
-  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include
   ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
 )
 target_compile_features(telemetry_internal_contract_tests PRIVATE cxx_std_17)
+target_link_libraries(telemetry_internal_contract_tests PRIVATE local_argb_sink_contract)
 doctest_discover_tests(telemetry_internal_contract_tests)
 
 add_executable(mazda_candidate_tests mazda_candidate_tests.cpp)
@@ -87,7 +87,6 @@ doctest_discover_tests(can_bus_lifecycle_tests)
 add_executable(
   local_argb_tests
   local_argb_tests.cpp
-  ${CMAKE_SOURCE_DIR}/components/local_argb/src/local_argb.cpp
   ${CMAKE_SOURCE_DIR}/firmware/weact-can485-v1.1/main/semantic_led_policy.cpp
 )
 target_include_directories(
@@ -97,7 +96,10 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}/firmware/weact-can485-v1.1/main
     ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
 )
-target_link_libraries(local_argb_tests PRIVATE mazda doctest::doctest)
+target_link_libraries(
+  local_argb_tests
+  PRIVATE local_argb_firmware_compat doctest::doctest
+)
 target_compile_features(local_argb_tests PRIVATE cxx_std_17)
 doctest_discover_tests(local_argb_tests)
 

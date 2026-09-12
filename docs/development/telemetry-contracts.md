@@ -28,9 +28,14 @@ contracts remain usable without exposing their implementation handoffs.
   include path and is never re-exported from the public compatibility header.
 - `components/vehicle_telemetry/include/mazda/vehicle_telemetry.hpp` declares
   the non-copyable façade and its fixed polling/notification channels.
-- `components/local_argb/private_include/local_argb/lighting_sink.hpp` is the
-  private value-only lighting sink; generic RGB/deadline data crosses it, not
-  Mazda enums, decoder health, or driver handles.
+- `components/local_argb_sink_contract/include/local_argb/lighting_sink.hpp`
+  is the explicit implementation-only value-only lighting sink target;
+  generic RGB/deadline data crosses it, not Mazda enums, decoder health, or
+  driver handles. `components/local_argb/private_include` remains reserved for
+  renderer.hpp and is not exported to sink consumers.
+- `components/local_argb_compat/include/local_argb/legacy_compat.hpp` is a
+  temporary firmware-only adapter. The ordinary `local_argb` target does not
+  compile or link its Mazda-dependent implementation.
 
 The façade has two fixed subscriber slots per notification channel. Handles
 carry channel, slot, and generation internally, so a stale handle cannot

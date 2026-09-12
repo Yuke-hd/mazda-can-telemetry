@@ -1,9 +1,9 @@
 #pragma once
 
-// Temporary Stage 1 application compatibility. This header is intentionally
-// separate from local_argb/local_argb.h and is included only by the current
-// firmware semantic adapter/tests until S3-A performs final application
-// wiring. Ordinary renderer consumers must not include it.
+// Temporary Stage 1 application compatibility. This header intentionally
+// lives outside local_argb's ordinary public include root and is exposed only
+// through the explicit firmware compatibility target until S3-A performs
+// final application wiring. Ordinary renderer consumers must not include it.
 
 #include <cstdint>
 
@@ -124,8 +124,8 @@ private:
   bool armed_{false};
 };
 
-// Legacy application queue submission. The generic Stage 2 service uses the
-// implementation-only local_argb::internal::sink() instead.
+// Legacy application queue submission retained only for the current firmware
+// adapter. The generic Stage 2 service uses the private sink contract.
 bool submit(SemanticSnapshot snapshot) noexcept;
 
 } // namespace local_argb

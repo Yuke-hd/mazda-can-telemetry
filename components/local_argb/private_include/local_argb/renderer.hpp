@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lighting_sink.hpp"
+#include "local_argb/lighting_sink.hpp"
 #include "local_argb/local_argb.h"
 
 namespace local_argb::internal {

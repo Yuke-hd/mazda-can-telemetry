@@ -1,4 +1,3 @@
-#include "local_argb/legacy_compat.hpp"
 #include "local_argb/lighting_sink.hpp"
 #include "local_argb/local_argb.h"
 #include "local_argb/renderer.hpp"
@@ -225,18 +224,6 @@ bool start() noexcept {
   }
   g_started = true;
   return true;
-}
-
-bool submit(const SemanticSnapshot snapshot) noexcept {
-  internal::LightingCommand command{};
-  const auto color = color_for(snapshot, snapshot.turn_last_update_us);
-  command.color = {color.red, color.green, color.blue};
-  command.valid_until_us = snapshot.turn_last_update_us + kFailOffTimeoutUs;
-  command.actionable = color != kBlack && snapshot.health == SemanticHealth::Online &&
-                       snapshot.turn_status == vehicle_core::SignalStatus::Valid;
-  if (!command.actionable)
-    command.color = {};
-  return g_started && g_queue != nullptr && xQueueOverwrite(g_queue, &command) == pdPASS;
 }
 
 void fail_off() noexcept {

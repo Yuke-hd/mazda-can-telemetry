@@ -16,7 +16,8 @@ or application consumers.
 | `vehicle_telemetry` | `components/vehicle_telemetry/include/mazda/vehicle_telemetry.hpp` | The non-copyable application façade declaration | Host target exports only its component include directory and the public Mazda contract target |
 | `can_bus` | `components/can_bus/include/can_bus/can_bus.h` | Receive-only CAN lifecycle, queue API, and diagnostics | Ring/lifecycle helpers are private; the vehicle target has no transmit operation or runtime mode selector |
 | `vehicle_can_rx` / `bench_can_ack` | `vehicle_can_rx/vehicle_can_rx.h`, `bench_can_ack/bench_can_ack.h` | Explicit vehicle listen-only and isolated bench ACK application bindings | Targets select one binding; driver dependencies remain private to the selected ESP-IDF component |
-| `local_argb` | `local_argb/local_argb.h` and private `lighting_sink.hpp` | LED worker/policy composition and the value-only private sink | The sink carries generic RGB/deadline data only; renderer-private headers are not ordinary telemetry dependencies |
+| `local_argb` | `local_argb/local_argb.h` | LED worker/policy composition and renderer-private state | The ordinary target carries no Mazda compatibility dependency or sink include root |
+| `local_argb_sink_contract` / `local_argb_compat` | `local_argb/lighting_sink.hpp` / `local_argb/legacy_compat.hpp` | Explicit S2-A sink handoff / temporary firmware adapter | Each target is opt-in; the sink carries generic RGB/deadline data only and the compatibility target is the sole Mazda-dependent adapter |
 
 The availability evaluator intentionally remains a lower-level Mazda API:
 `mazda/availability.hpp` imports decoder-health and signal primitives for its
