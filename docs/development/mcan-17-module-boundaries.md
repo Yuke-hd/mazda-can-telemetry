@@ -97,5 +97,5 @@ ctest --test-dir build/host -R public_header_boundary --output-on-failure
 
 The full host CTest run remains the required regression command. Existing
 listen-only, artifact-separation, and LED semantic safety checks stay
-registered alongside the boundary gate; no validator is removed or invoked a
-second time by CI.
+registered unchanged alongside the boundary gate. The public-header checker
+has a single CTest registration and is not invoked separately by CI.

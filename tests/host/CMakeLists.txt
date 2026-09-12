@@ -130,4 +130,6 @@ add_test(
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/check_public_headers.py
           --root ${CMAKE_SOURCE_DIR}
+          --compiler ${CMAKE_CXX_COMPILER}
+          --cmake ${CMAKE_COMMAND}
 )
