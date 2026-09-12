@@ -2,9 +2,19 @@
 
 #include <cstdint>
 
-#include "mazda/state.hpp"
-#include "vehicle_core/signal.hpp"
 #include "vehicle_core/time.hpp"
+
+// Compatibility declarations for the Stage 1 semantic adapter.  The
+// renderer itself does not include Mazda headers; Stage 3 will remove these
+// declarations when the application wiring moves to vehicle_lighting_policy.
+namespace mazda {
+enum class TurnState : std::uint8_t;
+struct VehicleState;
+} // namespace mazda
+
+namespace vehicle_core {
+enum class SignalStatus : std::uint8_t;
+} // namespace vehicle_core
 
 namespace local_argb {
 
@@ -30,6 +40,14 @@ constexpr bool operator==(const Rgb &left, const Rgb &right) noexcept {
 }
 constexpr bool operator!=(const Rgb &left, const Rgb &right) noexcept { return !(left == right); }
 
+// Generic renderer command. Stage 2 policy commands are adapted to the
+// implementation-only sink record before queue submission.
+struct LightingCommand {
+  Rgb color{};
+  vehicle_core::MonotonicTimestamp valid_until_us{0};
+  bool actionable{false};
+};
+
 inline constexpr Rgb kBlack{};
 inline constexpr Rgb kLeftGreen{0, kBrightnessCeiling, 0};
 inline constexpr Rgb kRightBlue{0, 0, kBrightnessCeiling};
@@ -38,8 +56,8 @@ inline constexpr Rgb kHazardAmber{kBrightnessCeiling, kBrightnessCeiling / 2, 0}
 enum class SemanticHealth : std::uint8_t { Online, CanOffline, DecoderError };
 
 struct SemanticSnapshot {
-  mazda::TurnState turn{mazda::TurnState::Unknown};
-  vehicle_core::SignalStatus turn_status{vehicle_core::SignalStatus::Unknown};
+  mazda::TurnState turn{};
+  vehicle_core::SignalStatus turn_status{};
   vehicle_core::MonotonicTimestamp turn_last_update_us{0};
   SemanticHealth health{SemanticHealth::CanOffline};
 };
@@ -62,6 +80,11 @@ public:
   explicit Controller(PixelSink &sink) noexcept : sink_(&sink) {}
 
   bool start() noexcept;
+  // Generic renderer entry point. The command's absolute deadline is copied
+  // unchanged; renderer heartbeats therefore cannot extend sample validity.
+  bool apply(LightingCommand command, vehicle_core::MonotonicTimestamp now_us) noexcept;
+  // Stage 1 compatibility adapter. New consumers should use the typed policy
+  // and generic command overload above.
   bool apply(SemanticSnapshot snapshot, vehicle_core::MonotonicTimestamp now_us) noexcept;
   bool tick(vehicle_core::MonotonicTimestamp now_us) noexcept;
   [[nodiscard]] bool faulted() const noexcept { return faulted_; }
@@ -70,6 +93,8 @@ private:
   bool write_desired(Rgb desired) noexcept;
 
   PixelSink *sink_;
+  LightingCommand command_{};
+  bool has_command_{false};
   SemanticSnapshot snapshot_{};
   Rgb last_written_{};
   bool has_snapshot_{false};
@@ -80,6 +105,20 @@ private:
 // Portable model of the embedded length-one overwrite queue.
 class Mailbox {
 public:
+  void submit(LightingCommand command) noexcept {
+    command_ = command;
+    has_command_ = true;
+  }
+  [[nodiscard]] bool take(LightingCommand &command) noexcept {
+    if (!has_command_) {
+      return false;
+    }
+    command = command_;
+    has_command_ = false;
+    return true;
+  }
+
+  // Stage 1 compatibility adapter; policy/service code uses LightingCommand.
   void submit(SemanticSnapshot snapshot) noexcept {
     pending_ = snapshot;
     has_pending_ = true;
@@ -94,6 +133,8 @@ public:
   }
 
 private:
+  LightingCommand command_{};
+  bool has_command_{false};
   SemanticSnapshot pending_{};
   bool has_pending_{false};
 };
@@ -157,6 +198,9 @@ private:
 
 // ESP-IDF runtime. start() sends an explicit black RMT frame before returning.
 bool start() noexcept;
+bool submit(LightingCommand command) noexcept;
+// Stage 1 compatibility adapter. The generic overload is the private sink's
+// value boundary used by the Stage 2 service.
 bool submit(SemanticSnapshot snapshot) noexcept;
 void fail_off() noexcept;
 

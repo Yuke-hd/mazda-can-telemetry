@@ -1,5 +1,8 @@
 #include "local_argb/local_argb.h"
 
+#include "mazda/state.hpp"
+#include "mazda/types.hpp"
+
 namespace local_argb {
 
 SemanticSnapshot from_vehicle_state(const mazda::VehicleState &state,
@@ -30,11 +33,41 @@ Rgb color_for(const SemanticSnapshot &snapshot,
   return kBlack;
 }
 
+namespace {
+
+LightingCommand command_from_snapshot(const SemanticSnapshot &snapshot) noexcept {
+  LightingCommand command{};
+  command.color = color_for(snapshot, snapshot.turn_last_update_us);
+  command.valid_until_us = snapshot.turn_last_update_us + kFailOffTimeoutUs;
+  command.actionable = command.color != kBlack && snapshot.health == SemanticHealth::Online &&
+                       snapshot.turn_status == vehicle_core::SignalStatus::Valid;
+  if (!command.actionable) {
+    command.color = kBlack;
+  }
+  return command;
+}
+
+} // namespace
+
 bool Controller::start() noexcept {
+  has_command_ = false;
   has_snapshot_ = false;
   has_last_written_ = false;
   faulted_ = false;
   return write_desired(kBlack);
+}
+
+bool Controller::apply(const LightingCommand command,
+                       const vehicle_core::MonotonicTimestamp now_us) noexcept {
+  command_ = command;
+  has_command_ = true;
+  // A fresh command is a recovery boundary only after black was successfully
+  // written. If the clear also failed, keep retrying black.
+  if (!faulted_ || (has_last_written_ && last_written_ == kBlack)) {
+    faulted_ = false;
+  }
+  (void)now_us;
+  return tick(now_us);
 }
 
 bool Controller::apply(const SemanticSnapshot snapshot,
@@ -46,11 +79,21 @@ bool Controller::apply(const SemanticSnapshot snapshot,
   if (!faulted_ || (has_last_written_ && last_written_ == kBlack)) {
     faulted_ = false;
   }
-  return tick(now_us);
+  return apply(command_from_snapshot(snapshot), now_us);
 }
 
 bool Controller::tick(const vehicle_core::MonotonicTimestamp now_us) noexcept {
-  const Rgb desired = faulted_ || !has_snapshot_ ? kBlack : color_for(snapshot_, now_us);
+  Rgb desired = kBlack;
+  if (!faulted_) {
+    if (has_command_) {
+      const bool expired = now_us > command_.valid_until_us;
+      if (command_.actionable && !expired) {
+        desired = command_.color;
+      }
+    } else if (has_snapshot_) {
+      desired = color_for(snapshot_, now_us);
+    }
+  }
   return write_desired(desired);
 }
 
