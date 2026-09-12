@@ -36,6 +36,7 @@ _METADATA_FIELDS = (
     "channel",
     "name",
     "identifier",
+    "start_bit",
     "dbc_start_bit",
     "bit_length",
     "scale",
@@ -144,6 +145,7 @@ class MetadataSignal:
     channel: str
     name: str
     identifier: int
+    start_bit: int
     dbc_start_bit: int
     bit_length: int
     scale: Decimal
@@ -219,6 +221,7 @@ def parse_metadata(text: str) -> dict[tuple[str, str], MetadataSignal]:
             channel,
             name,
             identifier,
+            start_bit,
             dbc_start_bit,
             bit_length,
             scale,
@@ -236,6 +239,7 @@ def parse_metadata(text: str) -> dict[tuple[str, str], MetadataSignal]:
             channel=channel,
             name=name,
             identifier=int(identifier),
+            start_bit=int(start_bit),
             dbc_start_bit=int(dbc_start_bit),
             bit_length=int(bit_length),
             scale=_decimal(scale, "metadata scale"),
@@ -252,6 +256,34 @@ def parse_metadata(text: str) -> dict[tuple[str, str], MetadataSignal]:
             raise ValueError(f"duplicate metadata signal {message}.{dbc_signal}")
         metadata[key] = result
     return metadata
+
+
+def decoder_start_bit(signal: DbcSignal) -> int:
+    """Return the lowest linear payload bit coordinate covered by a DBC signal.
+
+    Intel DBC signals already identify their least-significant payload bit with
+    ``start``. Motorola signals identify their most-significant bit in the DBC
+    sawtooth coordinate system: walking toward the least-significant bit moves
+    down within a byte and wraps from bit 0 to bit 7 of the next byte. The
+    decoder metadata uses ordinary byte/LSB coordinates, so the lowest covered
+    coordinate is the decoder-facing start bit.
+    """
+
+    if signal.length <= 0:
+        raise ValueError(f"{signal.message}.{signal.name} has invalid bit length {signal.length}")
+    if signal.byte_order == "Intel":
+        return signal.start
+    if signal.byte_order != "Motorola":
+        raise ValueError(
+            f"{signal.message}.{signal.name} has invalid byte order {signal.byte_order!r}"
+        )
+
+    coordinate = signal.start
+    lowest = coordinate
+    for _ in range(1, signal.length):
+        coordinate = coordinate - 1 if coordinate % 8 else coordinate + 15
+        lowest = min(lowest, coordinate)
+    return lowest
 
 
 def compare(dbc: Mapping[tuple[str, str], DbcSignal],
@@ -282,6 +314,7 @@ def compare(dbc: Mapping[tuple[str, str], DbcSignal],
         checks: Iterable[tuple[str, object, object]] = (
             ("channel", _EXPECTED_CHANNEL[key], definition.channel),
             ("identifier", source.identifier, definition.identifier),
+            ("decoder start bit", decoder_start_bit(source), definition.start_bit),
             ("start bit", source.start, definition.dbc_start_bit),
             ("bit length", source.length, definition.bit_length),
             ("byte order", source.byte_order, definition.byte_order),

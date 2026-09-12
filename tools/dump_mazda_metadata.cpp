@@ -47,7 +47,7 @@ int main() {
   // a runtime schema. It exports the compiled constexpr table so comparison
   // cannot accidentally validate a duplicated Python/C++ literal.
   std::cout << "mazda-metadata-v1\n";
-  std::cout << "message\tdbc_signal\tchannel\tname\tidentifier\tdbc_start_bit\tbit_length"
+  std::cout << "message\tdbc_signal\tchannel\tname\tidentifier\tstart_bit\tdbc_start_bit\tbit_length"
                "\tscale\toffset\tphysical_min\tphysical_max\tbyte_order\tunit\tconfidence"
                "\tprovenance\n";
   std::cout << std::setprecision(9);
@@ -55,6 +55,7 @@ int main() {
     const auto &definition = *entry.definition;
     std::cout << entry.message_name << '\t' << entry.dbc_signal_name << '\t' << entry.channel_name
               << '\t' << definition.name << '\t' << definition.identifier << '\t'
+              << static_cast<unsigned>(definition.start_bit) << '\t'
               << static_cast<unsigned>(definition.dbc_start_bit) << '\t'
               << static_cast<unsigned>(definition.bit_length) << '\t' << definition.scale << '\t'
               << definition.offset << '\t' << definition.physical_min << '\t'

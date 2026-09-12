@@ -47,14 +47,18 @@ TEST_CASE("confirmed definitions retain DBC provenance and exact metadata") {
   CHECK(kEngineRpmDefinition.unit == vehicle_core::SignalUnit::RevolutionsPerMinute);
   CHECK(kEngineSpeedDefinition.unit == vehicle_core::SignalUnit::KilometresPerHour);
   CHECK(kEngineRpmDefinition.dbc_start_bit == 7);
+  CHECK(kEngineRpmDefinition.start_bit == 0);
   CHECK(kSelectorDefinition.dbc_start_bit == 2);
+  CHECK(kSelectorDefinition.start_bit == 0);
   CHECK(kSelectorDefinition.physical_min == doctest::Approx(0.0F));
   CHECK(kSelectorDefinition.physical_max == doctest::Approx(7.0F));
   CHECK(kActualGearDefinition.dbc_start_bit == 36);
+  CHECK(kActualGearDefinition.start_bit == 33);
   CHECK(kActualGearDefinition.physical_min == doctest::Approx(0.0F));
   CHECK(kActualGearDefinition.physical_max == doctest::Approx(15.0F));
   CHECK(kLeftIndicatorLampDefinition.byte_order ==
         mazda::candidate::CandidateSignalDefinition::ByteOrder::Intel);
+  CHECK(kLeftIndicatorLampDefinition.start_bit == 18);
   CHECK(kFrontWiperDefinition.bit_length == 2);
   CHECK(kFrontWiperDefinition.dbc_start_bit == 21);
   CHECK(std::string{kFrontLeftDoorOpenRhdDefinition.name}.find("Reference") == std::string::npos);

@@ -33,9 +33,11 @@ struct CandidateMessageDefinition {
 struct CandidateSignalDefinition {
   const char *name;
   std::uint32_t identifier;
-  // Payload bit offset in the decoder's byte/LSB numbering, not DBC Motorola
-  // start-bit notation. Numeric big-endian fields are documented by byte
-  // offset in the MCAN-14 note.
+  // Lowest payload bit coordinate in the decoder's byte/LSB numbering. For
+  // Intel signals this is the DBC least-significant start bit; for Motorola
+  // signals it is the lowest coordinate reached by walking from the DBC
+  // most-significant bit through the sawtooth byte order. Numeric big-endian
+  // fields are documented by byte offset in the MCAN-14 note.
   std::uint8_t start_bit;
   std::uint8_t bit_length;
   float scale;
