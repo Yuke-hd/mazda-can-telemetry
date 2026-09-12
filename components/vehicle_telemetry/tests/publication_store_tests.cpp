@@ -60,6 +60,7 @@ void test_availability_and_reset() {
   mazda::VehicleState state{};
   EXPECT(state.speed_kph.update(42.5F, 10));
   EXPECT(state.engine_rpm.update(2'000.0F, 10));
+  EXPECT(state.liftgate_open.update(true, 10));
   store.publish(
       state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 1));
 
@@ -72,6 +73,10 @@ void test_availability_and_reset() {
   EXPECT(rpm.validation == mazda::ValidationStatus::Confirmed);
   EXPECT(speed.value.has_value() && *speed.value == 42.5F);
   EXPECT(rpm.value.has_value() && *rpm.value == 2'000.0F);
+  const auto test_only_liftgate =
+      store.read_test_signal(&mazda::VehicleState::liftgate_open, mazda::candidate::kDoorsId);
+  EXPECT(test_only_liftgate.availability == mazda::Availability::FreshnessUnverified);
+  EXPECT(test_only_liftgate.value.has_value() && *test_only_liftgate.value);
 
   clock.set(111);
   EXPECT(store.speed_kph().availability == mazda::Availability::Stale);
@@ -160,7 +165,8 @@ void test_coherent_snapshot_under_concurrent_publication() {
     mazda::VehicleState state{};
     for (std::uint64_t sequence = 1; sequence <= 50'000; ++sequence) {
       const auto value = static_cast<float>(sequence);
-      if (!state.speed_kph.update(value, sequence) || !state.engine_rpm.update(value, sequence)) {
+      if (!state.speed_kph.update(value, sequence) || !state.engine_rpm.update(value, sequence) ||
+          !state.liftgate_open.update((sequence % 2U) == 0U, sequence)) {
         inconsistent.store(true, std::memory_order_release);
         break;
       }
@@ -173,6 +179,13 @@ void test_coherent_snapshot_under_concurrent_publication() {
   std::thread reader{[&] {
     while (!writer_done.load(std::memory_order_acquire)) {
       const auto snapshot = store.snapshot();
+      const auto test_channel =
+          store.read_test_signal(&mazda::VehicleState::liftgate_open, mazda::candidate::kDoorsId);
+      if (test_channel.value.has_value() &&
+          test_channel.availability != mazda::Availability::FreshnessUnverified) {
+        inconsistent.store(true, std::memory_order_release);
+        break;
+      }
       if (!snapshot.state.speed_kph.has_value || !snapshot.state.engine_rpm.has_value)
         continue;
       if (snapshot.state.speed_kph.value != snapshot.state.engine_rpm.value ||

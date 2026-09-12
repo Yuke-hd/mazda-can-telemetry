@@ -141,14 +141,6 @@ PublishedSnapshot PublicationStore::snapshot() const noexcept {
 } // namespace mazda::internal
 
 namespace mazda {
-namespace {
-
-template <typename T> Result<Subscription> unavailable_subscription() noexcept {
-  (void)sizeof(T);
-  return Result<Subscription>{ResultCode::InvalidState, std::nullopt};
-}
-
-} // namespace
 
 static_assert(sizeof(internal::PublicationStore) <= sizeof(VehicleTelemetry));
 static_assert(alignof(internal::PublicationStore) <= alignof(std::max_align_t));
@@ -165,11 +157,6 @@ StatusResult VehicleTelemetry::configure(const TelemetryConfig &config) noexcept
   return reinterpret_cast<internal::PublicationStore *>(implementation_storage_)->configure(config);
 }
 
-// Task creation, driver ownership and lifecycle transitions belong to S2-A.
-StatusResult VehicleTelemetry::start() noexcept { return StatusResult{ResultCode::InvalidState}; }
-
-StatusResult VehicleTelemetry::stop() noexcept { return StatusResult{ResultCode::InvalidState}; }
-
 Reading<float> VehicleTelemetry::speed_kph() const noexcept {
   return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)->speed_kph();
 }
@@ -177,85 +164,6 @@ Reading<float> VehicleTelemetry::speed_kph() const noexcept {
 Reading<float> VehicleTelemetry::engine_rpm() const noexcept {
   return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)
       ->engine_rpm();
-}
-
-Result<Subscription> VehicleTelemetry::on_selector_position_changed(Callback<SelectorPosition>,
-                                                                    void *) noexcept {
-  return unavailable_subscription<SelectorPosition>();
-}
-
-Result<Subscription> VehicleTelemetry::on_actual_gear_changed(Callback<ActualGear>,
-                                                              void *) noexcept {
-  return unavailable_subscription<ActualGear>();
-}
-
-Result<Subscription> VehicleTelemetry::on_turn_state_changed(Callback<TurnState>, void *) noexcept {
-  return unavailable_subscription<TurnState>();
-}
-
-Result<Subscription> VehicleTelemetry::on_hazard_request_changed(Callback<bool>, void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_left_turn_request_changed(Callback<bool>,
-                                                                    void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_right_turn_request_changed(Callback<bool>,
-                                                                     void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_liftgate_open_changed(Callback<bool>, void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_rear_right_door_open_changed(Callback<bool>,
-                                                                       void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_rear_left_door_open_changed(Callback<bool>,
-                                                                      void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_front_left_door_open_rhd_changed(Callback<bool>,
-                                                                           void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_front_right_door_open_rhd_changed(Callback<bool>,
-                                                                            void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_doors_unlocked_changed(Callback<bool>, void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_left_indicator_lamp_changed(Callback<bool>,
-                                                                      void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_right_indicator_lamp_changed(Callback<bool>,
-                                                                       void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_wiper_low_changed(Callback<bool>, void *) noexcept {
-  return unavailable_subscription<bool>();
-}
-
-Result<Subscription> VehicleTelemetry::on_front_wiper_changed(Callback<FrontWiperPosition>,
-                                                              void *) noexcept {
-  return unavailable_subscription<FrontWiperPosition>();
-}
-
-StatusResult VehicleTelemetry::unsubscribe(Subscription) noexcept {
-  return StatusResult{ResultCode::InvalidState};
 }
 
 Diagnostics VehicleTelemetry::diagnostics() const noexcept {

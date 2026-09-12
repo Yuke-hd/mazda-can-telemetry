@@ -60,6 +60,15 @@ public:
 
   [[nodiscard]] Reading<float> speed_kph() const noexcept;
   [[nodiscard]] Reading<float> engine_rpm() const noexcept;
+  // Test-only descriptor seam. It exercises the same bounded synchronized
+  // read path for an additional state member without adding a public facade
+  // channel or another synchronization loop.
+  template <typename T>
+  [[nodiscard]] Reading<T>
+  read_test_signal(vehicle_core::Signal<T> VehicleState::*member, std::uint32_t identifier,
+                   ValidationStatus validation = ValidationStatus::Reference) const noexcept {
+    return read_signal(member, identifier, validation);
+  }
   [[nodiscard]] Diagnostics diagnostics() const noexcept;
   [[nodiscard]] PublishedSnapshot snapshot() const noexcept;
 
