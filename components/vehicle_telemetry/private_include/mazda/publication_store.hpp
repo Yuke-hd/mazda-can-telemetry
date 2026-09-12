@@ -25,10 +25,10 @@ struct PublishedSnapshot {
 
 // Owns the fixed, coherent publication boundary between the service task and
 // polling callers. The service task publishes a value-copy state and
-// diagnostics together; readers copy only the fields needed for one reading
-// while holding the mutex, then evaluate freshness outside the critical
-// section. No callback, driver, clock or logging operation runs under the
-// mutex.
+// diagnostics together; readers copy the publication and its evaluation
+// policy while holding the mutex, then sample the clock and evaluate
+// freshness outside the critical section. No callback, driver, clock or
+// logging operation runs under the mutex.
 class PublicationStore final {
 public:
   PublicationStore() noexcept;
@@ -73,8 +73,11 @@ public:
   [[nodiscard]] PublishedSnapshot snapshot() const noexcept;
 
 private:
-  [[nodiscard]] vehicle_core::TransportHealth
-  effective_transport(vehicle_core::MonotonicTimestamp now_us) const noexcept;
+  [[nodiscard]] static vehicle_core::TransportHealth
+  effective_transport(vehicle_core::TransportHealth transport,
+                      std::optional<vehicle_core::MonotonicTimestamp> transport_reference_us,
+                      vehicle_core::Microseconds transport_silence_timeout_us,
+                      vehicle_core::MonotonicTimestamp now_us) noexcept;
   template <typename T>
   [[nodiscard]] Reading<T> read_signal(vehicle_core::Signal<T> VehicleState::*member,
                                        std::uint32_t identifier,
@@ -92,21 +95,29 @@ template <typename T>
 Reading<T> PublicationStore::read_signal(vehicle_core::Signal<T> VehicleState::*member,
                                          const std::uint32_t identifier,
                                          const ValidationStatus validation) const noexcept {
-  // Sample time outside the lock. The value and all inputs to its availability
-  // decision are copied from one publication while the lock is held.
-  const auto now_us = clock_->now();
+  // Copy all publication-dependent inputs from one coherent handoff while
+  // holding the lock. The clock is sampled only after unlocking so a blocked
+  // injected clock cannot hold up a publisher or be paired with a later
+  // publication.
   vehicle_core::Signal<T> signal{};
   vehicle_core::MessageHealth message = vehicle_core::MessageHealth::Unknown;
   vehicle_core::TransportHealth transport = vehicle_core::TransportHealth::Stopped;
+  std::optional<vehicle_core::MonotonicTimestamp> transport_reference_us{};
+  TelemetryConfig config{};
   {
     std::lock_guard<std::mutex> lock{mutex_};
     signal = published_.state.*member;
-    transport = effective_transport(now_us);
+    transport = published_.diagnostics.transport;
+    transport_reference_us = transport_reference_us_;
+    config = config_;
     const auto *health = published_.state.message_health_for(identifier);
     if (health != nullptr)
       message = health->health;
   }
 
+  const auto now_us = clock_->now();
+  transport = effective_transport(transport, transport_reference_us,
+                                  config.transport_silence_timeout_us, now_us);
   return mazda::snapshot(signal, now_us, validation, message, transport);
 }
 

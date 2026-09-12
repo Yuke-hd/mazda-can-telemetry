@@ -26,6 +26,46 @@ private:
   std::atomic<vehicle_core::MonotonicTimestamp> now_us_{0};
 };
 
+// Pauses one clock read after its value has been captured. The test can then
+// publish a new handoff while the reader is between its synchronized copy and
+// its availability evaluation. This makes the publication/clock ordering
+// deterministic instead of relying on a scheduling race.
+class ForcedInterleavingClock final : public vehicle_core::MonotonicClock {
+public:
+  [[nodiscard]] vehicle_core::MonotonicTimestamp now() const noexcept override {
+    const auto captured = now_us_.load(std::memory_order_acquire);
+    if (armed_.exchange(false, std::memory_order_acq_rel)) {
+      entered_.store(true, std::memory_order_release);
+      while (!release_.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    }
+    return captured;
+  }
+
+  void set(const vehicle_core::MonotonicTimestamp now_us) noexcept {
+    now_us_.store(now_us, std::memory_order_release);
+  }
+
+  void arm() noexcept {
+    release_.store(false, std::memory_order_release);
+    entered_.store(false, std::memory_order_release);
+    armed_.store(true, std::memory_order_release);
+  }
+
+  void wait_until_entered() const noexcept {
+    while (!entered_.load(std::memory_order_acquire))
+      std::this_thread::yield();
+  }
+
+  void release() noexcept { release_.store(true, std::memory_order_release); }
+
+private:
+  std::atomic<vehicle_core::MonotonicTimestamp> now_us_{0};
+  mutable std::atomic<bool> armed_{false};
+  mutable std::atomic<bool> entered_{false};
+  mutable std::atomic<bool> release_{false};
+};
+
 int failures = 0;
 
 void expect(const bool condition, const char *expression, const char *file, const int line) {
@@ -181,6 +221,89 @@ void test_unrelated_receive_keeps_transport_live() {
   EXPECT(store.speed_kph().availability == mazda::Availability::Unavailable);
 }
 
+void test_polling_copies_publication_before_sampling_clock() {
+  ForcedInterleavingClock clock;
+  mazda::TelemetryConfig config{};
+  config.freshness.speed_kph_timeout_us = 0;
+  mazda::internal::PublicationStore store{clock, config};
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
+
+  mazda::VehicleState next{};
+  EXPECT(next.speed_kph.update(42.5F, 0));
+
+  mazda::Reading<float> observed{};
+  clock.arm();
+  std::thread reader{[&] { observed = store.speed_kph(); }};
+  clock.wait_until_entered();
+
+  // The reader has captured t=0. Publishing at the later wall-clock value
+  // must not make the old no-data copy appear to be a fresh observation.
+  clock.set(1'000);
+  store.publish(
+      next, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live), 0);
+  clock.release();
+  reader.join();
+
+  EXPECT(observed.availability == mazda::Availability::NoData);
+  EXPECT(!observed.value.has_value());
+  EXPECT(store.speed_kph().availability == mazda::Availability::Stale);
+}
+
+void test_diagnostics_copies_publication_before_sampling_clock() {
+  ForcedInterleavingClock clock;
+  mazda::TelemetryConfig config{};
+  config.transport_silence_timeout_us = 0;
+  mazda::internal::PublicationStore store{clock, config};
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
+
+  mazda::VehicleState next{};
+  EXPECT(next.speed_kph.update(42.5F, 0));
+
+  mazda::Diagnostics observed{};
+  clock.arm();
+  std::thread reader{[&] { observed = store.diagnostics(); }};
+  clock.wait_until_entered();
+
+  clock.set(1'000);
+  store.publish(
+      next, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live), 0);
+  clock.release();
+  reader.join();
+
+  EXPECT(observed.transport == vehicle_core::TransportHealth::AwaitingTraffic);
+  EXPECT(store.diagnostics().transport == vehicle_core::TransportHealth::TimedOut);
+}
+
+void test_snapshot_copies_publication_before_sampling_clock() {
+  ForcedInterleavingClock clock;
+  mazda::TelemetryConfig config{};
+  config.transport_silence_timeout_us = 0;
+  mazda::internal::PublicationStore store{clock, config};
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
+
+  mazda::VehicleState next{};
+  EXPECT(next.speed_kph.update(42.5F, 0));
+
+  mazda::internal::PublishedSnapshot observed{};
+  clock.arm();
+  std::thread reader{[&] { observed = store.snapshot(); }};
+  clock.wait_until_entered();
+
+  clock.set(1'000);
+  store.publish(
+      next, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live), 0);
+  clock.release();
+  reader.join();
+
+  EXPECT(observed.diagnostics.transport == vehicle_core::TransportHealth::AwaitingTraffic);
+  EXPECT(!observed.state.speed_kph.has_value);
+  EXPECT(store.snapshot().diagnostics.transport == vehicle_core::TransportHealth::TimedOut);
+  EXPECT(store.snapshot().state.speed_kph.has_value);
+}
+
 void test_coherent_snapshot_under_concurrent_publication() {
   FakeClock clock;
   mazda::TelemetryConfig config{};
@@ -241,6 +364,9 @@ void test_coherent_snapshot_under_concurrent_publication() {
 int main() {
   test_availability_and_reset();
   test_unrelated_receive_keeps_transport_live();
+  test_polling_copies_publication_before_sampling_clock();
+  test_diagnostics_copies_publication_before_sampling_clock();
+  test_snapshot_copies_publication_before_sampling_clock();
   test_coherent_snapshot_under_concurrent_publication();
   if (failures != 0)
     std::cerr << failures << " publication-store assertion(s) failed\n";

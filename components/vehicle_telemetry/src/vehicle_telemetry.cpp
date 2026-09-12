@@ -28,18 +28,20 @@ PublicationStore::PublicationStore(vehicle_core::MonotonicClock &clock,
     : clock_(&clock), config_(config) {}
 
 vehicle_core::TransportHealth PublicationStore::effective_transport(
-    const vehicle_core::MonotonicTimestamp now_us) const noexcept {
-  const auto transport = published_.diagnostics.transport;
+    const vehicle_core::TransportHealth transport,
+    const std::optional<vehicle_core::MonotonicTimestamp> transport_reference_us,
+    const vehicle_core::Microseconds transport_silence_timeout_us,
+    const vehicle_core::MonotonicTimestamp now_us) noexcept {
   if ((transport != vehicle_core::TransportHealth::AwaitingTraffic &&
        transport != vehicle_core::TransportHealth::Live) ||
-      !transport_reference_us_.has_value()) {
+      !transport_reference_us.has_value()) {
     return transport;
   }
 
-  const auto age_us = now_us >= *transport_reference_us_
-                          ? now_us - *transport_reference_us_
+  const auto age_us = now_us >= *transport_reference_us
+                          ? now_us - *transport_reference_us
                           : static_cast<vehicle_core::Microseconds>(0);
-  if (age_us > config_.transport_silence_timeout_us)
+  if (age_us > transport_silence_timeout_us)
     return vehicle_core::TransportHealth::TimedOut;
   return transport;
 }
@@ -100,18 +102,35 @@ Reading<float> PublicationStore::engine_rpm() const noexcept {
 }
 
 Diagnostics PublicationStore::diagnostics() const noexcept {
+  Diagnostics result{};
+  std::optional<vehicle_core::MonotonicTimestamp> transport_reference_us{};
+  TelemetryConfig config{};
+  {
+    std::lock_guard<std::mutex> lock{mutex_};
+    result = published_.diagnostics;
+    transport_reference_us = transport_reference_us_;
+    config = config_;
+  }
   const auto now_us = clock_->now();
-  std::lock_guard<std::mutex> lock{mutex_};
-  Diagnostics result = published_.diagnostics;
-  result.transport = effective_transport(now_us);
+  result.transport = effective_transport(result.transport, transport_reference_us,
+                                         config.transport_silence_timeout_us, now_us);
   return result;
 }
 
 PublishedSnapshot PublicationStore::snapshot() const noexcept {
+  PublishedSnapshot result{};
+  std::optional<vehicle_core::MonotonicTimestamp> transport_reference_us{};
+  TelemetryConfig config{};
+  {
+    std::lock_guard<std::mutex> lock{mutex_};
+    result = published_;
+    transport_reference_us = transport_reference_us_;
+    config = config_;
+  }
   const auto now_us = clock_->now();
-  std::lock_guard<std::mutex> lock{mutex_};
-  PublishedSnapshot result = published_;
-  result.diagnostics.transport = effective_transport(now_us);
+  result.diagnostics.transport =
+      effective_transport(result.diagnostics.transport, transport_reference_us,
+                          config.transport_silence_timeout_us, now_us);
   return result;
 }
 
