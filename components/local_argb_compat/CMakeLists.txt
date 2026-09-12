@@ -1,8 +1,8 @@
 if(COMMAND idf_component_register)
   idf_component_register(
-    SRCS "src/legacy_compat.cpp"
+    SRCS "src/legacy_compat.cpp" "src/legacy_submit_idf.cpp"
     INCLUDE_DIRS "include"
-    REQUIRES vehicle_core mazda local_argb
+    REQUIRES vehicle_core mazda local_argb local_argb_sink_contract
   )
   return()
 endif()
