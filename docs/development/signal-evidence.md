@@ -110,3 +110,13 @@ policy, not evidence that the source emits at that interval.
 
 No runtime provenance database, generated signal schema, new signal research,
 new capture, credential, or private vehicle artifact is part of this inventory.
+
+## S2-D metadata verification
+
+The supported DBC subset is checked against the compiled constexpr metadata
+authority by the host-only
+[MCAN-71 comparison tool](mcan-71-dbc-metadata.md). The tool covers the
+stable public channel, decoder/DBC bit coordinates, numeric fields, and the
+explicit source-name/interpretation exception recorded above; an actual
+channel or coordinate/numeric mismatch fails. It does not promote evidence
+based on synthetic tests or runtime availability.
