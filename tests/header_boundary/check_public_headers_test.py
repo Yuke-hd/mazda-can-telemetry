@@ -3,17 +3,21 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "tools/check_public_headers.py"
 FIXTURE = Path(__file__).resolve().parent / "fixtures/clean"
+CHECKER_COMPILER: Optional[str] = None
+CHECKER_CMAKE = "cmake"
 
 sys.path.insert(0, str(ROOT))
 from tools.check_public_headers import (
@@ -24,8 +28,11 @@ from tools.check_public_headers import (
 
 
 def run_checker(root: Path) -> subprocess.CompletedProcess:
+    command = [sys.executable, str(CHECKER), "--root", str(root), "--cmake", CHECKER_CMAKE]
+    if CHECKER_COMPILER is not None:
+        command.extend(("--compiler", CHECKER_COMPILER))
     return subprocess.run(
-        [sys.executable, str(CHECKER), "--root", str(root)],
+        command,
         cwd=ROOT,
         check=False,
         capture_output=True,
@@ -157,6 +164,38 @@ class PublicHeaderCheckerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, output)
         self.assertIn("exported private/internal include path", output)
 
+    def test_conditional_forbidden_include_uses_consumer_compile_flags(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="header-boundary-test-") as directory:
+            root = self.copy_fixture(Path(directory))
+            facade = root / "lib/mazda/include/mazda/facade_contracts.hpp"
+            facade.write_text(
+                "#pragma once\n"
+                "#if defined(MAZDA_ENABLE_RAW_FRAME)\n"
+                '#include "vehicle_core/frame.hpp"\n'
+                "#endif\n"
+                + facade.read_text(encoding="utf-8").replace("#pragma once\n", "", 1),
+                encoding="utf-8",
+            )
+            cmake = root / "CMakeLists.txt"
+            cmake.write_text(
+                cmake.read_text(encoding="utf-8")
+                + "\ntarget_compile_definitions(vehicle_telemetry_contracts INTERFACE"
+                " MAZDA_ENABLE_RAW_FRAME)\n",
+                encoding="utf-8",
+            )
+            result = run_checker(root)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("actual compile flags", output)
+        self.assertIn("raw frame", output)
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--compiler")
+    parser.add_argument("--cmake", default="cmake")
+    options, remaining = parser.parse_known_args()
+    CHECKER_COMPILER = options.compiler
+    CHECKER_CMAKE = options.cmake
+    sys.argv[1:] = remaining
     unittest.main()

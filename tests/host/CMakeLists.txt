@@ -23,13 +23,17 @@ add_executable(telemetry_contract_compile_tests telemetry_contract_compile_tests
 target_link_libraries(telemetry_contract_compile_tests PRIVATE vehicle_telemetry_contracts
                                                              telemetry_test_support
                                                              doctest::doctest)
-target_include_directories(telemetry_contract_compile_tests PRIVATE
-  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include
-  # This test is an explicitly authorized implementation-boundary consumer;
-  # ordinary consumers reach only the public Mazda façade target.
-  ${CMAKE_SOURCE_DIR}/lib/mazda/internal_include)
 target_compile_features(telemetry_contract_compile_tests PRIVATE cxx_std_17)
 doctest_discover_tests(telemetry_contract_compile_tests)
+
+add_executable(telemetry_internal_contract_tests telemetry_internal_contract_tests.cpp)
+target_link_libraries(telemetry_internal_contract_tests PRIVATE doctest::doctest)
+target_include_directories(telemetry_internal_contract_tests PRIVATE
+  ${CMAKE_SOURCE_DIR}/components/local_argb/private_include
+  ${CMAKE_SOURCE_DIR}/lib/vehicle_core/include
+)
+target_compile_features(telemetry_internal_contract_tests PRIVATE cxx_std_17)
+doctest_discover_tests(telemetry_internal_contract_tests)
 
 add_executable(mazda_candidate_tests mazda_candidate_tests.cpp)
 target_link_libraries(mazda_candidate_tests PRIVATE mazda telemetry_test_support doctest::doctest)
@@ -130,6 +134,14 @@ add_test(
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/check_public_headers.py
           --root ${CMAKE_SOURCE_DIR}
+          --compiler ${CMAKE_CXX_COMPILER}
+          --cmake ${CMAKE_COMMAND}
+)
+
+add_test(
+  NAME public_header_checker_regression
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tests/header_boundary/check_public_headers_test.py
           --compiler ${CMAKE_CXX_COMPILER}
           --cmake ${CMAKE_COMMAND}
 )

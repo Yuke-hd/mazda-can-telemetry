@@ -294,20 +294,27 @@ def check_public_headers(root: Path, compiler: Sequence[str], work_dir: Path) ->
     return failures
 
 
-def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path]:
-    source = probe_dir / "consumer.cpp"
-    source.write_text(
+def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path, Path]:
+    facade_source = probe_dir / "facade_consumer.cpp"
+    facade_source.write_text(
         '#include "mazda/vehicle_telemetry.hpp"\n'
         '#include "mazda/facade_contracts.hpp"\n'
         '#include "mazda/reading.hpp"\n'
         '#include "mazda/notification.hpp"\n'
         '#include "mazda/telemetry_contracts.hpp"\n'
         '#include "vehicle_core/telemetry_contracts.hpp"\n'
-        '#include "vehicle_core/frame.hpp"\n'
         "int main() {\n"
         "  mazda::VehicleTelemetry telemetry;\n"
-        "  vehicle_core::RawCanFrame frame{};\n"
         "  (void)telemetry;\n"
+        "  return 0;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    lower_level_source = probe_dir / "lower_level_consumer.cpp"
+    lower_level_source.write_text(
+        '#include "vehicle_core/frame.hpp"\n'
+        "int main() {\n"
+        "  vehicle_core::RawCanFrame frame{};\n"
         "  (void)frame;\n"
         "  return 0;\n"
         "}\n",
@@ -321,11 +328,13 @@ def _cmake_probe_files(probe_dir: Path, root: Path) -> Tuple[Path, Path]:
         "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)\n"
         "set(MAZDA_BUILD_HOST_TESTS OFF CACHE BOOL \"\" FORCE)\n"
         f'add_subdirectory({json.dumps(root.as_posix())} project)\n'
-        f'add_executable(public_header_consumer {json.dumps(source.as_posix())})\n'
-        "target_link_libraries(public_header_consumer PRIVATE vehicle_telemetry_contracts)\n",
+        f'add_executable(public_header_facade_consumer {json.dumps(facade_source.as_posix())})\n'
+        "target_link_libraries(public_header_facade_consumer PRIVATE vehicle_telemetry_contracts)\n"
+        f'add_executable(public_header_lower_level_consumer {json.dumps(lower_level_source.as_posix())})\n'
+        "target_link_libraries(public_header_lower_level_consumer PRIVATE vehicle_telemetry_contracts)\n",
         encoding="utf-8",
     )
-    return cmake, source
+    return cmake, facade_source, lower_level_source
 
 
 def _compile_database_entry_source(entry: object) -> Optional[Path]:
@@ -435,6 +444,28 @@ def _include_directory_arguments(tokens: Sequence[str], cwd: Path) -> Tuple[Path
     return tuple(directories)
 
 
+def _consumer_dependency_probe(
+    entry: object, source: Path, work_dir: Path, index: int
+) -> Tuple[CommandResult, Path]:
+    """Re-run an exact CMake consumer command with an explicit depfile.
+
+    Some CMake versions/generators omit automatic dependency flags from
+    ``compile_commands.json`` and do not leave a usable ``<output>.d`` file.
+    Appending dependency-only flags to the actual command preserves all
+    target-provided definitions, include paths, and warning/options while
+    making the dependency observation deterministic.
+    """
+
+    tokens, parse_errors = _compile_database_command(entry)
+    depfile = work_dir / f"facade_consumer_{index}.d"
+    if parse_errors:
+        return CommandResult(1, "; ".join(parse_errors)), depfile
+    directory = entry.get("directory") if isinstance(entry, dict) else None
+    command_cwd = Path(directory).resolve() if isinstance(directory, str) and directory else source.parent
+    command = [*tokens, "-MD", "-MF", str(depfile), "-MT", str(source)]
+    return _run(command, cwd=command_cwd, timeout=120), depfile
+
+
 def _private_include_argument(path: Path, root: Path) -> Optional[str]:
     try:
         relative_parts = path.resolve().relative_to(root.resolve()).parts
@@ -451,7 +482,7 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
     probe_dir = work_dir / "cmake_probe"
     build_dir = work_dir / "cmake_build"
     probe_dir.mkdir()
-    _, source = _cmake_probe_files(probe_dir, root)
+    _, facade_source, lower_level_source = _cmake_probe_files(probe_dir, root)
     configure = [cmake, "-S", str(probe_dir), "-B", str(build_dir), "-DBUILD_TESTING=OFF"]
     if len(compiler) == 1:
         configure.append(f"-DCMAKE_CXX_COMPILER={compiler[0]}")
@@ -463,7 +494,18 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
         if detail:
             print(f"      {detail}")
         return failures
-    built = _run([cmake, "--build", str(build_dir), "--target", "public_header_consumer"], cwd=root, timeout=120)
+    built = _run(
+        [
+            cmake,
+            "--build",
+            str(build_dir),
+            "--target",
+            "public_header_facade_consumer",
+            "public_header_lower_level_consumer",
+        ],
+        cwd=root,
+        timeout=120,
+    )
     if built.returncode != 0:
         detail = built.output[-3000:] if built.output else "CMake build failed"
         failures.append(f"CMake consumer probe build failed\n{detail}")
@@ -483,17 +525,20 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
         failures.append(f"CMake consumer probe compile database is unreadable: {error}")
         print("FAIL CMake consumer target: compile database unreadable")
         return failures
-    consumer_entries = [
+    facade_entries = [
+        entry for entry in entries if _compile_database_entry_source(entry) == facade_source.resolve()
+    ]
+    lower_level_entries = [
         entry
         for entry in entries
-        if _compile_database_entry_source(entry) == source.resolve()
+        if _compile_database_entry_source(entry) == lower_level_source.resolve()
     ]
-    if not consumer_entries:
-        failures.append("CMake consumer probe did not expose the consumer compile command")
+    if not facade_entries or not lower_level_entries:
+        failures.append("CMake consumer probe did not expose both consumer compile commands")
         print("FAIL CMake consumer target: consumer compile command missing")
         return failures
     forbidden: List[str] = []
-    for entry in consumer_entries:
+    for entry in [*facade_entries, *lower_level_entries]:
         tokens, parse_errors = _compile_database_command(entry)
         if parse_errors:
             detail = "; ".join(parse_errors)
@@ -506,6 +551,43 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
             marker = _private_include_argument(include_dir, root)
             if marker is not None:
                 forbidden.append(marker)
+    facade_dependency_failures: List[str] = []
+    for index, entry in enumerate(facade_entries):
+        probe, depfile = _consumer_dependency_probe(entry, facade_source, work_dir, index)
+        if probe.returncode != 0:
+            detail = probe.output[-3000:] if probe.output else "compiler failed"
+            facade_dependency_failures.append(
+                f"facade consumer dependency probe compile failed: {detail}"
+            )
+            continue
+        if not depfile.is_file():
+            facade_dependency_failures.append(
+                "facade consumer dependency probe did not produce a dependency file"
+            )
+            continue
+        directory = entry.get("directory") if isinstance(entry, dict) else None
+        command_cwd = Path(directory).resolve() if isinstance(directory, str) and directory else root
+        dependencies = _dependency_paths(depfile, command_cwd)
+        if not dependencies:
+            facade_dependency_failures.append(
+                "facade consumer dependency output was empty or malformed"
+            )
+            continue
+        for dependency in dependencies:
+            category = _dependency_violation(dependency, root)
+            if category is not None:
+                facade_dependency_failures.append(
+                    f"{category}: {_relative_name(dependency, root)}"
+                )
+    if facade_dependency_failures:
+        unique = list(dict.fromkeys(facade_dependency_failures))
+        detail = "; ".join(unique)
+        failures.append(
+            "CMake facade consumer has a forbidden dependency under its actual compile flags: "
+            + detail
+        )
+        print("FAIL CMake facade consumer: forbidden dependency under actual compile flags")
+        print(f"      {detail}")
     if forbidden:
         unique = list(dict.fromkeys(forbidden))
         detail = ", ".join(unique)
@@ -514,7 +596,9 @@ def check_consumer_target(root: Path, cmake: str, compiler: Sequence[str], work_
         print(f"      {detail}")
     elif not failures:
         # Check the exact consumer command rather than CMake source spelling:
-        # this is the actual interface consumed by a downstream target.
+        # this is the actual interface consumed by a downstream target. The
+        # facade dependency file comes from that same command, including any
+        # target-controlled definitions or options.
         print("OK   CMake consumer target: isolated public interface compiled")
     return failures
 

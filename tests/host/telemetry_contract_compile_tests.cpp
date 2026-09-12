@@ -3,15 +3,17 @@
 
 #include <type_traits>
 
-#include "local_argb/lighting_sink.hpp"
 #include "mazda/vehicle_telemetry.hpp"
-#include "vehicle_core/decoder_contracts.hpp"
 #include "vehicle_core/notification.hpp"
 #include "vehicle_core/reading.hpp"
 
 namespace {
 void turn_callback(void *, const mazda::Notification<mazda::TurnState> &) noexcept {}
 void bool_callback(void *, const mazda::Notification<bool> &) noexcept {}
+
+template <typename T>
+using SubscriptionFn = mazda::Result<mazda::Subscription> (mazda::VehicleTelemetry::*)(
+    mazda::Callback<T>, void *) noexcept;
 } // namespace
 
 TEST_CASE("telemetry contracts are value-copy and callback ABI seams") {
@@ -45,19 +47,50 @@ TEST_CASE("facade exposes fixed polling and notify channels without implementati
   using Facade = mazda::VehicleTelemetry;
   static_assert(!std::is_copy_constructible_v<Facade>);
   static_assert(!std::is_move_constructible_v<Facade>);
+  static_assert(std::is_nothrow_default_constructible_v<Facade>);
+  static_assert(std::is_nothrow_destructible_v<Facade>);
 
-  using SpeedFn = decltype(&Facade::speed_kph);
-  using RpmFn = decltype(&Facade::engine_rpm);
-  using TurnFn = decltype(&Facade::on_turn_state_changed);
-  using DoorsFn = decltype(&Facade::on_doors_unlocked_changed);
-  using UnsubscribeFn = decltype(&Facade::unsubscribe);
-  using DiagnosticsFn = decltype(&Facade::diagnostics);
-  static_assert(std::is_member_function_pointer_v<SpeedFn>);
-  static_assert(std::is_member_function_pointer_v<RpmFn>);
-  static_assert(std::is_member_function_pointer_v<TurnFn>);
-  static_assert(std::is_member_function_pointer_v<DoorsFn>);
-  static_assert(std::is_member_function_pointer_v<UnsubscribeFn>);
-  static_assert(std::is_member_function_pointer_v<DiagnosticsFn>);
+  using ConfigureFn = mazda::StatusResult (Facade::*)(const mazda::TelemetryConfig &) noexcept;
+  using LifecycleFn = mazda::StatusResult (Facade::*)() noexcept;
+  using PollingFn = mazda::Reading<float> (Facade::*)() const noexcept;
+  using UnsubscribeFn = mazda::StatusResult (Facade::*)(mazda::Subscription) noexcept;
+  using DiagnosticsFn = mazda::Diagnostics (Facade::*)() const noexcept;
+  static_assert(std::is_same_v<decltype(&Facade::configure), ConfigureFn>);
+  static_assert(std::is_same_v<decltype(&Facade::start), LifecycleFn>);
+  static_assert(std::is_same_v<decltype(&Facade::stop), LifecycleFn>);
+  static_assert(std::is_same_v<decltype(&Facade::speed_kph), PollingFn>);
+  static_assert(std::is_same_v<decltype(&Facade::engine_rpm), PollingFn>);
+  static_assert(std::is_same_v<decltype(&Facade::unsubscribe), UnsubscribeFn>);
+  static_assert(std::is_same_v<decltype(&Facade::diagnostics), DiagnosticsFn>);
+
+  static_assert(std::is_same_v<decltype(&Facade::on_selector_position_changed),
+                               SubscriptionFn<mazda::SelectorPosition>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_actual_gear_changed), SubscriptionFn<mazda::ActualGear>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_turn_state_changed), SubscriptionFn<mazda::TurnState>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_hazard_request_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_left_turn_request_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_right_turn_request_changed), SubscriptionFn<bool>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_liftgate_open_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_rear_right_door_open_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_rear_left_door_open_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_front_left_door_open_rhd_changed), SubscriptionFn<bool>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_front_right_door_open_rhd_changed),
+                               SubscriptionFn<bool>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_doors_unlocked_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_left_indicator_lamp_changed), SubscriptionFn<bool>>);
+  static_assert(
+      std::is_same_v<decltype(&Facade::on_right_indicator_lamp_changed), SubscriptionFn<bool>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_wiper_low_changed), SubscriptionFn<bool>>);
+  static_assert(std::is_same_v<decltype(&Facade::on_front_wiper_changed),
+                               SubscriptionFn<mazda::FrontWiperPosition>>);
 
   CHECK(mazda::TelemetryConfig{}.transport_silence_timeout_us == 1'000'000);
   CHECK(mazda::TelemetryConfig{}.callback_stop_timeout_us == 500'000);
@@ -65,17 +98,4 @@ TEST_CASE("facade exposes fixed polling and notify channels without implementati
   const mazda::AcquisitionMetrics acquisition{};
   CHECK(acquisition.controller_resets == 0);
   CHECK(acquisition.bus_off_events == 0);
-}
-
-TEST_CASE("decoder and private lighting contracts keep health separate") {
-  vehicle_core::DecoderObservation observation{};
-  observation.validity = vehicle_core::DecodeValidity::Malformed;
-  observation.timestamp_us = 100;
-  CHECK(observation.validity == vehicle_core::DecodeValidity::Malformed);
-
-  local_argb::internal::LightingCommand command{};
-  command.actionable = false;
-  command.valid_until_us = 200;
-  CHECK_FALSE(command.actionable);
-  CHECK(command.valid_until_us == 200);
 }

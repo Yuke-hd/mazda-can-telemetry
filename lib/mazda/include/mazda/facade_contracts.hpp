@@ -15,7 +15,6 @@ namespace mazda {
 
 using vehicle_core::Callback;
 using vehicle_core::Microseconds;
-using vehicle_core::MonotonicTimestamp;
 using vehicle_core::TransportHealth;
 
 inline constexpr std::size_t kNotifySubscribersPerChannel = 2;
@@ -83,7 +82,7 @@ private:
 };
 
 struct TelemetryConfig {
-  vehicle_core::VehicleFreshnessPolicy freshness{};
+  VehicleFreshnessPolicy freshness{};
   Microseconds transport_silence_timeout_us{kDefaultTransportSilenceTimeoutUs};
   Microseconds callback_stop_timeout_us{kDefaultCallbackStopTimeoutUs};
   std::uint8_t max_frames_per_batch{kDefaultMaxFramesPerBatch};
