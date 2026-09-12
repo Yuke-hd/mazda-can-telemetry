@@ -45,7 +45,9 @@ left to later stages.
 decoder tests. Decoder/freshness tests use these helpers and do not depend on
 the retired capture parser. Capture-format tests were removed with the custom
 capture product in S1-D; no parser or replay API remains in test
-infrastructure.
+infrastructure. S2-C adds the standalone core-only and vehicle/bench adapter
+build probes through `architecture_contracts`, without requiring S2-A or S2-B
+runtime sources.
 
 ## Boundary and compatibility checks
 
@@ -83,12 +85,15 @@ cmake --build build/host -j2
 ctest --test-dir build/host --output-on-failure
 ```
 
-The host run includes the existing receive-only, vehicle/bench artifact, and
-local-ARGB semantic safety checks plus the required public-header boundary
-gate. Physical firmware and isolated-bench checks remain outstanding when
-their pinned toolchain or hardware is unavailable; host contract tests never
-claim those results. No credentials, private captures, or personal trip data
-are included in these artifacts.
+The host run includes the consolidated `architecture_contracts` gate, the
+required public-header boundary gate and regression fixtures, and the existing
+portable contract tests. The architecture gate owns the receive-only,
+vehicle/bench artifact, and local-ARGB semantic safety validators exactly once;
+CI does not invoke them a second time before firmware builds. Physical
+firmware and isolated-bench checks remain outstanding when their pinned
+toolchain or hardware is unavailable; host contract tests never claim those
+results. No credentials, private captures, or personal trip data are included
+in these artifacts.
 
 ## Stage 1.5 validation evidence
 
@@ -115,3 +120,20 @@ The pinned ESP-IDF firmware checks remain outstanding on this host because
 neither Docker nor `idf.py` is available. The repository's host toolchain
 checker also reports `clang-format-14` unavailable; this does not affect the
 compiled host result.
+
+## S2-C architecture validation
+
+The consolidated architecture command was run on 2026-09-12:
+
+```text
+python3 tools/check_architecture.py --root . --compiler c++ --cmake cmake
+```
+
+It passed the isolated `vehicle_core` build/dependency check, both real
+vehicle/bench binding adapter builds and executions, all three safety
+validators, the active-path raw-capture removal check, and the single-validator
+ownership check. A fresh host CTest run also passed the same gate and retained
+the standalone public-header and consumer checks. AddressSanitizer,
+UndefinedBehaviorSanitizer, and ThreadSanitizer targeted runs passed for the core
+notification and CAN queue/lifecycle executables. ESP-IDF/Docker availability
+remains a firmware-only prerequisite.

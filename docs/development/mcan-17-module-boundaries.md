@@ -79,13 +79,21 @@ notification, or diagnostics signature is changed by the boundary handoff.
 
 ## Required boundary gate
 
-The checker supplied by S1.5-C is registered exactly once in
-`tests/host/CMakeLists.txt` as the `public_header_boundary` CTest. It compiles
-the six public entry points independently, inspects compiler dependency files,
-builds an isolated consumer against `vehicle_telemetry_contracts`, and checks
-both ordinary-denied and explicitly-authorized internal access. The checker
-does not claim runtime linkage, ESP-IDF support, Arduino packaging, or physical
-vehicle/bench acceptance.
+The S2-C architecture contract checker is registered exactly once in
+`tests/host/CMakeLists.txt` as `architecture_contracts`. It builds
+`vehicle_core` in an isolated consumer project without Mazda or RTOS inputs,
+builds and runs both project-owned vehicle/bench binding adapter tests, runs
+the receive-only/vehicle-boundary/lighting validators once, and confirms that
+retired capture code has no active dependency. It does not claim runtime
+linkage, ESP-IDF support, Arduino packaging, or physical vehicle/bench
+acceptance.
+
+The checker supplied by S1.5-C remains registered exactly once as the
+`public_header_boundary` CTest. It compiles the six public entry points
+independently, inspects compiler dependency files, builds an isolated consumer
+against `vehicle_telemetry_contracts`, and checks both ordinary-denied and
+explicitly-authorized internal access. Its separate
+`public_header_checker_regression` test preserves the negative fixtures.
 
 Run the integrated host gate with:
 
@@ -96,6 +104,6 @@ ctest --test-dir build/host -R public_header_boundary --output-on-failure
 ```
 
 The full host CTest run remains the required regression command. Existing
-listen-only, artifact-separation, and LED semantic safety checks stay
-registered unchanged alongside the boundary gate. The public-header checker
-has a single CTest registration and is not invoked separately by CI.
+listen-only, artifact-separation, and LED semantic safety checks are owned by
+the single `architecture_contracts` registration, while the public-header
+checker has a single registration and is not invoked separately by CI.
