@@ -3,8 +3,8 @@ if(COMMAND idf_component_register)
     SRCS "src/local_argb.cpp" "src/local_argb_idf.cpp"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "private_include"
-    REQUIRES board vehicle_core mazda esp_timer led_strip
-    PRIV_REQUIRES freertos
+    REQUIRES board vehicle_core esp_timer led_strip
+    PRIV_REQUIRES mazda freertos
   )
   return()
 endif()
@@ -15,7 +15,8 @@ target_include_directories(
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/private_include
 )
-target_link_libraries(local_argb PUBLIC mazda vehicle_core)
+target_link_libraries(local_argb PUBLIC vehicle_core)
+target_link_libraries(local_argb PRIVATE mazda)
 target_compile_features(local_argb PUBLIC cxx_std_17)
 
 if(MSVC)
@@ -35,4 +36,13 @@ if(BUILD_TESTING)
   target_link_libraries(local_argb_rendering_tests PRIVATE local_argb)
   target_compile_features(local_argb_rendering_tests PRIVATE cxx_std_17)
   add_test(NAME local_argb_rendering_tests COMMAND local_argb_rendering_tests)
+
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(
+    NAME local_argb_public_boundary
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/public_boundary.py
+            --root ${CMAKE_CURRENT_SOURCE_DIR}/../..
+            --compiler ${CMAKE_CXX_COMPILER}
+  )
 endif()

@@ -1,5 +1,7 @@
+#include "local_argb/legacy_compat.hpp"
 #include "local_argb/lighting_sink.hpp"
 #include "local_argb/local_argb.h"
+#include "local_argb/renderer.hpp"
 
 #include "board/board_config.h"
 #include "esp_log.h"
@@ -27,8 +29,8 @@ constexpr std::uint32_t kSupervisorStackDepth = 2048;
 constexpr TickType_t kWorkerPollTicks =
     pdMS_TO_TICKS(kSupervisorPollUs / 1'000) == 0 ? 1 : pdMS_TO_TICKS(kSupervisorPollUs / 1'000);
 
-DriverWatchdog g_driver_watchdog{};
-WorkerLease g_worker_lease{};
+internal::DriverWatchdog g_driver_watchdog{};
+internal::WorkerLease g_worker_lease{};
 portMUX_TYPE g_watchdog_lock = portMUX_INITIALIZER_UNLOCKED;
 
 vehicle_core::MonotonicTimestamp now_us() noexcept {
@@ -87,7 +89,7 @@ private:
 };
 
 LedStripSink g_sink;
-Controller g_controller{g_sink};
+internal::RendererController g_controller{g_sink};
 class QueueSink final : public internal::LightingSink {
 public:
   bool publish(const internal::LightingCommand &command) noexcept override;
@@ -107,7 +109,7 @@ void worker(void *) noexcept {
     heartbeat_worker();
     internal::LightingCommand command{};
     if (xQueueReceive(g_queue, &command, kWorkerPollTicks) == pdTRUE) {
-      if (!g_controller.apply(internal::adapt_command(command), now_us())) {
+      if (!g_controller.apply(command, now_us())) {
         ESP_LOGE(kTag, "pixel write failed; fail-off clear scheduled for retry");
       }
     } else if (!g_controller.tick(now_us())) {
@@ -225,25 +227,21 @@ bool start() noexcept {
   return true;
 }
 
-bool submit(const LightingCommand command) noexcept {
-  const auto private_command = internal::adapt_command(command);
-  return g_started && g_queue != nullptr && xQueueOverwrite(g_queue, &private_command) == pdPASS;
-}
-
 bool submit(const SemanticSnapshot snapshot) noexcept {
-  LightingCommand command{};
-  command.color = color_for(snapshot, snapshot.turn_last_update_us);
+  internal::LightingCommand command{};
+  const auto color = color_for(snapshot, snapshot.turn_last_update_us);
+  command.color = {color.red, color.green, color.blue};
   command.valid_until_us = snapshot.turn_last_update_us + kFailOffTimeoutUs;
-  command.actionable = command.color != kBlack && snapshot.health == SemanticHealth::Online &&
+  command.actionable = color != kBlack && snapshot.health == SemanticHealth::Online &&
                        snapshot.turn_status == vehicle_core::SignalStatus::Valid;
   if (!command.actionable)
-    command.color = kBlack;
-  return submit(command);
+    command.color = {};
+  return g_started && g_queue != nullptr && xQueueOverwrite(g_queue, &command) == pdPASS;
 }
 
 void fail_off() noexcept {
-  const LightingCommand command{};
-  if (!submit(command)) {
+  const internal::LightingCommand command{};
+  if (!g_started || g_queue == nullptr || xQueueOverwrite(g_queue, &command) != pdPASS) {
     (void)g_sink.write(kBlack);
   }
 }

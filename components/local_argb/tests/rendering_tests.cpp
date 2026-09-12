@@ -3,6 +3,7 @@
 
 #include "local_argb/lighting_sink.hpp"
 #include "local_argb/local_argb.h"
+#include "local_argb/renderer.hpp"
 #include "vehicle_lighting_policy/command.hpp"
 
 namespace {
@@ -32,18 +33,13 @@ public:
   std::vector<local_argb::internal::LightingCommand> commands;
 };
 
-local_argb::LightingCommand green(const vehicle_core::MonotonicTimestamp deadline) {
-  return {local_argb::Rgb{0, local_argb::kBrightnessCeiling, 0}, deadline, true};
-}
-
-local_argb::internal::LightingCommand
-private_green(const vehicle_core::MonotonicTimestamp deadline) {
+local_argb::internal::LightingCommand green(const vehicle_core::MonotonicTimestamp deadline) {
   return {local_argb::internal::LightingRgb{0, local_argb::kBrightnessCeiling, 0}, deadline, true};
 }
 
 void test_startup_and_independent_expiry() {
   FakePixelSink sink;
-  local_argb::Controller renderer{sink};
+  local_argb::internal::RendererController renderer{sink};
   assert(renderer.start());
   assert(sink.writes.size() == 1);
   assert(sink.writes.front() == local_argb::kBlack);
@@ -59,7 +55,7 @@ void test_startup_and_independent_expiry() {
 
 void test_failed_colour_attempt_retries_black_then_recovers() {
   FakePixelSink sink;
-  local_argb::Controller renderer{sink};
+  local_argb::internal::RendererController renderer{sink};
   assert(renderer.start());
   sink.failures_remaining = 1;
   assert(!renderer.apply(green(250), 100));
@@ -72,16 +68,16 @@ void test_failed_colour_attempt_retries_black_then_recovers() {
 }
 
 void test_bounded_overwrite_and_generic_sink() {
-  local_argb::Mailbox mailbox;
+  local_argb::internal::Mailbox mailbox;
   mailbox.submit(green(10));
   mailbox.submit(green(20));
-  local_argb::LightingCommand command{};
+  local_argb::internal::LightingCommand command{};
   assert(mailbox.take(command));
   assert(command.valid_until_us == 20);
   assert(!mailbox.take(command));
 
   FakeLightingSink sink;
-  assert(sink.publish(private_green(42)));
+  assert(sink.publish(green(42)));
   assert(sink.commands.size() == 1);
   assert(sink.commands.front().actionable);
 
