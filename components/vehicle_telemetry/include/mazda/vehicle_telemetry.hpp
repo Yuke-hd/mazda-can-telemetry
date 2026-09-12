@@ -69,7 +69,10 @@ private:
   // Keep synchronization, state copies and the clock seam out of the public
   // include graph. The implementation owns this fixed storage with placement
   // construction, so constructing the facade performs no heap allocation.
-  static constexpr std::size_t kImplementationStorageBytes = 4096;
+  // The service keeps all notification channels, worker state and the
+  // publication store in one fixed opaque allocation. It remains private so
+  // task/lock/decoder types never enter the public include graph.
+  static constexpr std::size_t kImplementationStorageBytes = 32768;
   alignas(std::max_align_t) std::byte implementation_storage_[kImplementationStorageBytes]{};
 };
 
