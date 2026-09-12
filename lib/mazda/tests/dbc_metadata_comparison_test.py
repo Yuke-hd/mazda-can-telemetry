@@ -55,6 +55,16 @@ class DbcMetadataComparisonTests(unittest.TestCase):
         failures = compare_mazda_dbc.compare(self.dbc, drifted_metadata)
         self.assertTrue(any("EngineRPM scale mismatch" in failure for failure in failures), failures)
 
+    def test_intentional_channel_drift_fails_with_channel_diagnostic(self) -> None:
+        drifted = self.metadata_text.replace(
+            "ENGINE_DATA\tEngineRPM\tengine_rpm\t",
+            "ENGINE_DATA\tEngineRPM\tdrifted_channel\t",
+            1,
+        )
+        drifted_metadata = compare_mazda_dbc.parse_metadata(drifted)
+        failures = compare_mazda_dbc.compare(self.dbc, drifted_metadata)
+        self.assertTrue(any("EngineRPM channel mismatch" in failure for failure in failures), failures)
+
     def test_promoting_confidence_without_evidence_fails(self) -> None:
         promoted = self.metadata_text.replace(
             "TRANSMISSION\tActualGear\tactual_gear\tActualGear\t552\t36\t4\t1\t0\t0\t15\tMotorola\tNone\tObserved\t",

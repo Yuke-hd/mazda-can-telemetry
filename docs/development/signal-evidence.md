@@ -116,6 +116,7 @@ new capture, credential, or private vehicle artifact is part of this inventory.
 The supported DBC subset is checked against the compiled constexpr metadata
 authority by the host-only
 [MCAN-71 comparison tool](mcan-71-dbc-metadata.md). The tool covers the
-numeric fields and the explicit source-name/interpretation exception recorded
-above; an actual numeric mismatch fails. It does not promote evidence based on
-synthetic tests or runtime availability.
+stable public channel, numeric fields, and the explicit
+source-name/interpretation exception recorded above; an actual channel or
+numeric mismatch fails. It does not promote evidence based on synthetic tests
+or runtime availability.

@@ -70,6 +70,30 @@ _EXPECTED_CONFIDENCE = {
     ("TURN_SWITCH", "FrontWiper"): "Observed",
 }
 
+# Stable application-facing channel names are an independent contract from
+# the reviewed DBC source names. Keep this mapping frozen here so a change in
+# kSupportedSignalDefinitions cannot silently change the channel used by the
+# evidence inventory. FrontOtherDoor's mapping is the sole documented
+# interpretation exception.
+_EXPECTED_CHANNEL = {
+    ("ENGINE_DATA", "EngineRPM"): "engine_rpm",
+    ("TRANSMISSION", "Selector"): "selector_position",
+    ("TRANSMISSION", "ActualGear"): "actual_gear",
+    ("DOORS", "Liftgate_Open_Reference"): "liftgate_open",
+    ("DOORS", "RearRightDoor_Open_Reference"): "rear_right_door_open",
+    ("DOORS", "RearLeftDoor_Open_Reference"): "rear_left_door_open",
+    ("DOORS", "FrontOtherDoor_Open_Reference"): "front_left_door_open_rhd",
+    ("DOORS", "FrontRightDoor_Open_RHD"): "front_right_door_open_rhd",
+    ("DOORS", "DoorsUnlocked_Reference"): "doors_unlocked",
+    ("BLINK_INFO", "LeftIndicatorLamp_Reference"): "left_indicator_lamp",
+    ("BLINK_INFO", "RightIndicatorLamp_Reference"): "right_indicator_lamp",
+    ("BLINK_INFO", "WiperLow_Reference"): "wiper_low",
+    ("TURN_SWITCH", "HazardSwitch_Reference"): "hazard_request",
+    ("TURN_SWITCH", "RightIndicatorSwitch_Reference"): "right_turn_request",
+    ("TURN_SWITCH", "LeftIndicatorSwitch_Reference"): "left_turn_request",
+    ("TURN_SWITCH", "FrontWiper"): "front_wiper",
+}
+
 _EXPECTED_UNIT = {
     ("ENGINE_DATA", "EngineRPM"): "RevolutionsPerMinute",
     ("TRANSMISSION", "Selector"): "None",
@@ -256,6 +280,7 @@ def compare(dbc: Mapping[tuple[str, str], DbcSignal],
         definition = metadata[key]
         label = f"{source.message}.{source.name}"
         checks: Iterable[tuple[str, object, object]] = (
+            ("channel", _EXPECTED_CHANNEL[key], definition.channel),
             ("identifier", source.identifier, definition.identifier),
             ("start bit", source.start, definition.dbc_start_bit),
             ("bit length", source.length, definition.bit_length),

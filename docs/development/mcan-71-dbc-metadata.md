@@ -20,10 +20,10 @@ python3 tools/compare_mazda_dbc.py
 The checker compiles
 `tools/dump_mazda_metadata.cpp`, which
 exports the compiled constexpr table in a stable tab-delimited host-tool
-format. The checker then compares the supported 16-signal subset's identifier,
-DBC start bit, length, byte order, scale, offset, and declared physical
-range. Numeric mismatches are errors; they cannot be hidden by an evidence
-exception.
+format. The checker then compares the supported 16-signal subset's stable
+public channel, identifier, DBC start bit, length, byte order, scale, offset,
+and declared physical range. Channel and numeric mismatches are errors; they
+cannot be hidden by an evidence exception.
 
 `SPEED` is intentionally excluded because it is a retained candidate and has
 no field in the reviewed custom DBC. The only source-name/interpretation
@@ -43,6 +43,6 @@ validity, freshness, or runtime availability.
 The module-local
 `dbc_metadata_comparison_test.py`
 checks the reviewed baseline, verifies the DBC digest, and mutates temporary
-metadata to prove that both a numeric drift and an unsupported confidence
-promotion fail with diagnostics. Temporary mutations are never written to the
-repository.
+metadata to prove that channel and numeric drift plus an unsupported
+confidence promotion fail with diagnostics. Temporary mutations are never
+written to the repository.
