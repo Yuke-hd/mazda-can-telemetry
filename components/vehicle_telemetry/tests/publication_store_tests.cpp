@@ -52,16 +52,16 @@ void test_availability_and_reset() {
   // FreshnessUnverified rather than acquiring an invented timeout.
   mazda::internal::PublicationStore store{clock, config};
 
-  store.reset(diagnostics(mazda::LifecycleState::Running,
-                          vehicle_core::TransportHealth::AwaitingTraffic));
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
   EXPECT(store.speed_kph().availability == mazda::Availability::NoData);
   EXPECT(store.engine_rpm().availability == mazda::Availability::NoData);
 
   mazda::VehicleState state{};
   EXPECT(state.speed_kph.update(42.5F, 10));
   EXPECT(state.engine_rpm.update(2'000.0F, 10));
-  store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                   vehicle_core::TransportHealth::Live, 1));
+  store.publish(
+      state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 1));
 
   clock.set(110);
   const auto speed = store.speed_kph();
@@ -91,8 +91,8 @@ void test_availability_and_reset() {
   malformed.timestamp_us = 20;
   EXPECT(state.observe_message(malformed, vehicle_core::DecodeValidity::Malformed) ==
          mazda::MessageObservationResult::Accepted);
-  store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                   vehicle_core::TransportHealth::Live, 2));
+  store.publish(
+      state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 2));
   const auto unavailable_message = store.engine_rpm();
   EXPECT(unavailable_message.availability == mazda::Availability::Unavailable);
   EXPECT(unavailable_message.value.has_value() && *unavailable_message.value == 2'000.0F);
@@ -104,8 +104,8 @@ void test_availability_and_reset() {
   EXPECT(unavailable_speed.value.has_value() && *unavailable_speed.value == 42.5F);
 
   // A restart handoff must clear old-run observations before awaiting traffic.
-  store.reset(diagnostics(mazda::LifecycleState::Running,
-                          vehicle_core::TransportHealth::AwaitingTraffic));
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
   EXPECT(store.speed_kph().availability == mazda::Availability::NoData);
   EXPECT(!store.speed_kph().value.has_value());
   EXPECT(store.engine_rpm().availability == mazda::Availability::NoData);
@@ -122,19 +122,21 @@ void test_unrelated_receive_keeps_transport_live() {
   mazda::TelemetryConfig config{};
   config.transport_silence_timeout_us = 100;
   mazda::internal::PublicationStore store{clock, config};
-  store.reset(diagnostics(mazda::LifecycleState::Running,
-                          vehicle_core::TransportHealth::AwaitingTraffic));
+  store.reset(
+      diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::AwaitingTraffic));
 
   mazda::VehicleState state{};
   EXPECT(state.speed_kph.update(8.0F, 10));
-  store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                   vehicle_core::TransportHealth::Live, 1), 10);
+  store.publish(state,
+                diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 1),
+                10);
 
   // This is a receive-only transport watermark for an unrelated/unsupported
   // frame. It must not modify state, but it does prove the receiver is live.
   clock.set(90);
-  store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                   vehicle_core::TransportHealth::Live, 2), 90);
+  store.publish(state,
+                diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 2),
+                90);
   EXPECT(store.diagnostics().transport == vehicle_core::TransportHealth::Live);
   EXPECT(store.speed_kph().availability == mazda::Availability::FreshnessUnverified);
   EXPECT(store.speed_kph().value.has_value() && *store.speed_kph().value == 8.0F);
@@ -150,8 +152,7 @@ void test_coherent_snapshot_under_concurrent_publication() {
   config.freshness.speed_kph_timeout_us = 1'000'000;
   config.freshness.engine_rpm_timeout_us = 1'000'000;
   mazda::internal::PublicationStore store{clock, config};
-  store.reset(diagnostics(mazda::LifecycleState::Running,
-                          vehicle_core::TransportHealth::Live));
+  store.reset(diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live));
 
   std::atomic<bool> writer_done{false};
   std::atomic<bool> inconsistent{false};
@@ -159,8 +160,7 @@ void test_coherent_snapshot_under_concurrent_publication() {
     mazda::VehicleState state{};
     for (std::uint64_t sequence = 1; sequence <= 50'000; ++sequence) {
       const auto value = static_cast<float>(sequence);
-      if (!state.speed_kph.update(value, sequence) ||
-          !state.engine_rpm.update(value, sequence)) {
+      if (!state.speed_kph.update(value, sequence) || !state.engine_rpm.update(value, sequence)) {
         inconsistent.store(true, std::memory_order_release);
         break;
       }

@@ -27,8 +27,8 @@ PublicationStore::PublicationStore(vehicle_core::MonotonicClock &clock,
                                    TelemetryConfig config) noexcept
     : clock_(&clock), config_(config) {}
 
-vehicle_core::TransportHealth
-PublicationStore::effective_transport(const vehicle_core::MonotonicTimestamp now_us) const noexcept {
+vehicle_core::TransportHealth PublicationStore::effective_transport(
+    const vehicle_core::MonotonicTimestamp now_us) const noexcept {
   const auto transport = published_.diagnostics.transport;
   if ((transport != vehicle_core::TransportHealth::AwaitingTraffic &&
        transport != vehicle_core::TransportHealth::Live) ||
@@ -71,8 +71,7 @@ StatusResult PublicationStore::configure(const TelemetryConfig &config) noexcept
   return StatusResult{ResultCode::Ok};
 }
 
-void PublicationStore::publish(const VehicleState &state,
-                               const Diagnostics &diagnostics) noexcept {
+void PublicationStore::publish(const VehicleState &state, const Diagnostics &diagnostics) noexcept {
   publish(state, diagnostics, std::nullopt);
 }
 
@@ -84,9 +83,8 @@ void PublicationStore::publish(
   published_.state.apply_freshness_policy(config_.freshness);
   published_.diagnostics = diagnostics;
   if (diagnostics.transport == vehicle_core::TransportHealth::Live) {
-    const auto observation = last_transport_receive_us.has_value()
-                                 ? last_transport_receive_us
-                                 : latest_observation(state);
+    const auto observation = last_transport_receive_us.has_value() ? last_transport_receive_us
+                                                                   : latest_observation(state);
     if (observation.has_value() &&
         (!transport_reference_us_.has_value() || *observation > *transport_reference_us_)) {
       transport_reference_us_ = observation;
@@ -94,11 +92,10 @@ void PublicationStore::publish(
   }
 }
 
-void PublicationStore::publish(const VehicleState &state, const LifecycleState lifecycle,
-                               const vehicle_core::TransportHealth transport,
-                               const AcquisitionMetrics &acquisition,
-                               const std::optional<vehicle_core::MonotonicTimestamp>
-                                   last_transport_receive_us) noexcept {
+void PublicationStore::publish(
+    const VehicleState &state, const LifecycleState lifecycle,
+    const vehicle_core::TransportHealth transport, const AcquisitionMetrics &acquisition,
+    const std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us) noexcept {
   Diagnostics diagnostics{};
   diagnostics.lifecycle = lifecycle;
   diagnostics.transport = transport;
@@ -178,86 +175,82 @@ Reading<float> VehicleTelemetry::speed_kph() const noexcept {
 }
 
 Reading<float> VehicleTelemetry::engine_rpm() const noexcept {
-  return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)->engine_rpm();
+  return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)
+      ->engine_rpm();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_selector_position_changed(Callback<SelectorPosition>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_selector_position_changed(Callback<SelectorPosition>,
+                                                                    void *) noexcept {
   return unavailable_subscription<SelectorPosition>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_actual_gear_changed(Callback<ActualGear>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_actual_gear_changed(Callback<ActualGear>,
+                                                              void *) noexcept {
   return unavailable_subscription<ActualGear>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_turn_state_changed(Callback<TurnState>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_turn_state_changed(Callback<TurnState>, void *) noexcept {
   return unavailable_subscription<TurnState>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_hazard_request_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_hazard_request_changed(Callback<bool>, void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_left_turn_request_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_left_turn_request_changed(Callback<bool>,
+                                                                    void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_right_turn_request_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_right_turn_request_changed(Callback<bool>,
+                                                                     void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_liftgate_open_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_liftgate_open_changed(Callback<bool>, void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_rear_right_door_open_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_rear_right_door_open_changed(Callback<bool>,
+                                                                       void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_rear_left_door_open_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_rear_left_door_open_changed(Callback<bool>,
+                                                                      void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_front_left_door_open_rhd_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_front_left_door_open_rhd_changed(Callback<bool>,
+                                                                           void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_front_right_door_open_rhd_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_front_right_door_open_rhd_changed(Callback<bool>,
+                                                                            void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_doors_unlocked_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_doors_unlocked_changed(Callback<bool>, void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_left_indicator_lamp_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_left_indicator_lamp_changed(Callback<bool>,
+                                                                      void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_right_indicator_lamp_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_right_indicator_lamp_changed(Callback<bool>,
+                                                                       void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_wiper_low_changed(Callback<bool>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_wiper_low_changed(Callback<bool>, void *) noexcept {
   return unavailable_subscription<bool>();
 }
 
-Result<Subscription>
-VehicleTelemetry::on_front_wiper_changed(Callback<FrontWiperPosition>, void *) noexcept {
+Result<Subscription> VehicleTelemetry::on_front_wiper_changed(Callback<FrontWiperPosition>,
+                                                              void *) noexcept {
   return unavailable_subscription<FrontWiperPosition>();
 }
 
@@ -266,7 +259,8 @@ StatusResult VehicleTelemetry::unsubscribe(Subscription) noexcept {
 }
 
 Diagnostics VehicleTelemetry::diagnostics() const noexcept {
-  return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)->diagnostics();
+  return reinterpret_cast<const internal::PublicationStore *>(implementation_storage_)
+      ->diagnostics();
 }
 
 } // namespace mazda

@@ -51,13 +51,11 @@ public:
   // decoder ignores. The optional is private because transport receive time
   // is not part of a public Reading value.
   void publish(const VehicleState &state, const Diagnostics &diagnostics,
-               std::optional<vehicle_core::MonotonicTimestamp>
-                   last_transport_receive_us) noexcept;
+               std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us) noexcept;
   void publish(const VehicleState &state, LifecycleState lifecycle,
-               vehicle_core::TransportHealth transport,
-               const AcquisitionMetrics &acquisition = {},
-               std::optional<vehicle_core::MonotonicTimestamp>
-                   last_transport_receive_us = std::nullopt) noexcept;
+               vehicle_core::TransportHealth transport, const AcquisitionMetrics &acquisition = {},
+               std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us =
+                   std::nullopt) noexcept;
   void reset(const Diagnostics &diagnostics = {}) noexcept;
 
   [[nodiscard]] Reading<float> speed_kph() const noexcept;
@@ -66,15 +64,15 @@ public:
   [[nodiscard]] PublishedSnapshot snapshot() const noexcept;
 
 private:
-  [[nodiscard]] vehicle_core::TransportHealth effective_transport(
-      vehicle_core::MonotonicTimestamp now_us) const noexcept;
+  [[nodiscard]] vehicle_core::TransportHealth
+  effective_transport(vehicle_core::MonotonicTimestamp now_us) const noexcept;
   [[nodiscard]] static std::optional<vehicle_core::MonotonicTimestamp>
   latest_observation(const VehicleState &state) noexcept;
 
   template <typename T>
-  [[nodiscard]] Reading<T> read_signal(
-      vehicle_core::Signal<T> VehicleState::*member, std::uint32_t identifier,
-      ValidationStatus validation) const noexcept;
+  [[nodiscard]] Reading<T> read_signal(vehicle_core::Signal<T> VehicleState::*member,
+                                       std::uint32_t identifier,
+                                       ValidationStatus validation) const noexcept;
 
   SteadyClock steady_clock_{};
   vehicle_core::MonotonicClock *clock_{nullptr};
@@ -86,8 +84,8 @@ private:
 
 template <typename T>
 Reading<T> PublicationStore::read_signal(vehicle_core::Signal<T> VehicleState::*member,
-                                          const std::uint32_t identifier,
-                                          const ValidationStatus validation) const noexcept {
+                                         const std::uint32_t identifier,
+                                         const ValidationStatus validation) const noexcept {
   // Sample time outside the lock. The value and all inputs to its availability
   // decision are copied from one publication while the lock is held.
   const auto now_us = clock_->now();
