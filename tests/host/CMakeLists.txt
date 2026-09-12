@@ -103,25 +103,12 @@ doctest_discover_tests(local_argb_tests)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(
-  NAME can_bus_no_transmit_structure
+  NAME architecture_contracts
   COMMAND ${Python3_EXECUTABLE}
-          ${CMAKE_SOURCE_DIR}/tools/validate_can_receive_only.py
-          --public-header ${CMAKE_SOURCE_DIR}/components/can_bus/include/can_bus/can_bus.h
-          --implementation ${CMAKE_SOURCE_DIR}/components/can_bus/src/can_bus.cpp
-)
-
-add_test(
-  NAME weact_vehicle_artifact_separation
-  COMMAND ${Python3_EXECUTABLE}
-          ${CMAKE_SOURCE_DIR}/tools/validate_weact_vehicle_artifacts.py
+          ${CMAKE_SOURCE_DIR}/tools/check_architecture.py
           --root ${CMAKE_SOURCE_DIR}
-)
-
-add_test(
-  NAME local_argb_semantic_boundary
-  COMMAND ${Python3_EXECUTABLE}
-          ${CMAKE_SOURCE_DIR}/tools/validate_local_argb_boundary.py
-          --root ${CMAKE_SOURCE_DIR}
+          --compiler ${CMAKE_CXX_COMPILER}
+          --cmake ${CMAKE_COMMAND}
 )
 
 # Required Stage 1.5 gate. The checker compiles each public entry point in
