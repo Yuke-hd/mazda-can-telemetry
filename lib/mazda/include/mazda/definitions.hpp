@@ -1,11 +1,13 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 
 #include "mazda/freshness.hpp"
 #include "vehicle_core/frame.hpp"
 #include "vehicle_core/signal.hpp"
+#include "vehicle_core/telemetry_contracts.hpp"
 
 namespace mazda::candidate {
 
@@ -49,10 +51,39 @@ struct CandidateSignalDefinition {
   ByteOrder byte_order{ByteOrder::Motorola};
   const char *value_table{nullptr};
   const char *provenance{nullptr};
+  // Evidence confidence is independent from decoder validity and runtime
+  // availability. In particular, synthetic vectors cannot promote a
+  // source-only mapping to Observed or Confirmed.
+  vehicle_core::ValidationStatus confidence{vehicle_core::ValidationStatus::Reference};
 };
+
+using EvidenceConfidence = vehicle_core::ValidationStatus;
+using SignalConfidence = EvidenceConfidence;
 
 inline constexpr const char *kCaptureConfirmedProvenance =
     "capture-derived Mazda custom DBC; confirmed from passive real-world capture";
+
+inline constexpr const char *kEngineRpmEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L95";
+inline constexpr const char *kSelectorEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L98";
+inline constexpr const char *kActualGearEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L99";
+inline constexpr const char *kFrontRightDoorEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L101";
+inline constexpr const char *kWiperLowEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L108";
+inline constexpr const char *kFrontWiperEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L110";
+inline constexpr const char *kSourceOnlyEvidenceProvenance =
+    "docs/development/signal-evidence.md; reviewed source mapping in "
+    "docs/protocol/mazda_custom.dbc";
+inline constexpr const char *kFrontOtherDoorEvidenceProvenance =
+    "docs/development/signal-evidence.md; docs/protocol/mazda_custom.dbc#L49 and #L102; "
+    "FrontOtherDoor is a Reference-only source field interpreted as a front-left RHD channel";
+inline constexpr const char *kSpeedCandidateEvidenceProvenance =
+    "docs/development/signal-evidence.md; retained SPEED candidate has no field in the reviewed "
+    "Mazda custom DBC";
 
 // The capture-derived DBC has no cycle-time declaration. Null periods/timeouts
 // are intentional until reviewed replay or isolated-bench evidence establishes
@@ -108,7 +139,8 @@ inline constexpr CandidateSignalDefinition kEngineRpmDefinition{
     7,
     CandidateSignalDefinition::ByteOrder::Motorola,
     "none",
-    kCaptureConfirmedProvenance};
+    kEngineRpmEvidenceProvenance,
+    vehicle_core::ValidationStatus::Confirmed};
 inline constexpr CandidateSignalDefinition kEngineSpeedDefinition{
     "SPEED",
     kEngineDataId,
@@ -120,7 +152,12 @@ inline constexpr CandidateSignalDefinition kEngineSpeedDefinition{
     0.0F,
     655.35F,
     "none declared by source; 655.35 is the representable 16-bit encoding maximum, not a "
-    "validated vehicle limit"};
+    "validated vehicle limit",
+    0,
+    CandidateSignalDefinition::ByteOrder::Motorola,
+    nullptr,
+    kSpeedCandidateEvidenceProvenance,
+    vehicle_core::ValidationStatus::Reference};
 inline constexpr CandidateSignalDefinition kSelectorDefinition{
     "Selector",
     kGearId,
@@ -135,7 +172,8 @@ inline constexpr CandidateSignalDefinition kSelectorDefinition{
     2,
     CandidateSignalDefinition::ByteOrder::Motorola,
     "0=Shifting; 1=Park; 2=Reverse; 3=Neutral; 4=Drive; 5=Unknown_5; 6=Unknown_6; 7=Unknown_7",
-    kCaptureConfirmedProvenance};
+    kSelectorEvidenceProvenance,
+    vehicle_core::ValidationStatus::Confirmed};
 inline constexpr CandidateSignalDefinition kActualGearDefinition{
     "ActualGear",
     kGearId,
@@ -152,41 +190,57 @@ inline constexpr CandidateSignalDefinition kActualGearDefinition{
     CandidateSignalDefinition::ByteOrder::Motorola,
     "0=P_or_N; 1=1st; 2=2nd; 3=3rd; 4=4th; 5=5th; 6=6th; 7=Unknown_7; 8=Unknown_8; 9=Unknown_9; "
     "10=Unknown_10; 11=Unknown_11; 12=Unknown_12; 13=Unknown_13; 14=Reverse; 15=Shifting",
-    kCaptureConfirmedProvenance};
+    kActualGearEvidenceProvenance,
+    vehicle_core::ValidationStatus::Observed};
 
-#define MAZDA_BOOLEAN_DEFINITION(symbol, label, identifier_value, bit, dbc_bit, order, table)      \
+#define MAZDA_BOOLEAN_DEFINITION(symbol, label, identifier_value, bit, dbc_bit, order, table,      \
+                                 evidence_confidence, evidence_provenance)                         \
   inline constexpr CandidateSignalDefinition symbol {                                              \
     label, identifier_value, bit, 1, 1.0F, 0.0F, vehicle_core::SignalUnit::Boolean, 0.0F, 1.0F,    \
-        "none", dbc_bit, CandidateSignalDefinition::ByteOrder::order, table,                       \
-        kCaptureConfirmedProvenance                                                                \
+        "none", dbc_bit, CandidateSignalDefinition::ByteOrder::order, table, evidence_provenance,  \
+        evidence_confidence                                                                        \
   }
 
 MAZDA_BOOLEAN_DEFINITION(kLiftgateOpenDefinition, "Liftgate_Open", kDoorsId, 32, 32, Motorola,
-                         "0=Closed; 1=Open");
+                         "0=Closed; 1=Open", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kRearRightDoorOpenDefinition, "RearRightDoor_Open", kDoorsId, 34, 34,
-                         Motorola, "0=Closed; 1=Open");
+                         Motorola, "0=Closed; 1=Open", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kRearLeftDoorOpenDefinition, "RearLeftDoor_Open", kDoorsId, 35, 35,
-                         Motorola, "0=Closed; 1=Open");
+                         Motorola, "0=Closed; 1=Open", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kFrontLeftDoorOpenRhdDefinition, "FrontLeftDoor_Open_RHD", kDoorsId, 36,
-                         36, Motorola, "0=Closed; 1=Open");
+                         36, Motorola, "0=Closed; 1=Open",
+                         vehicle_core::ValidationStatus::Reference,
+                         kFrontOtherDoorEvidenceProvenance);
 inline constexpr const CandidateSignalDefinition &kFrontLeftDoorOpenDefinition =
     kFrontLeftDoorOpenRhdDefinition;
 MAZDA_BOOLEAN_DEFINITION(kFrontRightDoorOpenRhdDefinition, "FrontRightDoor_Open_RHD", kDoorsId, 37,
-                         37, Motorola, "0=Closed; 1=Open");
+                         37, Motorola, "0=Closed; 1=Open",
+                         vehicle_core::ValidationStatus::Confirmed,
+                         kFrontRightDoorEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kDoorsUnlockedDefinition, "DoorsUnlocked", kDoorsId, 30, 30, Motorola,
-                         "0=Locked; 1=Unlocked");
+                         "0=Locked; 1=Unlocked", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kLeftIndicatorLampDefinition, "LeftIndicatorLamp", kBlinkInfoId, 18, 18,
-                         Intel, "0=Off; 1=On");
+                         Intel, "0=Off; 1=On", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kRightIndicatorLampDefinition, "RightIndicatorLamp", kBlinkInfoId, 19, 19,
-                         Motorola, "0=Off; 1=On");
+                         Motorola, "0=Off; 1=On", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kWiperLowDefinition, "WiperLow", kBlinkInfoId, 33, 33, Motorola,
-                         "0=Off; 1=On");
+                         "0=Off; 1=On", vehicle_core::ValidationStatus::Observed,
+                         kWiperLowEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kHazardDefinition, "HazardSwitch", kTurnSwitchId, 10, 10, Motorola,
-                         "0=Off; 1=On");
+                         "0=Off; 1=On", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kTurnRightSwitchDefinition, "RightIndicatorSwitch", kTurnSwitchId, 12, 12,
-                         Motorola, "0=Off; 1=On");
+                         Motorola, "0=Off; 1=On", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 MAZDA_BOOLEAN_DEFINITION(kTurnLeftSwitchDefinition, "LeftIndicatorSwitch", kTurnSwitchId, 13, 13,
-                         Motorola, "0=Off; 1=On");
+                         Motorola, "0=Off; 1=On", vehicle_core::ValidationStatus::Reference,
+                         kSourceOnlyEvidenceProvenance);
 
 #undef MAZDA_BOOLEAN_DEFINITION
 
@@ -204,6 +258,51 @@ inline constexpr CandidateSignalDefinition kFrontWiperDefinition{
     21,
     CandidateSignalDefinition::ByteOrder::Motorola,
     "0=Off; 1=On; 2=High; 3=Intermittent",
-    kCaptureConfirmedProvenance};
+    kFrontWiperEvidenceProvenance,
+    vehicle_core::ValidationStatus::Observed};
+
+// This is the supported subset consumed by the host DBC comparison tool. It
+// intentionally excludes kEngineSpeedDefinition: SPEED is a retained legacy
+// candidate and is not present in the reviewed source DBC. The FrontOtherDoor
+// -> FrontLeftDoorOpenRhd entry is the sole interpretation/name exception
+// documented by S1-E.
+struct SupportedSignalDefinition {
+  const char *message_name;
+  const char *dbc_signal_name;
+  const char *channel_name;
+  const CandidateSignalDefinition *definition;
+};
+
+inline constexpr std::array kSupportedSignalDefinitions{
+    SupportedSignalDefinition{"ENGINE_DATA", "EngineRPM", "engine_rpm", &kEngineRpmDefinition},
+    SupportedSignalDefinition{"TRANSMISSION", "Selector", "selector_position",
+                              &kSelectorDefinition},
+    SupportedSignalDefinition{"TRANSMISSION", "ActualGear", "actual_gear", &kActualGearDefinition},
+    SupportedSignalDefinition{"DOORS", "Liftgate_Open_Reference", "liftgate_open",
+                              &kLiftgateOpenDefinition},
+    SupportedSignalDefinition{"DOORS", "RearRightDoor_Open_Reference", "rear_right_door_open",
+                              &kRearRightDoorOpenDefinition},
+    SupportedSignalDefinition{"DOORS", "RearLeftDoor_Open_Reference", "rear_left_door_open",
+                              &kRearLeftDoorOpenDefinition},
+    SupportedSignalDefinition{"DOORS", "FrontOtherDoor_Open_Reference", "front_left_door_open_rhd",
+                              &kFrontLeftDoorOpenRhdDefinition},
+    SupportedSignalDefinition{"DOORS", "FrontRightDoor_Open_RHD", "front_right_door_open_rhd",
+                              &kFrontRightDoorOpenRhdDefinition},
+    SupportedSignalDefinition{"DOORS", "DoorsUnlocked_Reference", "doors_unlocked",
+                              &kDoorsUnlockedDefinition},
+    SupportedSignalDefinition{"BLINK_INFO", "LeftIndicatorLamp_Reference", "left_indicator_lamp",
+                              &kLeftIndicatorLampDefinition},
+    SupportedSignalDefinition{"BLINK_INFO", "RightIndicatorLamp_Reference", "right_indicator_lamp",
+                              &kRightIndicatorLampDefinition},
+    SupportedSignalDefinition{"BLINK_INFO", "WiperLow_Reference", "wiper_low",
+                              &kWiperLowDefinition},
+    SupportedSignalDefinition{"TURN_SWITCH", "HazardSwitch_Reference", "hazard_request",
+                              &kHazardDefinition},
+    SupportedSignalDefinition{"TURN_SWITCH", "RightIndicatorSwitch_Reference", "right_turn_request",
+                              &kTurnRightSwitchDefinition},
+    SupportedSignalDefinition{"TURN_SWITCH", "LeftIndicatorSwitch_Reference", "left_turn_request",
+                              &kTurnLeftSwitchDefinition},
+    SupportedSignalDefinition{"TURN_SWITCH", "FrontWiper", "front_wiper", &kFrontWiperDefinition},
+};
 
 } // namespace mazda::candidate

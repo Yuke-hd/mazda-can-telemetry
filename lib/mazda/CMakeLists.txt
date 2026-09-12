@@ -30,3 +30,32 @@ endif()
 add_library(mazda_contracts INTERFACE)
 target_include_directories(mazda_contracts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(mazda_contracts INTERFACE mazda)
+
+# Host-only metadata export used by the S2-D source comparison tool. This
+# consumes the compiled constexpr table and is intentionally absent from the
+# ESP-IDF component path above.
+add_executable(
+  mazda_metadata_dump
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/dump_mazda_metadata.cpp
+)
+target_include_directories(
+  mazda_metadata_dump
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vehicle_core/include
+)
+target_compile_features(mazda_metadata_dump PRIVATE cxx_std_17)
+
+if(BUILD_TESTING AND MAZDA_BUILD_HOST_TESTS)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(
+    NAME mazda_dbc_metadata_comparison
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/dbc_metadata_comparison_test.py
+            --metadata-dumper $<TARGET_FILE:mazda_metadata_dump>
+  )
+  set_tests_properties(
+    mazda_dbc_metadata_comparison
+    PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+endif()
