@@ -46,16 +46,16 @@ public:
   // Publish and reset are the private lifecycle handoff used by S2-A. Both
   // operations replace fixed storage under one short critical section. Reset
   // intentionally clears old-run samples before a restart.
-  void publish(const VehicleState &state, const Diagnostics &diagnostics) noexcept;
   // Pass the receive watermark for every acquired frame, including frames the
-  // decoder ignores. The optional is private because transport receive time
-  // is not part of a public Reading value.
+  // decoder ignores. Callers must pass std::nullopt when no frame was
+  // acquired; there is intentionally no overload without this basis. The
+  // optional is private because transport receive time is not part of a
+  // public Reading value.
   void publish(const VehicleState &state, const Diagnostics &diagnostics,
                std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us) noexcept;
   void publish(const VehicleState &state, LifecycleState lifecycle,
-               vehicle_core::TransportHealth transport, const AcquisitionMetrics &acquisition = {},
-               std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us =
-                   std::nullopt) noexcept;
+               vehicle_core::TransportHealth transport, const AcquisitionMetrics &acquisition,
+               std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us) noexcept;
   void reset(const Diagnostics &diagnostics = {}) noexcept;
 
   [[nodiscard]] Reading<float> speed_kph() const noexcept;
@@ -75,9 +75,6 @@ public:
 private:
   [[nodiscard]] vehicle_core::TransportHealth
   effective_transport(vehicle_core::MonotonicTimestamp now_us) const noexcept;
-  [[nodiscard]] static std::optional<vehicle_core::MonotonicTimestamp>
-  latest_observation(const VehicleState &state) noexcept;
-
   template <typename T>
   [[nodiscard]] Reading<T> read_signal(vehicle_core::Signal<T> VehicleState::*member,
                                        std::uint32_t identifier,

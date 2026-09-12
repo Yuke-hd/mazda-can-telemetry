@@ -3,7 +3,10 @@
 #include <atomic>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 #include "vehicle_core/time.hpp"
 
@@ -44,6 +47,30 @@ mazda::Diagnostics diagnostics(const mazda::LifecycleState lifecycle,
   return result;
 }
 
+template <typename Store, typename = void> struct accepts_legacy_publish : std::false_type {};
+
+template <typename Store>
+struct accepts_legacy_publish<Store, std::void_t<decltype(std::declval<Store &>().publish(
+                                         std::declval<const mazda::VehicleState &>(),
+                                         std::declval<const mazda::Diagnostics &>()))>>
+    : std::true_type {};
+
+template <typename Store, typename = void>
+struct accepts_lifecycle_publish_without_transport : std::false_type {};
+
+template <typename Store>
+struct accepts_lifecycle_publish_without_transport<
+    Store, std::void_t<decltype(std::declval<Store &>().publish(
+               std::declval<const mazda::VehicleState &>(), std::declval<mazda::LifecycleState>(),
+               std::declval<vehicle_core::TransportHealth>(),
+               std::declval<const mazda::AcquisitionMetrics &>()))>> : std::true_type {};
+
+static_assert(!accepts_legacy_publish<mazda::internal::PublicationStore>::value,
+              "publication must require an explicit transport receive basis");
+static_assert(
+    !accepts_lifecycle_publish_without_transport<mazda::internal::PublicationStore>::value,
+    "lifecycle publication must require an explicit transport receive basis");
+
 void test_availability_and_reset() {
   FakeClock clock;
   mazda::TelemetryConfig config{};
@@ -61,8 +88,9 @@ void test_availability_and_reset() {
   EXPECT(state.speed_kph.update(42.5F, 10));
   EXPECT(state.engine_rpm.update(2'000.0F, 10));
   EXPECT(state.liftgate_open.update(true, 10));
-  store.publish(
-      state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 1));
+  store.publish(state,
+                diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 1),
+                10);
 
   clock.set(110);
   const auto speed = store.speed_kph();
@@ -96,14 +124,16 @@ void test_availability_and_reset() {
   malformed.timestamp_us = 20;
   EXPECT(state.observe_message(malformed, vehicle_core::DecodeValidity::Malformed) ==
          mazda::MessageObservationResult::Accepted);
-  store.publish(
-      state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 2));
+  store.publish(state,
+                diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live, 2),
+                20);
   const auto unavailable_message = store.engine_rpm();
   EXPECT(unavailable_message.availability == mazda::Availability::Unavailable);
   EXPECT(unavailable_message.value.has_value() && *unavailable_message.value == 2'000.0F);
 
-  store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                   vehicle_core::TransportHealth::Faulted, 3));
+  store.publish(
+      state, diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Faulted, 3),
+      std::nullopt);
   const auto unavailable_speed = store.speed_kph();
   EXPECT(unavailable_speed.availability == mazda::Availability::Unavailable);
   EXPECT(unavailable_speed.value.has_value() && *unavailable_speed.value == 42.5F);
@@ -170,8 +200,10 @@ void test_coherent_snapshot_under_concurrent_publication() {
         inconsistent.store(true, std::memory_order_release);
         break;
       }
-      store.publish(state, diagnostics(mazda::LifecycleState::Running,
-                                       vehicle_core::TransportHealth::Live, sequence));
+      store.publish(state,
+                    diagnostics(mazda::LifecycleState::Running, vehicle_core::TransportHealth::Live,
+                                sequence),
+                    sequence);
     }
     writer_done.store(true, std::memory_order_release);
   }};

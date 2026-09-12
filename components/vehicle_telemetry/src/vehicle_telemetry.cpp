@@ -44,23 +44,6 @@ vehicle_core::TransportHealth PublicationStore::effective_transport(
   return transport;
 }
 
-std::optional<vehicle_core::MonotonicTimestamp>
-PublicationStore::latest_observation(const VehicleState &state) noexcept {
-  std::optional<vehicle_core::MonotonicTimestamp> latest{};
-  for (const auto &message : state.message_health) {
-    if (message.has_frame && (!latest.has_value() || message.last_frame_us > *latest))
-      latest = message.last_frame_us;
-  }
-
-  // Direct host fakes may update a signal without creating decoder message
-  // health. The state timestamp is the safe fallback for that seam.
-  if (!latest.has_value() &&
-      (state.speed_kph.has_value || state.engine_rpm.has_value || state.timestamp_us != 0)) {
-    latest = state.timestamp_us;
-  }
-  return latest;
-}
-
 StatusResult PublicationStore::configure(const TelemetryConfig &config) noexcept {
   std::lock_guard<std::mutex> lock{mutex_};
   if (published_.diagnostics.lifecycle != LifecycleState::Stopped) {
@@ -71,10 +54,6 @@ StatusResult PublicationStore::configure(const TelemetryConfig &config) noexcept
   return StatusResult{ResultCode::Ok};
 }
 
-void PublicationStore::publish(const VehicleState &state, const Diagnostics &diagnostics) noexcept {
-  publish(state, diagnostics, std::nullopt);
-}
-
 void PublicationStore::publish(
     const VehicleState &state, const Diagnostics &diagnostics,
     const std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us) noexcept {
@@ -82,13 +61,11 @@ void PublicationStore::publish(
   published_.state = state;
   published_.state.apply_freshness_policy(config_.freshness);
   published_.diagnostics = diagnostics;
-  if (diagnostics.transport == vehicle_core::TransportHealth::Live) {
-    const auto observation = last_transport_receive_us.has_value() ? last_transport_receive_us
-                                                                   : latest_observation(state);
-    if (observation.has_value() &&
-        (!transport_reference_us_.has_value() || *observation > *transport_reference_us_)) {
-      transport_reference_us_ = observation;
-    }
+  if (diagnostics.transport == vehicle_core::TransportHealth::Live &&
+      last_transport_receive_us.has_value() &&
+      (!transport_reference_us_.has_value() ||
+       *last_transport_receive_us > *transport_reference_us_)) {
+    transport_reference_us_ = last_transport_receive_us;
   }
 }
 
