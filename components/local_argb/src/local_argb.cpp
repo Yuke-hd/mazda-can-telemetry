@@ -1,5 +1,5 @@
-#include "local_argb/legacy_compat.hpp"
 #include "../private_include/local_argb/renderer.hpp"
+#include "local_argb/legacy_compat.hpp"
 
 #include "mazda/state.hpp"
 
