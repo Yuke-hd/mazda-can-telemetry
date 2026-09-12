@@ -1,4 +1,6 @@
+#include "local_argb/lighting_sink.hpp"
 #include "local_argb/local_argb.h"
+#include "local_argb/renderer.hpp"
 
 #include "board/board_config.h"
 #include "esp_log.h"
@@ -8,6 +10,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "led_strip.h"
+#include "vehicle_core/signal.hpp"
 
 #include <cstdint>
 
@@ -25,8 +28,8 @@ constexpr std::uint32_t kSupervisorStackDepth = 2048;
 constexpr TickType_t kWorkerPollTicks =
     pdMS_TO_TICKS(kSupervisorPollUs / 1'000) == 0 ? 1 : pdMS_TO_TICKS(kSupervisorPollUs / 1'000);
 
-DriverWatchdog g_driver_watchdog{};
-WorkerLease g_worker_lease{};
+internal::DriverWatchdog g_driver_watchdog{};
+internal::WorkerLease g_worker_lease{};
 portMUX_TYPE g_watchdog_lock = portMUX_INITIALIZER_UNLOCKED;
 
 vehicle_core::MonotonicTimestamp now_us() noexcept {
@@ -85,10 +88,16 @@ private:
 };
 
 LedStripSink g_sink;
-Controller g_controller{g_sink};
+internal::RendererController g_controller{g_sink};
+class QueueSink final : public internal::LightingSink {
+public:
+  bool publish(const internal::LightingCommand &command) noexcept override;
+};
+
+QueueSink g_queue_sink;
 led_strip_handle_t g_strip{nullptr};
 StaticQueue_t g_queue_storage{};
-std::uint8_t g_queue_buffer[sizeof(SemanticSnapshot)]{};
+std::uint8_t g_queue_buffer[sizeof(internal::LightingCommand)]{};
 QueueHandle_t g_queue{nullptr};
 TaskHandle_t g_worker{nullptr};
 TaskHandle_t g_supervisor{nullptr};
@@ -97,9 +106,9 @@ bool g_started{false};
 void worker(void *) noexcept {
   for (;;) {
     heartbeat_worker();
-    SemanticSnapshot snapshot{};
-    if (xQueueReceive(g_queue, &snapshot, kWorkerPollTicks) == pdTRUE) {
-      if (!g_controller.apply(snapshot, now_us())) {
+    internal::LightingCommand command{};
+    if (xQueueReceive(g_queue, &command, kWorkerPollTicks) == pdTRUE) {
+      if (!g_controller.apply(command, now_us())) {
         ESP_LOGE(kTag, "pixel write failed; fail-off clear scheduled for retry");
       }
     } else if (!g_controller.tick(now_us())) {
@@ -133,6 +142,18 @@ void stop_supervisor() noexcept {
 }
 
 } // namespace
+
+bool QueueSink::publish(const internal::LightingCommand &command) noexcept {
+  // xQueueOverwrite never waits: a fresh command replaces obsolete pending
+  // state while the worker remains the sole owner of LED/RMT calls.
+  return g_started && g_queue != nullptr && xQueueOverwrite(g_queue, &command) == pdPASS;
+}
+
+namespace internal {
+
+LightingSink &sink() noexcept { return g_queue_sink; }
+
+} // namespace internal
 
 bool start() noexcept {
   if (g_started) {
@@ -180,7 +201,8 @@ bool start() noexcept {
     return false;
   }
 
-  g_queue = xQueueCreateStatic(1, sizeof(SemanticSnapshot), g_queue_buffer, &g_queue_storage);
+  g_queue =
+      xQueueCreateStatic(1, sizeof(internal::LightingCommand), g_queue_buffer, &g_queue_storage);
   const BaseType_t worker_created = g_queue == nullptr
                                         ? pdFAIL
                                         : xTaskCreate(worker, "local_argb", kWorkerStackDepth,
@@ -204,14 +226,9 @@ bool start() noexcept {
   return true;
 }
 
-bool submit(const SemanticSnapshot snapshot) noexcept {
-  return g_started && g_queue != nullptr && xQueueOverwrite(g_queue, &snapshot) == pdPASS;
-}
-
 void fail_off() noexcept {
-  const SemanticSnapshot snapshot{mazda::TurnState::Unknown, vehicle_core::SignalStatus::Unknown,
-                                  now_us(), SemanticHealth::CanOffline};
-  if (!submit(snapshot)) {
+  const internal::LightingCommand command{};
+  if (!g_started || g_queue == nullptr || xQueueOverwrite(g_queue, &command) != pdPASS) {
     (void)g_sink.write(kBlack);
   }
 }

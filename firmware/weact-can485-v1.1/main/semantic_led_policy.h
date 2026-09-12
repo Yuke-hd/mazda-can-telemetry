@@ -1,6 +1,6 @@
 #pragma once
 
-#include "local_argb/local_argb.h"
+#include "local_argb/legacy_compat.hpp"
 #include "mazda/decoder.hpp"
 
 namespace weact_app {
