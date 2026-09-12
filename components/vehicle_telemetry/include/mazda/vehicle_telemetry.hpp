@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "mazda/facade_contracts.hpp"
 
 namespace mazda {
@@ -9,8 +12,8 @@ namespace mazda {
 // intentionally implemented by later stages.
 class VehicleTelemetry final {
 public:
-  VehicleTelemetry() noexcept = default;
-  ~VehicleTelemetry() = default;
+  VehicleTelemetry() noexcept;
+  ~VehicleTelemetry() noexcept;
 
   VehicleTelemetry(const VehicleTelemetry &) = delete;
   VehicleTelemetry &operator=(const VehicleTelemetry &) = delete;
@@ -61,6 +64,13 @@ public:
 
   [[nodiscard]] StatusResult unsubscribe(Subscription subscription) noexcept;
   [[nodiscard]] Diagnostics diagnostics() const noexcept;
+
+private:
+  // Keep synchronization, state copies and the clock seam out of the public
+  // include graph. The implementation owns this fixed storage with placement
+  // construction, so constructing the facade performs no heap allocation.
+  static constexpr std::size_t kImplementationStorageBytes = 4096;
+  alignas(std::max_align_t) std::byte implementation_storage_[kImplementationStorageBytes]{};
 };
 
 } // namespace mazda
