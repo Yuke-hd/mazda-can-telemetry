@@ -19,6 +19,7 @@ add_subdirectory(components/local_argb_sink_contract)
 add_subdirectory(components/local_argb)
 add_subdirectory(components/local_argb_compat)
 add_subdirectory(components/vehicle_telemetry)
+add_subdirectory(components/vehicle_telemetry_consumer)
 
 if(MAZDA_BUILD_HOST_TESTS)
   enable_testing()

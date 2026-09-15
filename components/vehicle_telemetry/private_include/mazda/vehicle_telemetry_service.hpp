@@ -244,6 +244,7 @@ public:
   VehicleTelemetryService &operator=(const VehicleTelemetryService &) = delete;
 
   [[nodiscard]] StatusResult configure(const TelemetryConfig &config) noexcept;
+  [[nodiscard]] StatusResult bind_lighting_sink(LightingSink &lighting_sink) noexcept;
   [[nodiscard]] StatusResult start() noexcept;
   [[nodiscard]] StatusResult stop() noexcept;
   [[nodiscard]] Diagnostics diagnostics() const noexcept;

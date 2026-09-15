@@ -40,8 +40,10 @@ contracts remain usable without exposing their implementation handoffs.
 The façade has two fixed subscriber slots per notification channel. Handles
 carry channel, slot, and generation internally, so a stale handle cannot
 remove a later registration. Configuration and subscription mutation are
-stopped-only operations. Runtime task and driver ownership is deliberately
-left to later stages.
+stopped-only operations. Runtime task and driver ownership is private to the
+background service. The Stage 3-A WeAct application uses the public facade as
+shown in [`mcan-64-firmware-integration.md`](mcan-64-firmware-integration.md);
+it does not add a manual CAN, decode, freshness, notification, or LED loop.
 
 ## Deterministic host seams
 

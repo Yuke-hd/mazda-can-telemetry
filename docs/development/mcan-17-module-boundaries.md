@@ -17,7 +17,7 @@ or application consumers.
 | `can_bus` | `components/can_bus/include/can_bus/can_bus.h` | Receive-only CAN lifecycle, queue API, and diagnostics | Ring/lifecycle helpers are private; the vehicle target has no transmit operation or runtime mode selector |
 | `vehicle_can_rx` / `bench_can_ack` | `vehicle_can_rx/vehicle_can_rx.h`, `bench_can_ack/bench_can_ack.h` | Explicit vehicle listen-only and isolated bench ACK application bindings | Targets select one binding; driver dependencies remain private to the selected ESP-IDF component |
 | `local_argb` | `local_argb/local_argb.h` | LED worker/policy composition and renderer-private state | The ordinary target carries no Mazda compatibility dependency or sink include root |
-| `local_argb_sink_contract` / `local_argb_compat` | `local_argb/lighting_sink.hpp` / `local_argb/legacy_compat.hpp` | Explicit S2-A sink handoff / temporary firmware adapter | Each target is opt-in; the sink carries generic RGB/deadline data only and the compatibility target is the sole Mazda-dependent adapter |
+| `local_argb_sink_contract` / `local_argb_compat` | `local_argb/lighting_sink.hpp` / `local_argb/legacy_compat.hpp` | Explicit private sink handoff / retained migration adapter | The WeAct application selects the generic sink contract; the compatibility target is no longer part of the vehicle build and remains only as a migration/test seam |
 
 The availability evaluator intentionally remains a lower-level Mazda API:
 `mazda/availability.hpp` imports decoder-health and signal primitives for its
@@ -108,3 +108,18 @@ The full host CTest run remains the required regression command. Existing
 listen-only, artifact-separation, and LED semantic safety checks are owned by
 the single `architecture_contracts` registration, while the public-header
 checker has a single registration and is not invoked separately by CI.
+
+## Stage 3-A application composition
+
+The final WeAct application composition is documented in
+[`mcan-64-firmware-integration.md`](mcan-64-firmware-integration.md). Its
+ordinary application code includes only the public `VehicleTelemetry` facade,
+registers typed notices once, polls speed/RPM at its own cadence, and never
+receives frames or drives the LED. Board safe defaults and the explicit local
+ARGB startup-black frame complete before `VehicleTelemetry::start()` starts
+vehicle CAN. The service's private semantic update is translated through the
+Mazda-owned lighting policy to the generic `local_argb_sink_contract` sink.
+
+The isolated `tcan485_bench_ack_only` project continues to select only
+`board`, `can_bus`, `bench_can_ack`, and `vehicle_core`; it does not discover
+the vehicle facade, vehicle binding, lighting policy, or ARGB renderer.

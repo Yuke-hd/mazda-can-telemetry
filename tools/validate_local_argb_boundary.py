@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate local ARGB semantic isolation and fixed WeAct hardware binding."""
+"""Validate local ARGB isolation and final WeAct facade composition."""
 
 from __future__ import annotations
 
@@ -26,6 +26,9 @@ def main() -> int:
         encoding="utf-8"
     )
     bench_cmake = (root / "firmware/tcan485-bench-ack-only/CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+    vehicle_cmake = (root / "firmware/weact-can485-v1.1/main/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     vehicle_main = (root / "firmware/weact-can485-v1.1/main/main.cpp").read_text(
@@ -75,12 +78,42 @@ def main() -> int:
     if '"${CMAKE_CURRENT_LIST_DIR}/../../components"' in bench_cmake:
         failures.append("isolated bench discovers local_argb through the whole components tree")
     for needle, label in (
-        ("PublicationPolicy", "change/heartbeat publication policy"),
-        ("publication.should_publish", "publication throttling"),
-        ("process_received_frame", "turn-scoped health integration"),
+        ('#include "mazda/vehicle_telemetry.hpp"', "public telemetry facade include"),
+        ('#include "mazda/vehicle_telemetry_consumer.hpp"',
+         "explicit vehicle application binding include"),
+        ("mazda::VehicleTelemetry telemetry{}", "facade instance"),
+        ("mazda::application::bind_local_argb_sink", "private ARGB sink binding"),
+        ("telemetry.on_turn_state_changed", "typed turn notification registration"),
+        ("telemetry.speed_kph()", "speed polling"),
+        ("telemetry.engine_rpm()", "engine RPM polling"),
+        ("telemetry.start()", "facade-owned startup"),
+        ("vTaskDelay(pdMS_TO_TICKS(100))", "application polling cadence"),
     ):
         if needle not in vehicle_main:
             failures.append(f"{label} is missing from vehicle integration: {needle}")
+
+    if vehicle_main.find("board::initialize_safe_defaults()") > vehicle_main.find("local_argb::start()"):
+        failures.append("board safe defaults do not precede local ARGB startup")
+    if vehicle_main.find("local_argb::start()") > vehicle_main.find("telemetry.start()"):
+        failures.append("local ARGB startup does not precede telemetry/CAN startup")
+    for forbidden, label in (
+        ("semantic_led_policy", "legacy semantic application adapter"),
+        ("process_received_frame", "manual decoder loop"),
+        ("PublicationPolicy", "manual lighting publication policy"),
+        ("can_bus::receive", "manual CAN receive loop"),
+        ("local_argb::submit", "manual lighting submission loop"),
+    ):
+        if forbidden in vehicle_main:
+            failures.append(f"vehicle application retains {label}: {forbidden}")
+    if "local_argb_compat" in vehicle_cmake:
+        failures.append("vehicle application still selects the retired local_argb compatibility target")
+    for forbidden, label in (
+        ("local_argb", "ARGB renderer dependency"),
+        ("vehicle_telemetry", "telemetry facade dependency"),
+        ("vehicle_lighting_policy", "vehicle lighting policy dependency"),
+    ):
+        if forbidden in bench_cmake:
+            failures.append(f"isolated bench selects a vehicle-only {label}: {forbidden}")
 
     if failures:
         for failure in failures:

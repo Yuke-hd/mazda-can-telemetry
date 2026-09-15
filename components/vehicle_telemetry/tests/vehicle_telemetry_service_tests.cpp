@@ -1,5 +1,6 @@
 #include "mazda/vehicle_telemetry.hpp"
 
+#include "mazda/vehicle_telemetry_internal.hpp"
 #include "mazda/vehicle_telemetry_service.hpp"
 
 #include <array>
@@ -291,6 +292,22 @@ struct TurnRecorder final {
   bool release_block{false};
 };
 
+struct FrontWiperRecorder final {
+  mutable std::mutex mutex{};
+  mutable std::condition_variable changed{};
+  std::array<mazda::Notification<mazda::FrontWiperPosition>, 8> notices{};
+  std::size_t count{0};
+};
+
+void record_front_wiper(void *context,
+                        const mazda::Notification<mazda::FrontWiperPosition> &notice) noexcept {
+  auto &recorder = *static_cast<FrontWiperRecorder *>(context);
+  std::lock_guard<std::mutex> lock{recorder.mutex};
+  if (recorder.count < recorder.notices.size())
+    recorder.notices[recorder.count++] = notice;
+  recorder.changed.notify_all();
+}
+
 void record_turn(void *context, const mazda::Notification<mazda::TurnState> &notice) noexcept {
   auto &recorder = *static_cast<TurnRecorder *>(context);
   std::unique_lock<std::mutex> lock{recorder.mutex};
@@ -400,6 +417,72 @@ void test_lifecycle_and_subscription_state() {
   EXPECT(service.stop().ok());
   EXPECT(service.unsubscribe(subscription).ok());
   EXPECT(service.unsubscribe(second_subscription).ok());
+}
+
+void test_added_poll_and_notify_signals_use_service_workers() {
+  FakeClock clock;
+  mazda::internal::HostAcquisitionSource source;
+  FakeLightingSink lighting;
+  mazda::TelemetryConfig config{};
+  config.callback_stop_timeout_us = 20'000;
+  mazda::internal::VehicleTelemetryService service{clock, source, lighting, config};
+  FrontWiperRecorder recorder{};
+  EXPECT(service.subscribe_front_wiper(&record_front_wiper, &recorder).ok());
+  EXPECT(service.start().ok());
+  EXPECT(wait_for_flag([&recorder] {
+    std::lock_guard<std::mutex> lock{recorder.mutex};
+    return recorder.count >= 1;
+  }));
+
+  // The test injects into the existing source seam only; it does not call a
+  // decoder, tick, notification dispatcher, or LED update loop.
+  clock.set(10);
+  EXPECT(source.inject(frame(mazda::candidate::kEngineDataId, 10,
+                             {0x09, 0x5b, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_flag([&service] { return service.engine_rpm().value.has_value(); }));
+  clock.set(11);
+  EXPECT(source.inject(frame(mazda::candidate::kTurnSwitchId, 11, {0, 0, 0x10, 0, 0, 0, 0, 0})) ==
+         mazda::ResultCode::Ok);
+  EXPECT(wait_for_flag([&recorder] {
+    std::lock_guard<std::mutex> lock{recorder.mutex};
+    return recorder.count >= 2;
+  }));
+  {
+    std::lock_guard<std::mutex> lock{recorder.mutex};
+    EXPECT(recorder.notices[1].current.value == mazda::FrontWiperPosition::On);
+    EXPECT(recorder.notices[1].current.availability == mazda::Availability::FreshnessUnverified);
+  }
+  EXPECT(service.stop().ok());
+}
+
+void test_public_facade_private_lighting_binding() {
+  mazda::VehicleTelemetry telemetry{};
+  FakeLightingSink lighting;
+  EXPECT(mazda::internal::VehicleTelemetryAccess::bind_lighting_sink(telemetry, lighting).ok());
+  EXPECT(telemetry.start().ok());
+  EXPECT(wait_for_lighting_count(lighting, 1));
+  EXPECT(lighting.at(0).turn == mazda::TurnState::Unknown);
+  EXPECT(telemetry.stop().ok());
+  EXPECT(mazda::internal::VehicleTelemetryAccess::bind_lighting_sink(telemetry, lighting).ok());
+  EXPECT(telemetry.start().ok());
+  EXPECT(telemetry.stop().ok());
+}
+
+void test_lighting_sink_binding_is_stopped_only() {
+  FakeClock clock;
+  mazda::internal::HostAcquisitionSource source;
+  FakeLightingSink initial_lighting;
+  FakeLightingSink bound_lighting;
+  mazda::TelemetryConfig config{};
+  config.callback_stop_timeout_us = 20'000;
+  mazda::internal::VehicleTelemetryService service{clock, source, initial_lighting, config};
+
+  EXPECT(service.bind_lighting_sink(bound_lighting).ok());
+  EXPECT(service.start().ok());
+  EXPECT(wait_for_lighting_count(bound_lighting, 1));
+  EXPECT(initial_lighting.size() == 0);
+  EXPECT(service.bind_lighting_sink(initial_lighting).status == mazda::ResultCode::InvalidState);
+  EXPECT(service.stop().ok());
 }
 
 void test_failed_shared_source_start_does_not_stop_existing_owner() {
@@ -819,6 +902,8 @@ void test_public_facade_lifecycle_contract() {
 
 int main() {
   test_lifecycle_and_subscription_state();
+  test_added_poll_and_notify_signals_use_service_workers();
+  test_lighting_sink_binding_is_stopped_only();
   test_failed_shared_source_start_does_not_stop_existing_owner();
   test_source_start_failure_without_ownership_is_restartable();
   test_partial_source_start_cleanup_success_is_restartable();
@@ -831,6 +916,7 @@ int main() {
   test_terminal_receive_fault_is_propagated_and_restart_clears_state();
   test_lighting_startup_black_deadline_heartbeat_and_failure_retry();
   test_lighting_heartbeat_for_off_unknown_nodata_and_unavailable();
+  test_public_facade_private_lighting_binding();
   test_public_facade_lifecycle_contract();
   return failures == 0 ? 0 : 1;
 }

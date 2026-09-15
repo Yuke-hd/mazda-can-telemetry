@@ -1,5 +1,5 @@
 idf_component_register(
-  SRCS "main.cpp" "semantic_led_policy.cpp"
+  SRCS "main.cpp"
   INCLUDE_DIRS "."
-  REQUIRES board can_bus vehicle_can_rx local_argb local_argb_compat mazda vehicle_telemetry_consumer
+  REQUIRES board local_argb vehicle_can_rx vehicle_telemetry vehicle_telemetry_consumer freertos
 )

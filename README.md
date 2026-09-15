@@ -1,6 +1,6 @@
 # Mazda CAN Telemetry
 
-A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct Studio CAN485 DevBoard V1.1. Its `firmware/weact-can485-v1.1` image is strict classic-CAN listen-only. The separately named `firmware/tcan485-bench-ack-only` target is reserved for isolated LILYGO/TTGO bench ACK testing and must never be connected to a vehicle. Host-side capture and replay tools support analysis, while a real-time dashboard and independent ARGB frontend remain decoupled from the vehicle side through a versioned protocol.
+A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct Studio CAN485 DevBoard V1.1. Its `firmware/weact-can485-v1.1` image is strict classic-CAN listen-only. The separately named `firmware/tcan485-bench-ack-only` target is reserved for isolated LILYGO/TTGO bench ACK testing and must never be connected to a vehicle. Host-side capture and replay tools support analysis, while the WeAct application consumes a background telemetry facade and the independent ARGB renderer receives only a private generic RGB/deadline command.
 
 The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; the reviewed capture-derived definitions for Issue #51 are committed in [`docs/protocol/mazda_custom.dbc`](docs/protocol/mazda_custom.dbc) and only the listed signals are confirmed for this vehicle.
 
@@ -60,6 +60,14 @@ black startup frame and a lower-priority, fail-off semantic LED worker. See
 Its blocking third-party RMT refresh and complete worker progress are separately
 supervised: a stall exceeding 100 ms triggers a reboot path that sends startup
 black again before CAN starts.
+
+The current application integration is recorded in
+[`docs/development/mcan-64-firmware-integration.md`](docs/development/mcan-64-firmware-integration.md).
+It starts board safe defaults and the ARGB startup-black frame before the
+facade starts CAN, polls speed/RPM at an application-selected cadence, and
+handles typed turn notices without a manual receive/decode/LED loop. The
+vehicle build does not select the temporary `local_argb_compat` adapter; the
+isolated bench build remains explicitly separate.
 
 ## Safety Boundary
 

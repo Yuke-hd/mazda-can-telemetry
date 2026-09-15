@@ -1,13 +1,42 @@
 #include "board/board_config.h"
-#include "can_bus/can_bus.h"
 #include "esp_log.h"
-#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "local_argb/local_argb.h"
-#include "semantic_led_policy.h"
+#include "mazda/vehicle_telemetry.hpp"
+#include "mazda/vehicle_telemetry_consumer.hpp"
+
+#include <cstdint>
 
 namespace {
 constexpr char kTag[] = "weact_can485_v11";
+
+struct ApplicationState {
+  std::uint32_t turn_notifications{0};
+};
+
+void turn_state_changed(void *context,
+                        const mazda::Notification<mazda::TurnState> &notification) noexcept {
+  auto *state = static_cast<ApplicationState *>(context);
+  if (state != nullptr)
+    ++state->turn_notifications;
+
+  const auto value = notification.current.value.has_value()
+                         ? static_cast<unsigned>(*notification.current.value)
+                         : 0U;
+  ESP_LOGD(kTag,
+           "typed turn notice: value=%u availability=%u initial=%d unavailable=%d recovered=%d "
+           "coalesced=%d",
+           value, static_cast<unsigned>(notification.current.availability), notification.initial,
+           notification.became_unavailable, notification.recovered, notification.coalesced);
 }
+
+bool reading_is_actionable(const mazda::Reading<float> &reading) noexcept {
+  return reading.value.has_value() &&
+         (reading.availability == mazda::Availability::Fresh ||
+          reading.availability == mazda::Availability::FreshnessUnverified);
+}
+} // namespace
 
 extern "C" void app_main(void) {
   if (!board::initialize_safe_defaults()) {
@@ -19,39 +48,42 @@ extern "C" void app_main(void) {
     return;
   }
 
-  constexpr can_bus::Configuration configuration{500'000, 0};
-  ESP_LOGI(kTag,
-           "WeAct CAN485 DevBoard V1.1 vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; "
-           "TX queue disabled; receive API only",
-           static_cast<unsigned long>(configuration.bitrate_bps));
-  if (can_bus::start(configuration) != can_bus::Result::kOk) {
+  mazda::VehicleTelemetry telemetry{};
+  if (!mazda::application::bind_local_argb_sink(telemetry).ok()) {
     local_argb::fail_off();
-    ESP_LOGE(kTag, "strict listen-only CAN startup failed; refusing to continue");
+    ESP_LOGE(kTag, "private local ARGB sink binding failed; refusing to start CAN");
     return;
   }
-  ESP_LOGI(kTag, "strict listen-only CAN acquisition started");
+  ApplicationState application_state{};
+  const auto turn_subscription =
+      telemetry.on_turn_state_changed(&turn_state_changed, &application_state);
+  if (!turn_subscription.ok()) {
+    local_argb::fail_off();
+    ESP_LOGE(kTag, "turn notification registration failed; refusing to start CAN");
+    return;
+  }
 
-  weact_app::Context context{};
-  local_argb::PublicationPolicy publication{};
+  ESP_LOGI(kTag,
+           "WeAct CAN485 DevBoard V1.1 vehicle CAN mode: STRICT LISTEN-ONLY; bitrate=%lu; "
+           "TX queue disabled; receive API only; telemetry facade owns acquisition",
+           500UL);
+  if (!telemetry.start().ok()) {
+    local_argb::fail_off();
+    ESP_LOGE(kTag, "strict listen-only telemetry startup failed; refusing to continue");
+    return;
+  }
+
+  ESP_LOGI(kTag, "strict listen-only CAN acquisition started through telemetry facade");
   for (;;) {
-    vehicle_core::RawCanFrame frame{};
-    const can_bus::Result receive_result = can_bus::receive(frame, 50);
-    const auto now = static_cast<vehicle_core::MonotonicTimestamp>(esp_timer_get_time());
-    if (receive_result == can_bus::Result::kOk) {
-      weact_app::process_received_frame(context, frame);
-    } else if (receive_result != can_bus::Result::kTimeout) {
-      local_argb::fail_off();
-      (void)can_bus::stop();
-      ESP_LOGE(kTag, "CAN receive failed; LED cleared and acquisition stopped");
-      return;
+    const auto speed = telemetry.speed_kph();
+    const auto engine_rpm = telemetry.engine_rpm();
+    if (reading_is_actionable(speed) && reading_is_actionable(engine_rpm)) {
+      ESP_LOGD(kTag, "telemetry poll: speed=%.2f kph engine_rpm=%.2f", *speed.value,
+               *engine_rpm.value);
     }
-
-    const auto semantic = weact_app::semantic_snapshot(context, now);
-    if (publication.should_publish(semantic, now) && !local_argb::submit(semantic)) {
-      local_argb::fail_off();
-      (void)can_bus::stop();
-      ESP_LOGE(kTag, "semantic LED submission failed; acquisition stopped fail-off");
-      return;
-    }
+    // The application chooses its own observation cadence. CAN receive,
+    // decoding, freshness servicing, notification dispatch, and LED updates
+    // remain owned by their background service tasks.
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }

@@ -5,11 +5,14 @@
 
 #include "mazda/facade_contracts.hpp"
 
+namespace mazda::internal {
+class VehicleTelemetryAccess;
+}
+
 namespace mazda {
 
-// Application-facing background telemetry facade. This declaration is a
-// contract seam in Stage 0; task, driver, decoder and dispatcher ownership is
-// intentionally implemented by later stages.
+// Application-facing background telemetry facade. Task, driver, decoder, and
+// dispatcher ownership remains private to the implementation.
 class VehicleTelemetry final {
 public:
   VehicleTelemetry() noexcept;
@@ -66,6 +69,8 @@ public:
   [[nodiscard]] Diagnostics diagnostics() const noexcept;
 
 private:
+  friend class internal::VehicleTelemetryAccess;
+
   // Keep synchronization, state copies and the clock seam out of the public
   // include graph. The implementation owns this fixed storage with placement
   // construction, so constructing the facade performs no heap allocation.

@@ -1,6 +1,7 @@
 #include "mazda/vehicle_telemetry.hpp"
 
 #include "mazda/publication_store.hpp"
+#include "mazda/vehicle_telemetry_internal.hpp"
 #include "mazda/vehicle_telemetry_service.hpp"
 
 #include <algorithm>
@@ -344,6 +345,14 @@ StatusResult VehicleTelemetryService::configure(const TelemetryConfig &config) n
   if (result.ok())
     config_ = config;
   return result;
+}
+
+StatusResult VehicleTelemetryService::bind_lighting_sink(LightingSink &lighting_sink) noexcept {
+  std::lock_guard<std::mutex> lock{lifecycle_mutex_};
+  if (lifecycle_state_.load(std::memory_order_acquire) != LifecycleState::Stopped)
+    return {ResultCode::InvalidState};
+  lighting_sink_ = &lighting_sink;
+  return {ResultCode::Ok};
 }
 
 bool VehicleTelemetryService::start_channels() noexcept {
@@ -1026,6 +1035,14 @@ StatusResult VehicleTelemetryService::unsubscribe(const SubscriptionToken &token
 } // namespace mazda::internal
 
 namespace mazda {
+
+StatusResult
+internal::VehicleTelemetryAccess::bind_lighting_sink(VehicleTelemetry &facade,
+                                                     internal::LightingSink &sink) noexcept {
+  auto *service =
+      reinterpret_cast<internal::VehicleTelemetryService *>(facade.implementation_storage_);
+  return service->bind_lighting_sink(sink);
+}
 
 static_assert(sizeof(internal::VehicleTelemetryService) <= sizeof(VehicleTelemetry));
 static_assert(alignof(internal::VehicleTelemetryService) <= alignof(std::max_align_t));
