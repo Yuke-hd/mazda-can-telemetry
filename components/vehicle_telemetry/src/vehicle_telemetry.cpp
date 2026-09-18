@@ -230,45 +230,47 @@ const PollingDescriptorTuple &VehicleTelemetryService::polling_descriptors() noe
 }
 
 const NotificationDescriptorTuple &VehicleTelemetryService::notification_descriptors() noexcept {
-  static const NotificationDescriptorTuple descriptors{
-      {"selector_position", &VehicleTelemetryService::selector_channel_,
-       &VehicleState::selector_position, candidate::kGearId},
-      {"actual_gear", &VehicleTelemetryService::actual_gear_channel_, &VehicleState::actual_gear,
-       candidate::kGearId},
-      {"turn_state", &VehicleTelemetryService::turn_channel_, &VehicleState::turn_state,
-       candidate::kTurnSwitchId},
-      {"hazard_request", &VehicleTelemetryService::hazard_channel_, &VehicleState::hazard_request,
-       candidate::kTurnSwitchId},
-      {"left_turn_request", &VehicleTelemetryService::left_turn_channel_,
-       &VehicleState::left_turn_request, candidate::kTurnSwitchId},
-      {"right_turn_request", &VehicleTelemetryService::right_turn_channel_,
-       &VehicleState::right_turn_request, candidate::kTurnSwitchId},
-      {"liftgate_open", &VehicleTelemetryService::liftgate_channel_, &VehicleState::liftgate_open,
-       candidate::kDoorsId},
-      {"rear_right_door_open", &VehicleTelemetryService::rear_right_door_channel_,
-       &VehicleState::rear_right_door_open, candidate::kDoorsId},
-      {"rear_left_door_open", &VehicleTelemetryService::rear_left_door_channel_,
-       &VehicleState::rear_left_door_open, candidate::kDoorsId},
-      {"front_left_door_open_rhd", &VehicleTelemetryService::front_left_door_channel_,
-       &VehicleState::front_left_door_open_rhd, candidate::kDoorsId},
-      {"front_right_door_open_rhd", &VehicleTelemetryService::front_right_door_channel_,
-       &VehicleState::front_right_door_open_rhd, candidate::kDoorsId},
-      {"doors_unlocked", &VehicleTelemetryService::doors_unlocked_channel_,
-       &VehicleState::doors_unlocked, candidate::kDoorsId},
-      {"left_indicator_lamp", &VehicleTelemetryService::left_lamp_channel_,
-       &VehicleState::left_indicator_lamp, candidate::kBlinkInfoId},
-      {"right_indicator_lamp", &VehicleTelemetryService::right_lamp_channel_,
-       &VehicleState::right_indicator_lamp, candidate::kBlinkInfoId},
-      {"wiper_low", &VehicleTelemetryService::wiper_low_channel_, &VehicleState::wiper_low,
-       candidate::kBlinkInfoId},
+  static const NotificationDescriptorTuple descriptors {
+    {"selector_position", &VehicleTelemetryService::selector_channel_,
+     &VehicleState::selector_position, candidate::kGearId},
+        {"actual_gear", &VehicleTelemetryService::actual_gear_channel_, &VehicleState::actual_gear,
+         candidate::kGearId},
+        {"turn_state", &VehicleTelemetryService::turn_channel_, &VehicleState::turn_state,
+         candidate::kTurnSwitchId},
+        {"hazard_request", &VehicleTelemetryService::hazard_channel_, &VehicleState::hazard_request,
+         candidate::kTurnSwitchId},
+        {"left_turn_request", &VehicleTelemetryService::left_turn_channel_,
+         &VehicleState::left_turn_request, candidate::kTurnSwitchId},
+        {"right_turn_request", &VehicleTelemetryService::right_turn_channel_,
+         &VehicleState::right_turn_request, candidate::kTurnSwitchId},
+        {"liftgate_open", &VehicleTelemetryService::liftgate_channel_, &VehicleState::liftgate_open,
+         candidate::kDoorsId},
+        {"rear_right_door_open", &VehicleTelemetryService::rear_right_door_channel_,
+         &VehicleState::rear_right_door_open, candidate::kDoorsId},
+        {"rear_left_door_open", &VehicleTelemetryService::rear_left_door_channel_,
+         &VehicleState::rear_left_door_open, candidate::kDoorsId},
+        {"front_left_door_open_rhd", &VehicleTelemetryService::front_left_door_channel_,
+         &VehicleState::front_left_door_open_rhd, candidate::kDoorsId},
+        {"front_right_door_open_rhd", &VehicleTelemetryService::front_right_door_channel_,
+         &VehicleState::front_right_door_open_rhd, candidate::kDoorsId},
+        {"doors_unlocked", &VehicleTelemetryService::doors_unlocked_channel_,
+         &VehicleState::doors_unlocked, candidate::kDoorsId},
+        {"left_indicator_lamp", &VehicleTelemetryService::left_lamp_channel_,
+         &VehicleState::left_indicator_lamp, candidate::kBlinkInfoId},
+        {"right_indicator_lamp", &VehicleTelemetryService::right_lamp_channel_,
+         &VehicleState::right_indicator_lamp, candidate::kBlinkInfoId},
+        {"wiper_low", &VehicleTelemetryService::wiper_low_channel_, &VehicleState::wiper_low,
+         candidate::kBlinkInfoId},
 #if defined(ESP_PLATFORM)
-      {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
-       candidate::kTurnSwitchId}
+        {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
+         candidate::kTurnSwitchId}
 #else
-      {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
-       candidate::kTurnSwitchId},
-      {"test_front_wiper", &VehicleTelemetryService::test_front_wiper_channel_,
-       &VehicleState::front_wiper, candidate::kTurnSwitchId}
+        {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
+         candidate::kTurnSwitchId},
+    {
+      "test_front_wiper", &VehicleTelemetryService::test_front_wiper_channel_,
+          &VehicleState::front_wiper, candidate::kTurnSwitchId
+    }
 #endif
   };
   return descriptors;
