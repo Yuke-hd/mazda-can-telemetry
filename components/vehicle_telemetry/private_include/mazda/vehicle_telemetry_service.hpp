@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <tuple>
+#include <type_traits>
 #if !defined(ESP_PLATFORM)
 #include <chrono>
 #include <condition_variable>
@@ -18,6 +20,8 @@
 #include "vehicle_core/notification_channel.hpp"
 
 namespace mazda::internal {
+
+class VehicleTelemetryService;
 
 enum class SourceReceiveStatus : std::uint8_t { Frame, Timeout, Fault, NotStarted };
 
@@ -187,9 +191,6 @@ inline constexpr std::uint16_t kLeftLampNotificationChannel = 13;
 inline constexpr std::uint16_t kRightLampNotificationChannel = 14;
 inline constexpr std::uint16_t kWiperLowNotificationChannel = 15;
 inline constexpr std::uint16_t kFrontWiperNotificationChannel = 16;
-inline constexpr std::size_t kNotificationChannelCount = 16;
-inline constexpr std::size_t kSubscriptionCapacity =
-    kNotificationChannelCount * vehicle_core::kNotificationSubscribersPerChannel;
 
 using SelectorNotificationChannel =
     vehicle_core::NotificationChannel<SelectorPosition, kSelectorNotificationChannel>;
@@ -224,6 +225,103 @@ using WiperLowNotificationChannel =
 using FrontWiperNotificationChannel =
     vehicle_core::NotificationChannel<FrontWiperPosition, kFrontWiperNotificationChannel>;
 
+#if !defined(ESP_PLATFORM)
+// Host-only extension seam. The channel is deliberately private and has no
+// corresponding public facade callback; it proves a new fixed channel can be
+// added by extending the descriptor tuple alone.
+inline constexpr std::uint16_t kTestFrontWiperNotificationChannel = 17;
+using TestFrontWiperNotificationChannel =
+    vehicle_core::NotificationChannel<FrontWiperPosition, kTestFrontWiperNotificationChannel>;
+#endif
+
+// Fixed metadata records keep the service's typed state/channel wiring in one
+// place. Member pointers preserve compile-time value types while allowing the
+// worker loops to operate over a heterogeneous tuple without allocation.
+template <typename T> struct PollingDescriptor final {
+  using SignalMember = vehicle_core::Signal<T> VehicleState::*;
+
+  const char *name{nullptr};
+  SignalMember signal{nullptr};
+  std::uint32_t identifier{0};
+  ValidationStatus validation{ValidationStatus::Reference};
+};
+
+#if defined(ESP_PLATFORM)
+using PollingDescriptorTuple = std::tuple<PollingDescriptor<float>, PollingDescriptor<float>>;
+
+inline constexpr PollingDescriptorTuple kPollingDescriptors{
+    PollingDescriptor<float>{"speed_kph", &VehicleState::speed_kph, candidate::kEngineDataId,
+                             ValidationStatus::Reference},
+    PollingDescriptor<float>{"engine_rpm", &VehicleState::engine_rpm, candidate::kEngineDataId,
+                             ValidationStatus::Confirmed}};
+#else
+using PollingDescriptorTuple = std::tuple<PollingDescriptor<float>, PollingDescriptor<float>,
+                                          PollingDescriptor<FrontWiperPosition>>;
+
+inline constexpr PollingDescriptorTuple kPollingDescriptors{
+    PollingDescriptor<float>{"speed_kph", &VehicleState::speed_kph, candidate::kEngineDataId,
+                             ValidationStatus::Reference},
+    PollingDescriptor<float>{"engine_rpm", &VehicleState::engine_rpm, candidate::kEngineDataId,
+                             ValidationStatus::Confirmed},
+    PollingDescriptor<FrontWiperPosition>{"test_front_wiper", &VehicleState::front_wiper,
+                                          candidate::kTurnSwitchId, ValidationStatus::Observed}};
+#endif
+
+template <typename T, std::uint16_t ChannelId> struct NotificationDescriptor final {
+  using Channel = vehicle_core::NotificationChannel<T, ChannelId>;
+  using ChannelMember = Channel VehicleTelemetryService::*;
+  using SignalMember = vehicle_core::Signal<T> VehicleState::*;
+
+  const char *name{nullptr};
+  ChannelMember channel{nullptr};
+  SignalMember signal{nullptr};
+  std::uint32_t identifier{0};
+};
+
+#if defined(ESP_PLATFORM)
+using NotificationDescriptorTuple =
+    std::tuple<NotificationDescriptor<SelectorPosition, kSelectorNotificationChannel>,
+               NotificationDescriptor<ActualGear, kActualGearNotificationChannel>,
+               NotificationDescriptor<TurnState, kTurnNotificationChannel>,
+               NotificationDescriptor<bool, kHazardNotificationChannel>,
+               NotificationDescriptor<bool, kLeftTurnNotificationChannel>,
+               NotificationDescriptor<bool, kRightTurnNotificationChannel>,
+               NotificationDescriptor<bool, kLiftgateNotificationChannel>,
+               NotificationDescriptor<bool, kRearRightDoorNotificationChannel>,
+               NotificationDescriptor<bool, kRearLeftDoorNotificationChannel>,
+               NotificationDescriptor<bool, kFrontLeftDoorNotificationChannel>,
+               NotificationDescriptor<bool, kFrontRightDoorNotificationChannel>,
+               NotificationDescriptor<bool, kDoorsUnlockedNotificationChannel>,
+               NotificationDescriptor<bool, kLeftLampNotificationChannel>,
+               NotificationDescriptor<bool, kRightLampNotificationChannel>,
+               NotificationDescriptor<bool, kWiperLowNotificationChannel>,
+               NotificationDescriptor<FrontWiperPosition, kFrontWiperNotificationChannel>>;
+#else
+using NotificationDescriptorTuple =
+    std::tuple<NotificationDescriptor<SelectorPosition, kSelectorNotificationChannel>,
+               NotificationDescriptor<ActualGear, kActualGearNotificationChannel>,
+               NotificationDescriptor<TurnState, kTurnNotificationChannel>,
+               NotificationDescriptor<bool, kHazardNotificationChannel>,
+               NotificationDescriptor<bool, kLeftTurnNotificationChannel>,
+               NotificationDescriptor<bool, kRightTurnNotificationChannel>,
+               NotificationDescriptor<bool, kLiftgateNotificationChannel>,
+               NotificationDescriptor<bool, kRearRightDoorNotificationChannel>,
+               NotificationDescriptor<bool, kRearLeftDoorNotificationChannel>,
+               NotificationDescriptor<bool, kFrontLeftDoorNotificationChannel>,
+               NotificationDescriptor<bool, kFrontRightDoorNotificationChannel>,
+               NotificationDescriptor<bool, kDoorsUnlockedNotificationChannel>,
+               NotificationDescriptor<bool, kLeftLampNotificationChannel>,
+               NotificationDescriptor<bool, kRightLampNotificationChannel>,
+               NotificationDescriptor<bool, kWiperLowNotificationChannel>,
+               NotificationDescriptor<FrontWiperPosition, kFrontWiperNotificationChannel>,
+               NotificationDescriptor<FrontWiperPosition, kTestFrontWiperNotificationChannel>>;
+#endif
+
+inline constexpr std::size_t kNotificationChannelCount =
+    std::tuple_size_v<NotificationDescriptorTuple>;
+inline constexpr std::size_t kSubscriptionCapacity =
+    kNotificationChannelCount * vehicle_core::kNotificationSubscribersPerChannel;
+
 struct SubscriptionToken final {
   ResultCode status{ResultCode::InvalidState};
   std::uint16_t channel{0xffffU};
@@ -251,6 +349,21 @@ public:
 
   [[nodiscard]] Reading<float> speed_kph() const noexcept { return publication_.speed_kph(); }
   [[nodiscard]] Reading<float> engine_rpm() const noexcept { return publication_.engine_rpm(); }
+
+  // These records are implementation-only. Host extension tests can inspect
+  // the exact metadata consumed by the service workers without widening the
+  // public facade contract.
+  [[nodiscard]] static const PollingDescriptorTuple &polling_descriptors() noexcept;
+  [[nodiscard]] static const NotificationDescriptorTuple &notification_descriptors() noexcept;
+
+  template <typename T>
+  [[nodiscard]] Reading<T>
+  read_polling_descriptor(const PollingDescriptor<T> &descriptor) const noexcept;
+
+  template <typename T, std::uint16_t ChannelId>
+  [[nodiscard]] SubscriptionToken
+  subscribe_notification_descriptor(const NotificationDescriptor<T, ChannelId> &descriptor,
+                                    Callback<T> callback, void *context) noexcept;
 
   [[nodiscard]] SubscriptionToken subscribe_selector(Callback<SelectorPosition> callback,
                                                      void *context) noexcept;
@@ -321,6 +434,11 @@ private:
 #endif
   void process_frame(const vehicle_core::RawCanFrame &frame) noexcept;
   void publish_current(bool received_frame) noexcept;
+  template <typename T, std::uint16_t ChannelId>
+  void
+  publish_notification_descriptor(const PublishedSnapshot &snapshot,
+                                  vehicle_core::MonotonicTimestamp now_us,
+                                  const NotificationDescriptor<T, ChannelId> &descriptor) noexcept;
   void publish_notifications(const PublishedSnapshot &snapshot,
                              vehicle_core::MonotonicTimestamp now_us) noexcept;
   void publish_lighting(const PublishedSnapshot &snapshot,
@@ -369,6 +487,9 @@ private:
   RightLampNotificationChannel right_lamp_channel_{};
   WiperLowNotificationChannel wiper_low_channel_{};
   FrontWiperNotificationChannel front_wiper_channel_{};
+#if !defined(ESP_PLATFORM)
+  TestFrontWiperNotificationChannel test_front_wiper_channel_{};
+#endif
   std::array<Registration, kSubscriptionCapacity> registrations_{};
 
   mutable std::mutex lifecycle_mutex_{};
@@ -410,6 +531,23 @@ SubscriptionToken VehicleTelemetryService::register_subscription(
     registration->generation = 1;
   registration->handle = *result.value;
   return {ResultCode::Ok, ChannelId, registration->slot, registration->generation};
+}
+
+template <typename T>
+Reading<T> VehicleTelemetryService::read_polling_descriptor(
+    const PollingDescriptor<T> &descriptor) const noexcept {
+  return publication_.read_test_signal(descriptor.signal, descriptor.identifier,
+                                       descriptor.validation);
+}
+
+template <typename T, std::uint16_t ChannelId>
+SubscriptionToken VehicleTelemetryService::subscribe_notification_descriptor(
+    const NotificationDescriptor<T, ChannelId> &descriptor, Callback<T> callback,
+    void *context) noexcept {
+  std::lock_guard<std::mutex> lock{lifecycle_mutex_};
+  if (lifecycle_state_.load(std::memory_order_acquire) != LifecycleState::Stopped)
+    return {ResultCode::InvalidState, 0xffffU, 0xffU, 0};
+  return register_subscription(this->*descriptor.channel, callback, context);
 }
 
 } // namespace mazda::internal
