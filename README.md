@@ -1,6 +1,6 @@
 # Mazda CAN Telemetry
 
-A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct Studio CAN485 DevBoard V1.1. Its `firmware/weact-can485-v1.1` image is strict classic-CAN listen-only. The separately named `firmware/tcan485-bench-ack-only` target is reserved for isolated LILYGO/TTGO bench ACK testing and must never be connected to a vehicle. Host-side capture and replay tools support analysis, while the WeAct application consumes a background telemetry facade and the independent ARGB renderer receives only a private generic RGB/deadline command.
+A receive-only Mazda CX-5 KF CAN telemetry project built around a portable vehicle-state decoder library. The approved product/vehicle target is WeAct Studio CAN485 DevBoard V1.1. Its `firmware/weact-can485-v1.1` image is strict classic-CAN listen-only. The separately named `firmware/tcan485-bench-ack-only` target is reserved for isolated LILYGO/TTGO bench ACK testing and must never be connected to a vehicle. SavvyCAN is the external tool for private analysis and isolated-bench work; it is not a repository-owned product and does not authorize vehicle-side CAN transmission. The WeAct application consumes a background telemetry facade and the independent ARGB renderer receives only a private generic RGB/deadline command.
 
 The current validation vehicle is an Australian-market 2019 Mazda CX-5 Akera with the 2.5T engine, six-speed automatic transmission, AWD, and MRCC. Third-party DBC definitions are candidate leads only; the reviewed capture-derived definitions for Issue #51 are committed in [`docs/protocol/mazda_custom.dbc`](docs/protocol/mazda_custom.dbc) and only the listed signals are confirmed for this vehicle.
 
@@ -11,9 +11,12 @@ the repository root. The WeAct V1.1 vehicle firmware lives under
 `firmware/weact-can485-v1.1`. See
 [`docs/development/mcan-3-scaffold.md`](docs/development/mcan-3-scaffold.md)
 for pinned tool versions and reproducible commands.
-Confirmed Mazda signal decoding, replay vectors, provenance, and
+Confirmed Mazda signal decoding, deterministic synthetic test vectors, provenance, and
 freshness boundaries are documented in
 [`docs/development/mcan-14-candidate-decoders.md`](docs/development/mcan-14-candidate-decoders.md).
+Deterministic host tests retain direct synthetic frame and injected-time helpers;
+the repository does not provide a capture parser, custom capture format, exporter,
+or public replay product.
 
 ## Development prerequisites
 
