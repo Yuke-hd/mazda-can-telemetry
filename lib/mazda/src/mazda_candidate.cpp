@@ -37,12 +37,12 @@ void record_malformed(const vehicle_core::RawCanFrame &frame, const std::uint32_
     (void)state.observe_message(frame, vehicle_core::DecodeValidity::Malformed);
 }
 
-bool record_healthy(const vehicle_core::RawCanFrame &frame, const std::uint32_t identifier,
-                    VehicleState &state) noexcept {
+MessageObservationResult record_healthy(const vehicle_core::RawCanFrame &frame,
+                                        const std::uint32_t identifier,
+                                        VehicleState &state) noexcept {
   if (frame.identifier != identifier)
-    return false;
-  return state.observe_message(frame, vehicle_core::DecodeValidity::Decoded) ==
-         MessageObservationResult::Accepted;
+    return MessageObservationResult::Ignored;
+  return state.observe_message(frame, vehicle_core::DecodeValidity::Decoded);
 }
 
 DecodeStatus classify_frame(const vehicle_core::RawCanFrame &frame, const std::uint32_t identifier,
@@ -171,7 +171,15 @@ DecodeStatus decode_engine_data(const vehicle_core::RawCanFrame &frame, VehicleS
     return finish_observation(DecodeStatus::Malformed, observation);
   }
 
-  if (!record_healthy(frame, kEngineDataId, state)) {
+  const auto message_result = record_healthy(frame, kEngineDataId, state);
+  if (message_result == MessageObservationResult::Idempotent) {
+    finish_health(state, kEngineDataId,
+                  state.engine_rpm.has_value ? vehicle_core::SignalHealth::Available
+                                             : vehicle_core::SignalHealth::NoData,
+                  health);
+    return finish_observation(DecodeStatus::Decoded, observation);
+  }
+  if (message_result != MessageObservationResult::Accepted) {
     finish_health(state, kEngineDataId,
                   state.engine_rpm.has_value ? vehicle_core::SignalHealth::Available
                                              : vehicle_core::SignalHealth::NoData,
@@ -202,7 +210,15 @@ DecodeStatus decode_gear(const vehicle_core::RawCanFrame &frame, VehicleState &s
     return classification;
   }
 
-  if (!record_healthy(frame, kGearId, state)) {
+  const auto message_result = record_healthy(frame, kGearId, state);
+  if (message_result == MessageObservationResult::Idempotent) {
+    const auto signal_health = (state.selector_position.is_valid() && state.actual_gear.is_valid())
+                                   ? vehicle_core::SignalHealth::Available
+                                   : vehicle_core::SignalHealth::Unavailable;
+    finish_health(state, kGearId, signal_health, health);
+    return finish_observation(DecodeStatus::Decoded, observation);
+  }
+  if (message_result != MessageObservationResult::Accepted) {
     finish_health(state, kGearId, vehicle_core::SignalHealth::Unavailable, health);
     return finish_observation(DecodeStatus::Decoded, observation);
   }
@@ -242,7 +258,12 @@ DecodeStatus decode_doors(const vehicle_core::RawCanFrame &frame, VehicleState &
     return classification;
   }
 
-  if (!record_healthy(frame, kDoorsId, state)) {
+  const auto message_result = record_healthy(frame, kDoorsId, state);
+  if (message_result == MessageObservationResult::Idempotent) {
+    finish_health(state, kDoorsId, vehicle_core::SignalHealth::Available, health);
+    return finish_observation(DecodeStatus::Decoded, observation);
+  }
+  if (message_result != MessageObservationResult::Accepted) {
     finish_health(state, kDoorsId, vehicle_core::SignalHealth::Unavailable, health);
     return finish_observation(DecodeStatus::Decoded, observation);
   }
@@ -282,7 +303,12 @@ DecodeStatus decode_blink_info(const vehicle_core::RawCanFrame &frame, VehicleSt
     return classification;
   }
 
-  if (!record_healthy(frame, kBlinkInfoId, state)) {
+  const auto message_result = record_healthy(frame, kBlinkInfoId, state);
+  if (message_result == MessageObservationResult::Idempotent) {
+    finish_health(state, kBlinkInfoId, vehicle_core::SignalHealth::Available, health);
+    return finish_observation(DecodeStatus::Decoded, observation);
+  }
+  if (message_result != MessageObservationResult::Accepted) {
     finish_health(state, kBlinkInfoId, vehicle_core::SignalHealth::Unavailable, health);
     return finish_observation(DecodeStatus::Decoded, observation);
   }
@@ -318,7 +344,15 @@ DecodeStatus decode_turn_switch(const vehicle_core::RawCanFrame &frame, VehicleS
     return classification;
   }
 
-  if (!record_healthy(frame, kTurnSwitchId, state)) {
+  const auto message_result = record_healthy(frame, kTurnSwitchId, state);
+  if (message_result == MessageObservationResult::Idempotent) {
+    const auto signal_health = state.turn_state.is_valid()
+                                   ? vehicle_core::SignalHealth::Available
+                                   : vehicle_core::SignalHealth::Unavailable;
+    finish_health(state, kTurnSwitchId, signal_health, health);
+    return finish_observation(DecodeStatus::Decoded, observation);
+  }
+  if (message_result != MessageObservationResult::Accepted) {
     finish_health(state, kTurnSwitchId, vehicle_core::SignalHealth::Unavailable, health);
     return finish_observation(DecodeStatus::Decoded, observation);
   }
