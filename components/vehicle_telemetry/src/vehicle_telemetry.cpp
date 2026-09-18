@@ -43,6 +43,57 @@ template <typename T> bool is_available_reading(const Reading<T> &reading) noexc
                                        reading.availability == Availability::FreshnessUnverified);
 }
 
+template <typename T> struct NotificationDescriptor final {
+  vehicle_core::Signal<T> VehicleState::*signal;
+  const candidate::CandidateSignalDefinition *metadata;
+};
+
+template <typename T>
+Reading<T> notification_reading(const PublishedSnapshot &snapshot,
+                                const NotificationDescriptor<T> &descriptor,
+                                const vehicle_core::MonotonicTimestamp now_us,
+                                const vehicle_core::TransportHealth transport) noexcept {
+  const auto &metadata = *descriptor.metadata;
+  return snapshot.state.reading_at(snapshot.state.*descriptor.signal, metadata.identifier, now_us,
+                                   metadata.confidence, transport);
+}
+
+inline constexpr NotificationDescriptor<SelectorPosition> kSelectorNotificationDescriptor{
+    &VehicleState::selector_position, &candidate::kSelectorDefinition};
+inline constexpr NotificationDescriptor<ActualGear> kActualGearNotificationDescriptor{
+    &VehicleState::actual_gear, &candidate::kActualGearDefinition};
+// turn_state is derived from the three TURN_SWITCH request fields. All three
+// source definitions are Reference-confidence, so bind the derived channel to
+// one of those authoritative definitions instead of duplicating a literal.
+inline constexpr NotificationDescriptor<TurnState> kTurnNotificationDescriptor{
+    &VehicleState::turn_state, &candidate::kTurnLeftSwitchDefinition};
+inline constexpr NotificationDescriptor<bool> kHazardNotificationDescriptor{
+    &VehicleState::hazard_request, &candidate::kHazardDefinition};
+inline constexpr NotificationDescriptor<bool> kLeftTurnNotificationDescriptor{
+    &VehicleState::left_turn_request, &candidate::kTurnLeftSwitchDefinition};
+inline constexpr NotificationDescriptor<bool> kRightTurnNotificationDescriptor{
+    &VehicleState::right_turn_request, &candidate::kTurnRightSwitchDefinition};
+inline constexpr NotificationDescriptor<bool> kLiftgateNotificationDescriptor{
+    &VehicleState::liftgate_open, &candidate::kLiftgateOpenDefinition};
+inline constexpr NotificationDescriptor<bool> kRearRightDoorNotificationDescriptor{
+    &VehicleState::rear_right_door_open, &candidate::kRearRightDoorOpenDefinition};
+inline constexpr NotificationDescriptor<bool> kRearLeftDoorNotificationDescriptor{
+    &VehicleState::rear_left_door_open, &candidate::kRearLeftDoorOpenDefinition};
+inline constexpr NotificationDescriptor<bool> kFrontLeftDoorNotificationDescriptor{
+    &VehicleState::front_left_door_open_rhd, &candidate::kFrontLeftDoorOpenRhdDefinition};
+inline constexpr NotificationDescriptor<bool> kFrontRightDoorNotificationDescriptor{
+    &VehicleState::front_right_door_open_rhd, &candidate::kFrontRightDoorOpenRhdDefinition};
+inline constexpr NotificationDescriptor<bool> kDoorsUnlockedNotificationDescriptor{
+    &VehicleState::doors_unlocked, &candidate::kDoorsUnlockedDefinition};
+inline constexpr NotificationDescriptor<bool> kLeftLampNotificationDescriptor{
+    &VehicleState::left_indicator_lamp, &candidate::kLeftIndicatorLampDefinition};
+inline constexpr NotificationDescriptor<bool> kRightLampNotificationDescriptor{
+    &VehicleState::right_indicator_lamp, &candidate::kRightIndicatorLampDefinition};
+inline constexpr NotificationDescriptor<bool> kWiperLowNotificationDescriptor{
+    &VehicleState::wiper_low, &candidate::kWiperLowDefinition};
+inline constexpr NotificationDescriptor<FrontWiperPosition> kFrontWiperNotificationDescriptor{
+    &VehicleState::front_wiper, &candidate::kFrontWiperDefinition};
+
 } // namespace
 
 vehicle_core::MonotonicTimestamp SteadyClock::now() const noexcept {
@@ -793,62 +844,45 @@ void VehicleTelemetryService::publish_current(const bool received_frame) noexcep
 void VehicleTelemetryService::publish_notifications(
     const PublishedSnapshot &snapshot, const vehicle_core::MonotonicTimestamp now_us) noexcept {
   const auto transport = snapshot.diagnostics.transport;
-  (void)selector_channel_.publish(snapshot.state.reading_at(snapshot.state.selector_position,
-                                                            candidate::kGearId, now_us,
-                                                            ValidationStatus::Observed, transport));
+  (void)selector_channel_.publish(
+      notification_reading(snapshot, kSelectorNotificationDescriptor, now_us, transport));
   (void)actual_gear_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.actual_gear, candidate::kGearId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)turn_channel_.publish(snapshot.state.reading_at(snapshot.state.turn_state,
-                                                        candidate::kTurnSwitchId, now_us,
-                                                        ValidationStatus::Observed, transport));
-  (void)hazard_channel_.publish(snapshot.state.reading_at(snapshot.state.hazard_request,
-                                                          candidate::kTurnSwitchId, now_us,
-                                                          ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kActualGearNotificationDescriptor, now_us, transport));
+  (void)turn_channel_.publish(
+      notification_reading(snapshot, kTurnNotificationDescriptor, now_us, transport));
+  (void)hazard_channel_.publish(
+      notification_reading(snapshot, kHazardNotificationDescriptor, now_us, transport));
   (void)left_turn_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.left_turn_request, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kLeftTurnNotificationDescriptor, now_us, transport));
   (void)right_turn_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.right_turn_request, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)liftgate_channel_.publish(snapshot.state.reading_at(snapshot.state.liftgate_open,
-                                                            candidate::kDoorsId, now_us,
-                                                            ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kRightTurnNotificationDescriptor, now_us, transport));
+  (void)liftgate_channel_.publish(
+      notification_reading(snapshot, kLiftgateNotificationDescriptor, now_us, transport));
   (void)rear_right_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.rear_right_door_open, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kRearRightDoorNotificationDescriptor, now_us, transport));
   (void)rear_left_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.rear_left_door_open, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kRearLeftDoorNotificationDescriptor, now_us, transport));
   (void)front_left_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_left_door_open_rhd, candidate::kDoorsId,
-                                now_us, ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kFrontLeftDoorNotificationDescriptor, now_us, transport));
   (void)front_right_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_right_door_open_rhd, candidate::kDoorsId,
-                                now_us, ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kFrontRightDoorNotificationDescriptor, now_us, transport));
   (void)doors_unlocked_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.doors_unlocked, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kDoorsUnlockedNotificationDescriptor, now_us, transport));
   (void)left_lamp_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.left_indicator_lamp, candidate::kBlinkInfoId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kLeftLampNotificationDescriptor, now_us, transport));
   (void)right_lamp_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.right_indicator_lamp, candidate::kBlinkInfoId,
-                                now_us, ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kRightLampNotificationDescriptor, now_us, transport));
   (void)wiper_low_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.wiper_low, candidate::kBlinkInfoId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kWiperLowNotificationDescriptor, now_us, transport));
   (void)front_wiper_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_wiper, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
+      notification_reading(snapshot, kFrontWiperNotificationDescriptor, now_us, transport));
   publish_lighting(snapshot, now_us);
 }
 
 void VehicleTelemetryService::publish_lighting(
     const PublishedSnapshot &snapshot, const vehicle_core::MonotonicTimestamp now_us) noexcept {
-  const auto turn_reading =
-      snapshot.state.reading_at(snapshot.state.turn_state, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, snapshot.diagnostics.transport);
+  const auto turn_reading = notification_reading(snapshot, kTurnNotificationDescriptor, now_us,
+                                                 snapshot.diagnostics.transport);
   const auto turn_health =
       snapshot.state.health_observation(candidate::kTurnSwitchId, snapshot.diagnostics.transport);
   const bool actionable =
