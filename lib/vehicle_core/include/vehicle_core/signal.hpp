@@ -102,7 +102,10 @@ SignalUpdateResult Signal<T>::update_status(T new_value, MonotonicTimestamp time
 }
 
 template <typename T> bool Signal<T>::invalidate(const MonotonicTimestamp timestamp) noexcept {
-  if (has_value && timestamp < last_update_us) {
+  // An invalid observation at the current watermark is not new evidence. Do
+  // not let it change availability or create a recovery boundary; only a
+  // strictly newer observation may invalidate an accepted value.
+  if (has_value && timestamp <= last_update_us) {
     return false;
   }
   status = SignalStatus::Unknown;

@@ -749,6 +749,63 @@ void test_unknown_frame_is_transport_traffic_and_expires() {
   EXPECT(service.stop().ok());
 }
 
+void test_transport_liveness_uses_acquisition_clock() {
+  FakeClock clock;
+  mazda::internal::HostAcquisitionSource source;
+  FakeLightingSink lighting;
+  mazda::TelemetryConfig config{};
+  config.transport_silence_timeout_us = 100;
+  config.callback_stop_timeout_us = 20'000;
+  mazda::internal::VehicleTelemetryService service{clock, source, lighting, config};
+
+  EXPECT(service.start().ok());
+  const auto wait_for_processed = [&](const std::uint64_t count) {
+    return wait_for_flag(
+        [&service, count] { return service.diagnostics().acquisition.frames_processed >= count; });
+  };
+
+  // The first frame establishes both the semantic value and the receive
+  // watermark. The second frame has an equal observation timestamp but was
+  // acquired later; it must keep transport live without changing the value.
+  clock.set(100);
+  EXPECT(source.inject(frame(mazda::candidate::kEngineDataId, 100,
+                             {0x00, 0x01, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_processed(1));
+  clock.set(180);
+  EXPECT(source.inject(frame(mazda::candidate::kEngineDataId, 100,
+                             {0x00, 0x02, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_processed(2));
+  EXPECT(service.engine_rpm().value.has_value());
+  EXPECT(*service.engine_rpm().value == 0.25F);
+  clock.set(201);
+  // A frame-timestamp watermark would have timed out at 201; acquisition time
+  // 180 remains within the 100-us silence interval.
+  EXPECT(service.diagnostics().transport == vehicle_core::TransportHealth::Live);
+
+  // An older observation timestamp is also transport traffic, but cannot
+  // replace the accepted semantic value.
+  clock.set(250);
+  EXPECT(source.inject(frame(mazda::candidate::kEngineDataId, 50,
+                             {0x00, 0x03, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_processed(3));
+  EXPECT(service.engine_rpm().value.has_value());
+  EXPECT(*service.engine_rpm().value == 0.25F);
+  EXPECT(service.diagnostics().transport == vehicle_core::TransportHealth::Live);
+
+  // A backwards acquisition-clock step must not move the receive watermark
+  // backwards. The high source timestamp is intentionally unrelated: it must
+  // not keep transport live or make the timeout clock run backwards.
+  clock.set(500);
+  EXPECT(source.inject(frame(0x7ff, 500, {0, 0, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_processed(4));
+  clock.set(400);
+  EXPECT(source.inject(frame(0x7ff, 1'000, {0, 0, 0, 0, 0, 0, 0, 0})) == mazda::ResultCode::Ok);
+  EXPECT(wait_for_processed(5));
+  clock.set(601);
+  EXPECT(service.diagnostics().transport == vehicle_core::TransportHealth::TimedOut);
+  EXPECT(service.stop().ok());
+}
+
 void test_notifications_coalesce_and_recover() {
   FakeClock clock;
   mazda::internal::HostAcquisitionSource source;
@@ -1050,6 +1107,7 @@ int main() {
   test_partial_source_start_cleanup_failure_is_retried_by_stop();
   test_immediate_worker_receive_fault_is_not_overwritten_by_running();
   test_unknown_frame_is_transport_traffic_and_expires();
+  test_transport_liveness_uses_acquisition_clock();
   test_notifications_coalesce_and_recover();
   test_blocked_callback_does_not_block_polling_and_stop_is_retryable();
   test_callback_stop_timeout_can_retry_after_source_already_stopped();

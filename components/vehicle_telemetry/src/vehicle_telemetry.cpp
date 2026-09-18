@@ -739,9 +739,14 @@ Diagnostics VehicleTelemetryService::diagnostics() const noexcept {
   return publication_.diagnostics();
 }
 
-void VehicleTelemetryService::process_frame(const vehicle_core::RawCanFrame &frame) noexcept {
-  if (!last_transport_receive_us_ || frame.timestamp_us > *last_transport_receive_us_)
-    last_transport_receive_us_ = frame.timestamp_us;
+void VehicleTelemetryService::process_frame(
+    const vehicle_core::RawCanFrame &frame,
+    const vehicle_core::MonotonicTimestamp received_at_us) noexcept {
+  // Transport liveness is based on the acquisition clock, not on the source
+  // observation timestamp used by the decoder's message watermarks. Keep the
+  // receive watermark monotonic when a fake or real clock moves backwards.
+  if (!last_transport_receive_us_ || received_at_us > *last_transport_receive_us_)
+    last_transport_receive_us_ = received_at_us;
   transport_ = vehicle_core::TransportHealth::Live;
   std::optional<TurnEdgeEvent> edge{};
   vehicle_core::DecoderObservation observation{};
@@ -768,10 +773,13 @@ void VehicleTelemetryService::processing_loop() noexcept {
       vehicle_core::RawCanFrame frame{};
       const auto status = source_->receive(frame, received ? 0 : timeout_ms);
       if (status == SourceReceiveStatus::Frame) {
+        // Sample the documented acquisition clock only after a successful
+        // source receive. The frame timestamp remains decoder-owned data.
+        const auto received_at_us = clock_->now();
         if (!run_requested_.load(std::memory_order_acquire))
           break;
         received = true;
-        process_frame(frame);
+        process_frame(frame, received_at_us);
         continue;
       }
       if (status == SourceReceiveStatus::Timeout)

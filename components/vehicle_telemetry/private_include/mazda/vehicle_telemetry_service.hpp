@@ -319,7 +319,8 @@ private:
   static void processing_task_entry(void *context) noexcept;
   static void dispatcher_task_entry(void *context) noexcept;
 #endif
-  void process_frame(const vehicle_core::RawCanFrame &frame) noexcept;
+  void process_frame(const vehicle_core::RawCanFrame &frame,
+                     vehicle_core::MonotonicTimestamp received_at_us) noexcept;
   void publish_current(bool received_frame) noexcept;
   void publish_notifications(const PublishedSnapshot &snapshot,
                              vehicle_core::MonotonicTimestamp now_us) noexcept;
@@ -349,6 +350,9 @@ private:
   PublicationStore publication_;
   TelemetryConfig config_{};
   VehicleState processing_state_{};
+  // This watermark is sampled from the private acquisition clock when the
+  // source successfully returns a frame. It is deliberately independent from
+  // RawCanFrame::timestamp_us, which belongs to decoder observation ordering.
   std::optional<vehicle_core::MonotonicTimestamp> last_transport_receive_us_{};
   vehicle_core::TransportHealth transport_{vehicle_core::TransportHealth::Stopped};
   std::uint64_t frames_processed_{0};

@@ -44,6 +44,11 @@ MessageHealthState *find_or_allocate_record(VehicleState &state,
 std::optional<TurnEdgeEvent>
 VehicleState::update_turn(const TurnState state,
                           const vehicle_core::MonotonicTimestamp timestamp) noexcept {
+  // Equal and older observations are handled as no-ops before refresh can
+  // mutate the signal's stale/valid status.
+  if (turn_state.has_value && timestamp <= turn_state.last_update_us) {
+    return std::nullopt;
+  }
   // A mutable receive state can sit without a snapshot between packets. Make
   // freshness part of the edge decision so recovery is Unknown -> state even
   // when the raw value happens to match the last stored direction.
@@ -123,15 +128,12 @@ VehicleState::observe_message(const vehicle_core::RawCanFrame &frame,
     if (frame.timestamp_us < record->last_frame_us) {
       return MessageObservationResult::RejectedOlder;
     }
-    // A malformed frame at the current watermark is conservatively faulting,
-    // even if a healthy frame with the same timestamp was seen first. Once
-    // faulted, equal-time malformed duplicates are idempotent.
-    if (record->health != vehicle_core::MessageHealth::Faulted) {
-      record->health = vehicle_core::MessageHealth::Faulted;
-      record->fault_timestamp_us = frame.timestamp_us;
-      return MessageObservationResult::Accepted;
-    }
-    return MessageObservationResult::Idempotent;
+    // The current watermark already represents the first observation at this
+    // timestamp. A malformed equal-time frame must not overwrite healthy
+    // state or add a fault; an identical fault duplicate is merely idempotent.
+    return record->health == vehicle_core::MessageHealth::Faulted && same_frame(frame, *record)
+               ? MessageObservationResult::Idempotent
+               : MessageObservationResult::RejectedConflict;
   }
 
   if (!record->has_frame || frame.timestamp_us > record->last_frame_us) {

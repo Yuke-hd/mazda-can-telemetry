@@ -41,8 +41,12 @@ bool record_healthy(const vehicle_core::RawCanFrame &frame, const std::uint32_t 
                     VehicleState &state) noexcept {
   if (frame.identifier != identifier)
     return false;
-  return state.observe_message(frame, vehicle_core::DecodeValidity::Decoded) ==
-         MessageObservationResult::Accepted;
+  const auto result = state.observe_message(frame, vehicle_core::DecodeValidity::Decoded);
+  // Idempotent equal-time healthy observations are healthy observations for
+  // reporting, but must not reapply semantic data. The decoder callers still
+  // invoke monotonic Signal updates, which are no-ops for identical values.
+  return result == MessageObservationResult::Accepted ||
+         result == MessageObservationResult::Idempotent;
 }
 
 DecodeStatus classify_frame(const vehicle_core::RawCanFrame &frame, const std::uint32_t identifier,

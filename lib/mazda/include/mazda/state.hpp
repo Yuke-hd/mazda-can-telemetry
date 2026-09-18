@@ -89,8 +89,8 @@ struct VehicleState {
   void apply_freshness_policy(const VehicleFreshnessPolicy &policy) noexcept;
 
   // Record decoder validity and apply timestamp-watermark rules. Ignored
-  // frames are not passed here. A malformed frame may latch a fault at the
-  // current watermark; only a strictly newer Decoded frame can clear it.
+  // frames are not passed here. Equal or older observations are no-ops for
+  // state; only a strictly newer Decoded frame can clear a malformed fault.
   [[nodiscard]] MessageObservationResult
   observe_message(const vehicle_core::RawCanFrame &frame,
                   vehicle_core::DecodeValidity validity) noexcept;

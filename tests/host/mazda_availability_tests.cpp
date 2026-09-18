@@ -56,6 +56,7 @@ TEST_CASE("undefined signal preserves its value but is unavailable until newer r
   vehicle_core::Signal<int> signal{};
   REQUIRE(signal.update(7, 100));
   CHECK_FALSE(signal.invalidate(99));
+  CHECK_FALSE(signal.invalidate(100));
   CHECK(signal.is_valid());
   CHECK(signal.snapshot(100).availability == mazda::Availability::FreshnessUnverified);
 
@@ -88,8 +89,12 @@ TEST_CASE("message watermark rejects old and conflicting data and requires newer
   CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
 
   const auto duplicate = first;
-  REQUIRE(mazda::candidate::decode_engine_data(duplicate, state) ==
+  vehicle_core::HealthObservation duplicate_health{};
+  duplicate_health.transport = vehicle_core::TransportHealth::Live;
+  REQUIRE(mazda::candidate::decode_engine_data(duplicate, state, nullptr, &duplicate_health) ==
           mazda::candidate::DecodeStatus::Decoded);
+  CHECK(duplicate_health.message == vehicle_core::MessageHealth::Healthy);
+  CHECK(duplicate_health.signal == vehicle_core::SignalHealth::Available);
   CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
   CHECK(state.engine_rpm.last_update_us == 100);
 
@@ -107,28 +112,43 @@ TEST_CASE("message watermark rejects old and conflicting data and requires newer
   CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
   CHECK(state.engine_rpm.last_update_us == 100);
 
-  const auto malformed =
+  const auto malformed_equal =
       frame(mazda::candidate::kEngineDataId, 100, {0x84, 0xd1, 0, 0, 0, 0, 0, 0});
+  REQUIRE(mazda::candidate::decode_engine_data(malformed_equal, state, nullptr, &health) ==
+          mazda::candidate::DecodeStatus::Malformed);
+  // Equal-time malformed data cannot replace the accepted frame or create a
+  // fault at the current watermark.
+  CHECK(health.message == vehicle_core::MessageHealth::Healthy);
+  CHECK_FALSE(health.fault_timestamp_us.has_value());
+  CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
+
+  const auto malformed =
+      frame(mazda::candidate::kEngineDataId, 101, {0x84, 0xd1, 0, 0, 0, 0, 0, 0});
   REQUIRE(mazda::candidate::decode_engine_data(malformed, state, nullptr, &health) ==
           mazda::candidate::DecodeStatus::Malformed);
   CHECK(health.message == vehicle_core::MessageHealth::Faulted);
-  CHECK(health.fault_timestamp_us == 100);
-  CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
+  CHECK(health.fault_timestamp_us == 101);
 
-  // Equal-time valid data cannot clear a same-time malformed fault.
-  REQUIRE(mazda::candidate::decode_engine_data(first, state) ==
+  // Equal-time and older valid observations cannot clear a newer fault.
+  const auto equal_valid =
+      frame(mazda::candidate::kEngineDataId, 101, {0x00, 0x04, 0, 0, 0, 0, 0, 0});
+  REQUIRE(mazda::candidate::decode_engine_data(equal_valid, state) ==
+          mazda::candidate::DecodeStatus::Decoded);
+  const auto older_valid =
+      frame(mazda::candidate::kEngineDataId, 100, {0x00, 0x05, 0, 0, 0, 0, 0, 0});
+  REQUIRE(mazda::candidate::decode_engine_data(older_valid, state) ==
           mazda::candidate::DecodeStatus::Decoded);
   CHECK(state.health_observation(mazda::candidate::kEngineDataId).message ==
         vehicle_core::MessageHealth::Faulted);
   CHECK(state.engine_rpm.value == doctest::Approx(0.25F));
 
   const auto recovered =
-      frame(mazda::candidate::kEngineDataId, 101, {0x00, 0x04, 0, 0, 0, 0, 0, 0});
+      frame(mazda::candidate::kEngineDataId, 102, {0x00, 0x04, 0, 0, 0, 0, 0, 0});
   REQUIRE(mazda::candidate::decode_engine_data(recovered, state, nullptr, &health) ==
           mazda::candidate::DecodeStatus::Decoded);
   CHECK(health.message == vehicle_core::MessageHealth::Healthy);
   CHECK_FALSE(health.fault_timestamp_us.has_value());
-  CHECK(health.last_accepted_us == 101);
+  CHECK(health.last_accepted_us == 102);
   CHECK(state.engine_rpm.value == doctest::Approx(1.0F));
 }
 
