@@ -18,6 +18,12 @@ namespace {
 class FakeClock final : public vehicle_core::MonotonicClock {
 public:
   [[nodiscard]] vehicle_core::MonotonicTimestamp now() const noexcept override {
+    std::unique_lock<std::mutex> lock{gate_mutex_};
+    if (pause_reads_) {
+      read_paused_ = true;
+      gate_changed_.notify_all();
+      gate_changed_.wait(lock, [this] { return !pause_reads_; });
+    }
     return now_us_.load(std::memory_order_relaxed);
   }
 
@@ -25,8 +31,32 @@ public:
     now_us_.store(value, std::memory_order_relaxed);
   }
 
+  void pause_reads() noexcept {
+    std::lock_guard<std::mutex> lock{gate_mutex_};
+    pause_reads_ = true;
+    read_paused_ = false;
+  }
+
+  [[nodiscard]] bool wait_until_read_paused(
+      const std::chrono::milliseconds timeout = std::chrono::milliseconds{500}) const noexcept {
+    std::unique_lock<std::mutex> lock{gate_mutex_};
+    return gate_changed_.wait_for(lock, timeout, [this] { return read_paused_; });
+  }
+
+  void resume_reads() noexcept {
+    {
+      std::lock_guard<std::mutex> lock{gate_mutex_};
+      pause_reads_ = false;
+    }
+    gate_changed_.notify_all();
+  }
+
 private:
   std::atomic<vehicle_core::MonotonicTimestamp> now_us_{0};
+  mutable std::mutex gate_mutex_{};
+  mutable std::condition_variable gate_changed_{};
+  bool pause_reads_{false};
+  mutable bool read_paused_{false};
 };
 
 class FakeLightingSink final : public mazda::internal::LightingSink {
@@ -610,6 +640,101 @@ void test_unknown_frame_is_transport_traffic_and_expires() {
   EXPECT(service.stop().ok());
 }
 
+void test_sustained_bounded_overload_services_expiry_and_latest_state() {
+  FakeClock clock;
+  mazda::internal::HostAcquisitionSource source;
+  FakeLightingSink lighting;
+  mazda::TelemetryConfig config{};
+  config.transport_silence_timeout_us = 100;
+  config.callback_stop_timeout_us = 20'000;
+  config.max_frames_per_batch = 16;
+  config.availability_service_target_us = 1'000;
+  mazda::internal::VehicleTelemetryService service{clock, source, lighting, config};
+
+  // Keep the fixed max-16 batch boundary part of this service-level contract.
+  auto invalid = config;
+  invalid.max_frames_per_batch = 17;
+  EXPECT(service.configure(invalid).status == mazda::ResultCode::InvalidConfiguration);
+  EXPECT(service.configure(config).ok());
+
+  TurnRecorder recorder{};
+  EXPECT(service.subscribe_turn(&record_turn, &recorder).ok());
+  EXPECT(service.start().ok());
+  EXPECT(wait_for_count(recorder, 1));
+
+  // Establish a known turn value and its transport timestamp at zero. The
+  // later burst uses the same timestamp, so advancing the injected clock
+  // cannot be hidden by frames that are still queued.
+  clock.set(0);
+  EXPECT(source.inject(frame(mazda::candidate::kTurnSwitchId, 0, {0, 0x20, 0, 0, 0, 0, 0, 0})) ==
+         mazda::ResultCode::Ok);
+  EXPECT(wait_for_count(recorder, 2));
+  const auto processed_before = service.diagnostics().acquisition.frames_processed;
+  const auto source_received_before = source.statistics().frames_received;
+  EXPECT(processed_before >= 1);
+
+  // Pause the injected clock at the processing publication boundary. This
+  // gives the fixed-capacity source a deterministic finite backlog without
+  // making any claim about physical task scheduling.
+  clock.set(300'000);
+  clock.pause_reads();
+  EXPECT(clock.wait_until_read_paused());
+
+  constexpr std::size_t kBurstFrames = mazda::internal::HostAcquisitionSource::kCapacity + 16;
+  std::size_t rejected = 0;
+  for (std::size_t index = 0; index < kBurstFrames; ++index) {
+    if (source.inject(frame(0x7ff, 0, {0, 0, 0, 0, 0, 0, 0, 0})) ==
+        mazda::ResultCode::CapacityExceeded)
+      ++rejected;
+  }
+  const auto burst_statistics = source.statistics();
+  EXPECT(rejected > 0);
+  EXPECT(burst_statistics.frames_dropped > 0);
+  EXPECT(burst_statistics.queue_overflows > 0);
+  EXPECT(burst_statistics.frames_received > burst_statistics.frames_dropped);
+
+  // Release the processing owner after the queue is known to contain frames.
+  // Its bounded batch handoff must still service expiry between finite bursts.
+  clock.resume_reads();
+  EXPECT(wait_for_flag([&service, processed_before] {
+    const auto diagnostics = service.diagnostics();
+    return diagnostics.acquisition.frames_processed > processed_before &&
+           diagnostics.transport == vehicle_core::TransportHealth::TimedOut;
+  }));
+  EXPECT(wait_for_flag([&recorder] {
+    std::lock_guard<std::mutex> lock{recorder.mutex};
+    for (std::size_t index = 0; index < recorder.count; ++index) {
+      if (recorder.notices[index].current.availability == mazda::Availability::Unavailable)
+        return true;
+    }
+    return false;
+  }));
+
+  const auto accepted_burst =
+      burst_statistics.frames_received - source_received_before - burst_statistics.frames_dropped;
+  EXPECT(wait_for_flag([&service, processed_before, accepted_burst] {
+    return service.diagnostics().acquisition.frames_processed >= processed_before + accepted_burst;
+  }));
+
+  // Polling remains live after the overload. A final accepted frame becomes
+  // the eventual bounded state, with a fresh timestamp and live transport.
+  clock.set(300'001);
+  const auto latest =
+      frame(mazda::candidate::kEngineDataId, 300'001, {0, 0, 0x2e, 0xe0, 0, 0, 0, 0});
+  bool latest_injected = false;
+  EXPECT(wait_for_flag([&] {
+    if (!latest_injected)
+      latest_injected = source.inject(latest) == mazda::ResultCode::Ok;
+    return latest_injected;
+  }));
+  EXPECT(wait_for_flag([&service] {
+    const auto reading = service.speed_kph();
+    return reading.value.has_value() && *reading.value == 120.0F;
+  }));
+  EXPECT(service.diagnostics().transport == vehicle_core::TransportHealth::Live);
+  EXPECT(service.stop().ok());
+}
+
 void test_notifications_coalesce_and_recover() {
   FakeClock clock;
   mazda::internal::HostAcquisitionSource source;
@@ -910,6 +1035,7 @@ int main() {
   test_partial_source_start_cleanup_failure_is_retried_by_stop();
   test_immediate_worker_receive_fault_is_not_overwritten_by_running();
   test_unknown_frame_is_transport_traffic_and_expires();
+  test_sustained_bounded_overload_services_expiry_and_latest_state();
   test_notifications_coalesce_and_recover();
   test_blocked_callback_does_not_block_polling_and_stop_is_retryable();
   test_callback_stop_timeout_can_retry_after_source_already_stopped();
