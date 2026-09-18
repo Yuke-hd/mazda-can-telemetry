@@ -225,6 +225,57 @@ SourceStatistics CanBusAcquisitionSource::statistics() const noexcept {
 
 #endif
 
+const PollingDescriptorTuple &VehicleTelemetryService::polling_descriptors() noexcept {
+  return kPollingDescriptors;
+}
+
+const NotificationDescriptorTuple &VehicleTelemetryService::notification_descriptors() noexcept {
+  static const NotificationDescriptorTuple descriptors {
+    {"selector_position", &VehicleTelemetryService::selector_channel_,
+     &VehicleState::selector_position, candidate::kGearId},
+        {"actual_gear", &VehicleTelemetryService::actual_gear_channel_, &VehicleState::actual_gear,
+         candidate::kGearId},
+        {"turn_state", &VehicleTelemetryService::turn_channel_, &VehicleState::turn_state,
+         candidate::kTurnSwitchId},
+        {"hazard_request", &VehicleTelemetryService::hazard_channel_, &VehicleState::hazard_request,
+         candidate::kTurnSwitchId},
+        {"left_turn_request", &VehicleTelemetryService::left_turn_channel_,
+         &VehicleState::left_turn_request, candidate::kTurnSwitchId},
+        {"right_turn_request", &VehicleTelemetryService::right_turn_channel_,
+         &VehicleState::right_turn_request, candidate::kTurnSwitchId},
+        {"liftgate_open", &VehicleTelemetryService::liftgate_channel_, &VehicleState::liftgate_open,
+         candidate::kDoorsId},
+        {"rear_right_door_open", &VehicleTelemetryService::rear_right_door_channel_,
+         &VehicleState::rear_right_door_open, candidate::kDoorsId},
+        {"rear_left_door_open", &VehicleTelemetryService::rear_left_door_channel_,
+         &VehicleState::rear_left_door_open, candidate::kDoorsId},
+        {"front_left_door_open_rhd", &VehicleTelemetryService::front_left_door_channel_,
+         &VehicleState::front_left_door_open_rhd, candidate::kDoorsId},
+        {"front_right_door_open_rhd", &VehicleTelemetryService::front_right_door_channel_,
+         &VehicleState::front_right_door_open_rhd, candidate::kDoorsId},
+        {"doors_unlocked", &VehicleTelemetryService::doors_unlocked_channel_,
+         &VehicleState::doors_unlocked, candidate::kDoorsId},
+        {"left_indicator_lamp", &VehicleTelemetryService::left_lamp_channel_,
+         &VehicleState::left_indicator_lamp, candidate::kBlinkInfoId},
+        {"right_indicator_lamp", &VehicleTelemetryService::right_lamp_channel_,
+         &VehicleState::right_indicator_lamp, candidate::kBlinkInfoId},
+        {"wiper_low", &VehicleTelemetryService::wiper_low_channel_, &VehicleState::wiper_low,
+         candidate::kBlinkInfoId},
+#if defined(ESP_PLATFORM)
+        {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
+         candidate::kTurnSwitchId}
+#else
+        {"front_wiper", &VehicleTelemetryService::front_wiper_channel_, &VehicleState::front_wiper,
+         candidate::kTurnSwitchId},
+    {
+      "test_front_wiper", &VehicleTelemetryService::test_front_wiper_channel_,
+          &VehicleState::front_wiper, candidate::kTurnSwitchId
+    }
+#endif
+  };
+  return descriptors;
+}
+
 VehicleTelemetryService::VehicleTelemetryService() noexcept
 #if defined(ESP_PLATFORM)
     : VehicleTelemetryService(steady_clock_, can_bus_source_, null_lighting_sink_){}
@@ -271,21 +322,24 @@ bool VehicleTelemetryService::valid_config(const TelemetryConfig &config) noexce
 }
 
 void VehicleTelemetryService::initialize_registration_slots() noexcept {
-  constexpr std::array<std::uint16_t, kNotificationChannelCount> channels{
-      kSelectorNotificationChannel,       kActualGearNotificationChannel,
-      kTurnNotificationChannel,           kHazardNotificationChannel,
-      kLeftTurnNotificationChannel,       kRightTurnNotificationChannel,
-      kLiftgateNotificationChannel,       kRearRightDoorNotificationChannel,
-      kRearLeftDoorNotificationChannel,   kFrontLeftDoorNotificationChannel,
-      kFrontRightDoorNotificationChannel, kDoorsUnlockedNotificationChannel,
-      kLeftLampNotificationChannel,       kRightLampNotificationChannel,
-      kWiperLowNotificationChannel,       kFrontWiperNotificationChannel};
-  for (std::size_t index = 0; index < registrations_.size(); ++index) {
-    registrations_[index].channel =
-        channels[index / vehicle_core::kNotificationSubscribersPerChannel];
-    registrations_[index].slot =
-        static_cast<std::uint8_t>(index % vehicle_core::kNotificationSubscribersPerChannel);
-  }
+  std::size_t descriptor_index = 0;
+  std::apply(
+      [this, &descriptor_index](const auto &...descriptor) {
+        (([&] {
+           for (std::size_t slot = 0; slot < vehicle_core::kNotificationSubscribersPerChannel;
+                ++slot) {
+             auto &registration =
+                 registrations_[descriptor_index *
+                                    vehicle_core::kNotificationSubscribersPerChannel +
+                                slot];
+             registration.channel = std::decay_t<decltype(descriptor)>::Channel::channel_id();
+             registration.slot = static_cast<std::uint8_t>(slot);
+           }
+           ++descriptor_index;
+         }()),
+         ...);
+      },
+      notification_descriptors());
 }
 
 VehicleTelemetryService::Registration *
@@ -361,105 +415,44 @@ StatusResult VehicleTelemetryService::bind_lighting_sink(LightingSink &lighting_
 }
 
 bool VehicleTelemetryService::start_channels() noexcept {
-  const bool selector = selector_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool actual_gear =
-      selector && actual_gear_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool turn = actual_gear && turn_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool hazard = turn && hazard_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool left_turn =
-      hazard && left_turn_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool right_turn =
-      left_turn && right_turn_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool liftgate =
-      right_turn && liftgate_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool rear_right =
-      liftgate && rear_right_door_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool rear_left =
-      rear_right && rear_left_door_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool front_left =
-      rear_left && front_left_door_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool front_right =
-      front_left && front_right_door_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool unlocked =
-      front_right && doors_unlocked_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool left_lamp =
-      unlocked && left_lamp_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool right_lamp =
-      left_lamp && right_lamp_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool wiper_low =
-      right_lamp && wiper_low_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  const bool front_wiper =
-      wiper_low && front_wiper_channel_.start() == vehicle_core::NotificationStatus::Ok;
-  return front_wiper;
+  bool result = true;
+  std::apply(
+      [this, &result](const auto &...descriptor) {
+        ((result = result &&
+                   ((this->*descriptor.channel).start() == vehicle_core::NotificationStatus::Ok)),
+         ...);
+      },
+      notification_descriptors());
+  return result;
 }
 
 bool VehicleTelemetryService::stop_channels() noexcept {
   bool result = true;
-  result = (selector_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result =
-      (actual_gear_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (turn_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (hazard_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (left_turn_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (right_turn_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (liftgate_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result =
-      (rear_right_door_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result =
-      (rear_left_door_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result =
-      (front_left_door_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (front_right_door_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) &&
-           result;
-  result =
-      (doors_unlocked_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (left_lamp_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (right_lamp_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result = (wiper_low_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
-  result =
-      (front_wiper_channel_.stop() != vehicle_core::NotificationStatus::InvalidState) && result;
+  std::apply(
+      [this, &result](const auto &...descriptor) {
+        ((result = ((this->*descriptor.channel).stop() !=
+                    vehicle_core::NotificationStatus::InvalidState) &&
+                   result),
+         ...);
+      },
+      notification_descriptors());
   return result;
 }
 
 std::size_t VehicleTelemetryService::dispatch_channels_once() noexcept {
   const std::size_t index =
       dispatch_cursor_.fetch_add(1, std::memory_order_relaxed) % kNotificationChannelCount;
-  switch (index) {
-  case 0:
-    return selector_channel_.dispatch_pending(1);
-  case 1:
-    return actual_gear_channel_.dispatch_pending(1);
-  case 2:
-    return turn_channel_.dispatch_pending(1);
-  case 3:
-    return hazard_channel_.dispatch_pending(1);
-  case 4:
-    return left_turn_channel_.dispatch_pending(1);
-  case 5:
-    return right_turn_channel_.dispatch_pending(1);
-  case 6:
-    return liftgate_channel_.dispatch_pending(1);
-  case 7:
-    return rear_right_door_channel_.dispatch_pending(1);
-  case 8:
-    return rear_left_door_channel_.dispatch_pending(1);
-  case 9:
-    return front_left_door_channel_.dispatch_pending(1);
-  case 10:
-    return front_right_door_channel_.dispatch_pending(1);
-  case 11:
-    return doors_unlocked_channel_.dispatch_pending(1);
-  case 12:
-    return left_lamp_channel_.dispatch_pending(1);
-  case 13:
-    return right_lamp_channel_.dispatch_pending(1);
-  case 14:
-    return wiper_low_channel_.dispatch_pending(1);
-  case 15:
-    return front_wiper_channel_.dispatch_pending(1);
-  default:
-    return 0;
-  }
+  std::size_t delivered = 0;
+  std::size_t descriptor_index = 0;
+  std::apply(
+      [this, index, &descriptor_index, &delivered](const auto &...descriptor) {
+        (((descriptor_index++ == index)
+              ? static_cast<void>(delivered = (this->*descriptor.channel).dispatch_pending(1))
+              : static_cast<void>(0)),
+         ...);
+      },
+      notification_descriptors());
+  return delivered;
 }
 
 StatusResult VehicleTelemetryService::start() noexcept {
@@ -790,57 +783,23 @@ void VehicleTelemetryService::publish_current(const bool received_frame) noexcep
   publish_notifications(snapshot, now_us);
 }
 
+template <typename T, std::uint16_t ChannelId>
+void VehicleTelemetryService::publish_notification_descriptor(
+    const PublishedSnapshot &snapshot, const vehicle_core::MonotonicTimestamp now_us,
+    const NotificationDescriptor<T, ChannelId> &descriptor) noexcept {
+  const auto transport = snapshot.diagnostics.transport;
+  (void)(this->*descriptor.channel)
+      .publish(snapshot.state.reading_at(snapshot.state.*descriptor.signal, descriptor.identifier,
+                                         now_us, ValidationStatus::Observed, transport));
+}
+
 void VehicleTelemetryService::publish_notifications(
     const PublishedSnapshot &snapshot, const vehicle_core::MonotonicTimestamp now_us) noexcept {
-  const auto transport = snapshot.diagnostics.transport;
-  (void)selector_channel_.publish(snapshot.state.reading_at(snapshot.state.selector_position,
-                                                            candidate::kGearId, now_us,
-                                                            ValidationStatus::Observed, transport));
-  (void)actual_gear_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.actual_gear, candidate::kGearId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)turn_channel_.publish(snapshot.state.reading_at(snapshot.state.turn_state,
-                                                        candidate::kTurnSwitchId, now_us,
-                                                        ValidationStatus::Observed, transport));
-  (void)hazard_channel_.publish(snapshot.state.reading_at(snapshot.state.hazard_request,
-                                                          candidate::kTurnSwitchId, now_us,
-                                                          ValidationStatus::Observed, transport));
-  (void)left_turn_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.left_turn_request, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)right_turn_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.right_turn_request, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)liftgate_channel_.publish(snapshot.state.reading_at(snapshot.state.liftgate_open,
-                                                            candidate::kDoorsId, now_us,
-                                                            ValidationStatus::Observed, transport));
-  (void)rear_right_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.rear_right_door_open, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)rear_left_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.rear_left_door_open, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)front_left_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_left_door_open_rhd, candidate::kDoorsId,
-                                now_us, ValidationStatus::Observed, transport));
-  (void)front_right_door_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_right_door_open_rhd, candidate::kDoorsId,
-                                now_us, ValidationStatus::Observed, transport));
-  (void)doors_unlocked_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.doors_unlocked, candidate::kDoorsId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)left_lamp_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.left_indicator_lamp, candidate::kBlinkInfoId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)right_lamp_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.right_indicator_lamp, candidate::kBlinkInfoId,
-                                now_us, ValidationStatus::Observed, transport));
-  (void)wiper_low_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.wiper_low, candidate::kBlinkInfoId, now_us,
-                                ValidationStatus::Observed, transport));
-  (void)front_wiper_channel_.publish(
-      snapshot.state.reading_at(snapshot.state.front_wiper, candidate::kTurnSwitchId, now_us,
-                                ValidationStatus::Observed, transport));
+  std::apply(
+      [this, &snapshot, now_us](const auto &...descriptor) {
+        (publish_notification_descriptor(snapshot, now_us, descriptor), ...);
+      },
+      notification_descriptors());
   publish_lighting(snapshot, now_us);
 }
 
@@ -942,31 +901,29 @@ void VehicleTelemetryService::publish_startup_black(
   lighting_next_heartbeat_us_ = saturating_add(now_us, kLightingHeartbeatUs);
 }
 
-#define MAZDA_SUBSCRIBE_METHOD(method_name, channel_member, callback_type)                         \
+#define MAZDA_SUBSCRIBE_METHOD(method_name, descriptor_index, callback_type)                       \
   SubscriptionToken VehicleTelemetryService::method_name(callback_type callback,                   \
                                                          void *context) noexcept {                 \
-    std::lock_guard<std::mutex> lock{lifecycle_mutex_};                                            \
-    if (lifecycle_state_.load(std::memory_order_acquire) != LifecycleState::Stopped)               \
-      return {ResultCode::InvalidState, kInvalidChannel, 0xffU, 0};                                \
-    return register_subscription(channel_member, callback, context);                               \
+    return subscribe_notification_descriptor(                                                      \
+        std::get<descriptor_index>(notification_descriptors()), callback, context);                \
   }
 
-MAZDA_SUBSCRIBE_METHOD(subscribe_selector, selector_channel_, Callback<SelectorPosition>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_actual_gear, actual_gear_channel_, Callback<ActualGear>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_turn, turn_channel_, Callback<TurnState>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_hazard, hazard_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_left_turn, left_turn_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_right_turn, right_turn_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_liftgate, liftgate_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_rear_right_door, rear_right_door_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_rear_left_door, rear_left_door_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_front_left_door, front_left_door_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_front_right_door, front_right_door_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_doors_unlocked, doors_unlocked_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_left_lamp, left_lamp_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_right_lamp, right_lamp_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_wiper_low, wiper_low_channel_, Callback<bool>)
-MAZDA_SUBSCRIBE_METHOD(subscribe_front_wiper, front_wiper_channel_, Callback<FrontWiperPosition>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_selector, 0, Callback<SelectorPosition>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_actual_gear, 1, Callback<ActualGear>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_turn, 2, Callback<TurnState>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_hazard, 3, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_left_turn, 4, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_right_turn, 5, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_liftgate, 6, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_rear_right_door, 7, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_rear_left_door, 8, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_front_left_door, 9, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_front_right_door, 10, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_doors_unlocked, 11, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_left_lamp, 12, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_right_lamp, 13, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_wiper_low, 14, Callback<bool>)
+MAZDA_SUBSCRIBE_METHOD(subscribe_front_wiper, 15, Callback<FrontWiperPosition>)
 
 #undef MAZDA_SUBSCRIBE_METHOD
 
@@ -979,58 +936,16 @@ StatusResult VehicleTelemetryService::unsubscribe(const SubscriptionToken &token
     return {ResultCode::InvalidSubscription};
 
   vehicle_core::NotificationStatus status = vehicle_core::NotificationStatus::InvalidSubscription;
-  switch (token.channel) {
-  case kSelectorNotificationChannel:
-    status = selector_channel_.unsubscribe(registration->handle);
-    break;
-  case kActualGearNotificationChannel:
-    status = actual_gear_channel_.unsubscribe(registration->handle);
-    break;
-  case kTurnNotificationChannel:
-    status = turn_channel_.unsubscribe(registration->handle);
-    break;
-  case kHazardNotificationChannel:
-    status = hazard_channel_.unsubscribe(registration->handle);
-    break;
-  case kLeftTurnNotificationChannel:
-    status = left_turn_channel_.unsubscribe(registration->handle);
-    break;
-  case kRightTurnNotificationChannel:
-    status = right_turn_channel_.unsubscribe(registration->handle);
-    break;
-  case kLiftgateNotificationChannel:
-    status = liftgate_channel_.unsubscribe(registration->handle);
-    break;
-  case kRearRightDoorNotificationChannel:
-    status = rear_right_door_channel_.unsubscribe(registration->handle);
-    break;
-  case kRearLeftDoorNotificationChannel:
-    status = rear_left_door_channel_.unsubscribe(registration->handle);
-    break;
-  case kFrontLeftDoorNotificationChannel:
-    status = front_left_door_channel_.unsubscribe(registration->handle);
-    break;
-  case kFrontRightDoorNotificationChannel:
-    status = front_right_door_channel_.unsubscribe(registration->handle);
-    break;
-  case kDoorsUnlockedNotificationChannel:
-    status = doors_unlocked_channel_.unsubscribe(registration->handle);
-    break;
-  case kLeftLampNotificationChannel:
-    status = left_lamp_channel_.unsubscribe(registration->handle);
-    break;
-  case kRightLampNotificationChannel:
-    status = right_lamp_channel_.unsubscribe(registration->handle);
-    break;
-  case kWiperLowNotificationChannel:
-    status = wiper_low_channel_.unsubscribe(registration->handle);
-    break;
-  case kFrontWiperNotificationChannel:
-    status = front_wiper_channel_.unsubscribe(registration->handle);
-    break;
-  default:
+  std::apply(
+      [this, &token, &status, &registration](const auto &...descriptor) {
+        (((token.channel == std::decay_t<decltype(descriptor)>::Channel::channel_id())
+              ? status = (this->*descriptor.channel).unsubscribe(registration->handle)
+              : status),
+         ...);
+      },
+      notification_descriptors());
+  if (status == vehicle_core::NotificationStatus::InvalidSubscription)
     return {ResultCode::InvalidSubscription};
-  }
   if (status != vehicle_core::NotificationStatus::Ok)
     return {map_notification_status(status)};
   registration->active = false;
